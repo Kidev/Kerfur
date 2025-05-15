@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file>kerfur.png</file>
+        <file>assets/img/eyes_closed.png</file>
+        <file>assets/img/eyes_meow.png</file>
+        <file>assets/img/eyes_opened.png</file>
+        <file>assets/sound/meow.mp3</file>
+    </qresource>
+</RCC>

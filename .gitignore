@@ -1,0 +1,9 @@
+*.user
+*.o
+moc_*
+viewsvg
+.*
+ui_*.h
+bin/
+build/
+install/

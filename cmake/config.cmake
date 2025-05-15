@@ -1,0 +1,57 @@
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/functions.cmake")
+
+file(GLOB_RECURSE SOURCES_CPP src/*.c*)
+file(
+    GLOB_RECURSE SOURCES_QML
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    qml/*.qml
+)
+set(RESOURCES_FILE "resources.qrc")
+
+resolve_env_or_var(QT_ROOT_DIR "" QT_INSTALL_DIR)
+
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_PREFIX_PATH "${QT_INSTALL_DIR};${CMAKE_PREFIX_PATH}")
+
+resolve_env_or_var(QT_QML_SOURCES "${CMAKE_SOURCE_DIR}/qml" QML_SOURCES_PATHS)
+append_env_path(QT_PLUGIN_PATH "${QT_INSTALL_DIR}/plugins")
+append_env_path(QML2_IMPORT_PATH "${QT_INSTALL_DIR}/qml")
+prepend_env_path(LD_LIBRARY_PATH "${QT_INSTALL_DIR}/lib")
+prepend_env_path(PATH "${QT_INSTALL_DIR}/bin")
+
+set(CMAKE_ENVIRONMENT_PATH_INSTALL "${QT_INSTALL_DIR}/bin")
+set(QT_INSTALL_QML "${QT_INSTALL_DIR}/qml")
+set(QT_INSTALL_PLUGINS "${QT_INSTALL_DIR}/plugins")
+
+if (
+    DEFINED VERSION_TAG
+    AND NOT
+        "${VERSION_TAG}"
+        STREQUAL
+        ""
+)
+    set(PROJECT_VERSION "${VERSION_TAG}")
+elseif (
+    DEFINED ENV{VERSION_TAG}
+    AND NOT
+        "$ENV{VERSION_TAG}"
+        STREQUAL
+        ""
+)
+    set(PROJECT_VERSION "$ENV{VERSION_TAG}")
+else ()
+    set(PROJECT_VERSION "0.0.0")
+endif ()
+add_definitions(-DVERSION_TAG="${PROJECT_VERSION}")
+
+message(STATUS "QT_INSTALL_DIR=${QT_INSTALL_DIR}")
+message(STATUS "QML_SOURCES_PATHS=${QML_SOURCES_PATHS}")
+message(STATUS "QT_PLUGIN_PATH=$ENV{QT_PLUGIN_PATH}")
+message(STATUS "QML2_IMPORT_PATH=$ENV{QML2_IMPORT_PATH}")
+message(STATUS "LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH}")
+message(STATUS "PATH=$ENV{PATH}")
