@@ -1036,9 +1036,9 @@ def main():
 
     # Input/output options
     parser.add_argument('--input', '-i', help='Input image path to analyze')
-    parser.add_argument('--output', '-o', default='textures/pixel_kerfur.png', help='Output image path')
-    parser.add_argument('--save-array', '-s', default='npy/pixel_kerfur.npy', help='Path to save the pixel array')
-    parser.add_argument('--load-array', '-l', help='Path to load an existing pixel array')
+    parser.add_argument('--output', '-o', default='textures/eyes_meow.png', help='Output image path')
+    parser.add_argument('--save-array', '-s', default='npy/eyes_meow2.npy', help='Path to save the pixel array')
+    parser.add_argument('--load-array', '-l', help='Path to load an existing pixel array', default='npy/eyes_meow.npy')
     parser.add_argument('--example', '-e', action='store_true', help='Create an example cat face')
 
     # Analysis options
@@ -1061,7 +1061,7 @@ def main():
     parser.add_argument('--background', default='0,0,0', help='Background color (R,G,B format)')
 
     # Editor options
-    parser.add_argument('--visual-edit', '-v', action='store_true', help='Open visual interactive editor', default=False)
+    parser.add_argument('--visual-edit', '-v', action='store_true', help='Open visual interactive editor', default=True)
     parser.add_argument('--text-edit', '-x', action='store_true', help='Open text-based editor')
     parser.add_argument('--text-format', action='store_true',
                         help='Save/load array in human-readable text format')
