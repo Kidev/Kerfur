@@ -117,6 +117,6 @@ def npy_to_texture(input_file, output_file=None, scale=1):
 
 
 if __name__ == "__main__":
-    #remove_last_row_and_column("full_kerfur.npy", "kerfur_final.npy")
-    #add_empty_columns("kerfur_final.npy", "kerfur_final2.npy")
-    npy_to_texture("kerfur_final2.npy", "kerfur_face.png", 1)
+    #remove_last_row_and_column("npy/full_kerfur.npy", "npy/kerfur_final.npy")
+    #add_empty_columns("npy/kerfur_final.npy", "npy/kerfur_final2.npy")
+    npy_to_texture("npy/kerfur_final2.npy", "textures/kerfur_face.png", 1)
