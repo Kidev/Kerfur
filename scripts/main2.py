@@ -1036,9 +1036,9 @@ def main():
 
     # Input/output options
     parser.add_argument('--input', '-i', help='Input image path to analyze')
-    parser.add_argument('--output', '-o', default='pixel_cat.png', help='Output image path')
-    parser.add_argument('--save-array', '-s', default='pixel_array.npy', help='Path to save the pixel array')
-    parser.add_argument('--load-array', '-l', help='Path to load an existing pixel array', default='kerfur_final2.npy')
+    parser.add_argument('--output', '-o', default='textures/pixel_kerfur.png', help='Output image path')
+    parser.add_argument('--save-array', '-s', default='npy/pixel_kerfur.npy', help='Path to save the pixel array')
+    parser.add_argument('--load-array', '-l', help='Path to load an existing pixel array')
     parser.add_argument('--example', '-e', action='store_true', help='Create an example cat face')
 
     # Analysis options
@@ -1055,7 +1055,7 @@ def main():
 
     # Rendering options
     parser.add_argument('--pixel-size', '-p', type=int, help='Size of each pixel')
-    parser.add_argument('--glow-radius', '-r', type=int, help='Radius of the glow effect', default=10)
+    parser.add_argument('--glow-radius', '-r', type=int, help='Radius of the glow effect')
     parser.add_argument('--glow-color', help='Glow color (R,G,B format)', default='128,0,255')
     parser.add_argument('--glow-intensity', type=float, default=0.8, help='Intensity of glow (0-1)')
     parser.add_argument('--background', default='0,0,0', help='Background color (R,G,B format)')
