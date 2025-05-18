@@ -1,4 +1,5 @@
 # Kerfur
-Meow!
 
-![meow](assets/img/eyes_meow.png)
+![meow](assets/img/kerfur.gif)
+
+_Meow!_

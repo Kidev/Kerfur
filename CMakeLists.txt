@@ -37,10 +37,7 @@ qt_add_qml_module(
 
 qt_add_shaders(
     ${PROJECT_NAME} ${PROJECT_NAME}_shaders
-    FILES ${SOURCES_SHADERS}
-    GLSL "120,150"
-    HLSL "50"
-    MSL "12"
+    FILES ${SOURCES_SHADERS} BATCHABLE
     PRECOMPILE OPTIMIZED
 )
 
