@@ -3,7 +3,7 @@
         <file>assets/img/eyes_closed.png</file>
         <file>assets/img/eyes_meow.png</file>
         <file>assets/img/eyes_opened.png</file>
-        <file>assets/sound/meow.mp3</file>
+        <file>assets/sound/meow.wav</file>
         <file>assets/img/pupil.png</file>
         <file>kidev.png</file>
     </qresource>

@@ -24,6 +24,7 @@
 
 #include <QDir>
 #include <QGuiApplication>
+#include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QSurfaceFormat>
@@ -34,9 +35,9 @@ int main(int argc, char *argv[])
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
     QSurfaceFormat format;
-    format.setVersion(4, 4); // Use OpenGL 4.4 for shader compatibility
+    format.setVersion(4, 4);
     format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSwapInterval(1); // vsync
+    format.setSwapInterval(1);
     format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     QSurfaceFormat::setDefaultFormat(format);
 
@@ -44,6 +45,8 @@ int main(int argc, char *argv[])
     app.setApplicationName("Kerfur");
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
     app.setOrganizationName("Kidev");
+
+    QLoggingCategory::setFilterRules("*.ffmpeg.*=false\n*.multimedia.*=false");
 
     QQmlApplicationEngine engine;
 
