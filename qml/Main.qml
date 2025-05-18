@@ -5,16 +5,16 @@ import QtMultimedia
 Window {
     id: root
 
-    readonly property int blinkDuration: 150         // How long eyes stay closed (ms)
-    readonly property real doubleBlinkChance: 0.2    // 20% chance of a double blink
-
-    readonly property int doubleBlinkDuration: 200   // Time between blinks in a double-blink
+    readonly property int blinkDuration: 150
+    readonly property real doubleBlinkChance: 0.2
+    readonly property int doubleBlinkDuration: 200
     readonly property vector4d glowColor: Qt.rgba(1.0, 1.0, 1.0, 1.0)
     property bool isBlinking: false
     property bool isTouched: false
     readonly property int ledSize: 16
-    readonly property int maxBlinkInterval: 8000     // Maximum time between blinks (ms)
-    readonly property int minBlinkInterval: 2000     // Minimum time between blinks (ms)
+    readonly property int maxBlinkInterval: 8000
+    readonly property real meowVolume: 1
+    readonly property int minBlinkInterval: 2000
     readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
     readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
     readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
@@ -29,7 +29,7 @@ Window {
     }
 
     function resetBlinkTimer() {
-        blinkTimer.interval = Math.floor(Math.random() * (maxBlinkInterval - minBlinkInterval)) + minBlinkInterval;
+        blinkTimer.interval = Math.floor(Math.random() * (root.maxBlinkInterval - root.minBlinkInterval)) + root.minBlinkInterval;
         blinkTimer.restart();
     }
 
@@ -38,12 +38,11 @@ Window {
             root.isBlinking = true;
             blinkDurationTimer.start();
         } else {
-            resetBlinkTimer();
+            root.resetBlinkTimer();
         }
     }
 
-    color: "black"  // Black background for the unfilled areas
-
+    color: "black"
     visibility: Window.FullScreen
     visible: true
 
@@ -63,7 +62,7 @@ Window {
         source: root.pathSoundMeow
 
         audioOutput: AudioOutput {
-            volume: 1
+            volume: root.meowVolume
         }
     }
 
@@ -72,13 +71,13 @@ Window {
 
         anchors.centerIn: parent
         fillMode: Image.PreserveAspectFit
-        height: Math.min(parent.height, parent.width * (sourceSize.height / sourceSize.width))
+        height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
         source: root.isTouched ? root.pathEyesMeow : root.isBlinking ? root.pathEyesClosed : root.pathEyesOpened
-        width: Math.min(parent.width, parent.height * (sourceSize.width / sourceSize.height))
+        width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
 
         onStatusChanged: {
-            if (status === Image.Error) {
-                console.error("Failed to load image:", source);
+            if (displayImage.status === Image.Error) {
+                console.error("Failed to load image:", displayImage.source);
             }
         }
     }
