@@ -15,6 +15,7 @@ find_package(
                Quick
                Qml
                Concurrent
+               ShaderTools
 )
 
 qt_standard_project_setup(REQUIRES 6.8)
@@ -32,6 +33,15 @@ qt_add_qml_module(
     QML_FILES ${SOURCES_QML}
     RESOURCE_PREFIX "/qt/qml"
     OUTPUT_DIRECTORY "qml"
+)
+
+qt_add_shaders(
+    ${PROJECT_NAME} ${PROJECT_NAME}_shaders
+    FILES ${SOURCES_SHADERS}
+    GLSL "120,150"
+    HLSL "50"
+    MSL "12"
+    PRECOMPILE OPTIMIZED
 )
 
 target_link_libraries(

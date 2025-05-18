@@ -9,11 +9,12 @@ Window {
     readonly property real doubleBlinkChance: 0.2    // 20% chance of a double blink
 
     readonly property int doubleBlinkDuration: 200   // Time between blinks in a double-blink
+    readonly property vector4d glowColor: Qt.rgba(1.0, 1.0, 1.0, 1.0)
     property bool isBlinking: false
     property bool isTouched: false
+    readonly property int ledSize: 16
     readonly property int maxBlinkInterval: 8000     // Maximum time between blinks (ms)
     readonly property int minBlinkInterval: 2000     // Minimum time between blinks (ms)
-
     readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
     readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
     readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
@@ -82,6 +83,13 @@ Window {
         }
     }
 
+    LedScreen {
+        anchors.fill: displayImage
+        ledScreenLedColor: root.glowColor
+        ledScreenLedSize: root.ledSize
+        source: displayImage
+    }
+
     Timer {
         id: blinkTimer
 
@@ -131,7 +139,7 @@ Window {
 
         anchors.fill: parent
 
-        onPressed: function (touchPoints) {
+        onPressed: touchPoints => {
             if (touchPoints.length >= 4) {
                 root.requestExit();
             } else {

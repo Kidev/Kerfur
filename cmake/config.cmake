@@ -1,10 +1,19 @@
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/functions.cmake")
 
-file(GLOB_RECURSE SOURCES_CPP src/*.c*)
+file(
+    GLOB_RECURSE SOURCES_CPP
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    src/*.c*
+)
 file(
     GLOB_RECURSE SOURCES_QML
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     qml/*.qml
+)
+file(
+    GLOB_RECURSE SOURCES_SHADERS
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    shaders/*
 )
 set(RESOURCES_FILE "resources.qrc")
 
