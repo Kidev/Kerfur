@@ -18,7 +18,7 @@ Window {
     readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
     readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
     readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
-    readonly property string pathSoundMeow: "qrc:/assets/sound/meow.mp3"
+    readonly property string pathSoundMeow: "qrc:/assets/sound/meow.wav"
 
     function playMeowSound() {
         meowSound.play();
@@ -56,14 +56,11 @@ Window {
         onActivated: root.requestExit()
     }
 
-    MediaPlayer {
+    SoundEffect {
         id: meowSound
 
         source: root.pathSoundMeow
-
-        audioOutput: AudioOutput {
-            volume: root.meowVolume
-        }
+        volume: root.meowVolume
     }
 
     Image {
