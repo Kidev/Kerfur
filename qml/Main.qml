@@ -17,6 +17,7 @@ Window {
     readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
     readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
     readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
+    readonly property string pathEyesPupil: "qrc:/assets/img/eyes_pupil.png"
     readonly property string pathSoundMeow: "qrc:/assets/sound/meow.wav"
     property bool showControls: false
 
@@ -57,6 +58,7 @@ Window {
     }
 
     Shortcut {
+        enabled: false
         sequence: "Tab"
 
         onActivated: root.showControls = !root.showControls
