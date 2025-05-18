@@ -8,7 +8,6 @@ Window {
     readonly property int blinkDuration: 150
     readonly property real doubleBlinkChance: 0.2
     readonly property int doubleBlinkDuration: 200
-    readonly property vector4d glowColor: Qt.rgba(1.0, 1.0, 1.0, 1.0)
     property bool isBlinking: false
     property bool isTouched: false
     readonly property int ledSize: 16
@@ -81,7 +80,6 @@ Window {
 
     LedScreen {
         anchors.fill: displayImage
-        ledScreenLedColor: root.glowColor
         ledScreenLedSize: root.ledSize
         source: displayImage
     }
