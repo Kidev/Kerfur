@@ -3,8 +3,15 @@ import QtQuick
 Item {
     id: root
 
+    property int blurMax: 64
+    property real blurMultiplier: 5
+    property int glowBlendMode: 1
+    property real glowBloom: 1.0
+    property real glowBlurAmount: 0.4
+    property color glowColor: Qt.rgba(0.757, 0, 0.697002, 1)
+    property real glowMaxBrightness: 2
     property color ledScreenLedColor: Qt.rgba(1, 1, 1, 1)
-    property real ledScreenLedSize: 20
+    property real ledScreenLedSize: 8
     property Item source: null
 
     ShaderEffect {
@@ -33,6 +40,13 @@ Item {
 
     Glow {
         anchors.fill: parent
+        blurMax: root.blurMax
+        blurMultiplier: root.blurMultiplier
+        glowBlendMode: root.glowBlendMode
+        glowBloom: root.glowBloom
+        glowBlurAmount: root.glowBlurAmount
+        glowColor: root.glowColor
+        glowMaxBrightness: root.glowMaxBrightness
         source: ledScreenEffect
     }
 }

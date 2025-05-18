@@ -3,18 +3,19 @@ import QtQuick
 Item {
     id: root
 
-    property real blurMultiplier: 0
+    property int blurMax: 64
+    property real blurMultiplier: 5
     property int glowBlendMode: 1
-    property real glowBloom: 0.73253
-    property real glowBlurAmount: 0.269301
+    property real glowBloom: 1.0
+    property real glowBlurAmount: 0.4
     property color glowColor: Qt.rgba(0.757, 0, 0.697002, 1)
-    property real glowMaxBrightness: 1
+    property real glowMaxBrightness: 2
     property Item source: null
 
     BlurHelper {
         id: blurHelper
 
-        property int blurMax: 64
+        property int blurMax: root.blurMax
         property real blurMultiplier: root.blurMultiplier
 
         anchors.fill: parent
