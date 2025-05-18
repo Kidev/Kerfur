@@ -22,14 +22,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <QCommandLineParser>
+#include <QDir>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
-#include <QQmlContext>
+#include <QQuickWindow>
+#include <QSurfaceFormat>
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app {argc, argv};
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
+    QSurfaceFormat format;
+    format.setVersion(4, 4); // Use OpenGL 4.4 for shader compatibility
+    format.setProfile(QSurfaceFormat::CoreProfile);
+    format.setSwapInterval(1); // vsync
+    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+    QSurfaceFormat::setDefaultFormat(format);
+
+    QGuiApplication app{argc, argv};
     app.setApplicationName("Kerfur");
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
     app.setOrganizationName("Kidev");
