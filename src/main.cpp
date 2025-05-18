@@ -22,11 +22,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <QDir>
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
-#include <QQuickWindow>
 #include <QSurfaceFormat>
 
 int main(int argc, char *argv[])

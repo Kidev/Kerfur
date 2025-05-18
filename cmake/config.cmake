@@ -58,6 +58,10 @@ else ()
 endif ()
 add_definitions(-DVERSION_TAG="${PROJECT_VERSION}")
 
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-DDEBUG_BUILD)
+endif ()
+
 message(STATUS "QT_INSTALL_DIR=${QT_INSTALL_DIR}")
 message(STATUS "QML_SOURCES_PATHS=${QML_SOURCES_PATHS}")
 message(STATUS "QT_PLUGIN_PATH=$ENV{QT_PLUGIN_PATH}")
