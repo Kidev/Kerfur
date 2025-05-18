@@ -8,6 +8,8 @@ Item {
     property Item source: null
 
     ShaderEffect {
+        id: ledScreenEffect
+
         readonly property vector3d iResolution: Qt.vector3d(root.width, root.height, 1.0)
         readonly property alias iSource: root.source
         readonly property alias ledScreenLedColor: root.ledScreenLedColor
@@ -17,6 +19,7 @@ Item {
         anchors.fill: parent
         blending: true
         fragmentShader: 'qrc:/shaders/kerfur.frag.qsb'
+        layer.enabled: true
         vertexShader: 'qrc:/shaders/kerfur.vert.qsb'
 
         ShaderEffectSource {
@@ -26,5 +29,10 @@ Item {
             sourceItem: root.source
             textureSize: Qt.size(root.source.width / root.ledScreenLedSize, root.source.height / root.ledScreenLedSize)
         }
+    }
+
+    Glow {
+        anchors.fill: parent
+        source: ledScreenEffect
     }
 }
