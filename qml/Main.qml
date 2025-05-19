@@ -13,7 +13,7 @@ Window {
     property bool isBlinking: false
     property bool isTouched: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
-    property point leftPupilOffset: Qt.point(0, 0)
+    property point leftPupilOffset: Qt.point(((root.leftRightAngle - 90) / 90) * root.maxPupilMovement, ((root.upDownAngle - 90) / 90) * root.maxPupilMovement)
     property real leftRightAngle: 90
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
@@ -30,16 +30,6 @@ Window {
     property real upDownAngle: 90
     property bool winkLeft: false
     property bool winkRight: false
-
-    function calculatePupilOffset() {
-        // Convert angles to normalized positions (-1 to 1)
-        // For leftRightAngle: 0 = far left, 90 = center, 180 = far right
-        // For upDownAngle: 0 = far up, 90 = center, 180 = far down
-        var xOffset = ((leftRightAngle - 90) / 90) * maxPupilMovement;
-        var yOffset = ((upDownAngle - 90) / 90) * maxPupilMovement;
-
-        return Qt.point(xOffset, yOffset);
-    }
 
     function playMeowSound() {
         meowSound.play();
@@ -63,19 +53,31 @@ Window {
         }
     }
 
-    // Function to update pupil positions based on angles
     function updatePupilPositions(leftRight, upDown) {
-        // Update angles with bounds checking
         root.leftRightAngle = Math.max(0, Math.min(180, leftRight));
         root.upDownAngle = Math.max(0, Math.min(180, upDown));
-
-        root.rightPupilOffset = calculatePupilOffset();
-        root.leftPupilOffset = calculatePupilOffset();
     }
 
     color: "black"
     visibility: Window.FullScreen
     visible: true
+
+    Behavior on leftRightAngle {
+        enabled: false
+
+        NumberAnimation {
+            duration: 300
+            easing.type: Easing.OutQuad
+        }
+    }
+    Behavior on upDownAngle {
+        enabled: false
+
+        NumberAnimation {
+            duration: 300
+            easing.type: Easing.OutQuad
+        }
+    }
 
     Component.onCompleted: {
         root.resetBlinkTimer();
@@ -238,7 +240,33 @@ Window {
         }
     }
 
-    // CONTROLS
+    MouseArea {
+        id: pupilTrackingArea
+
+        property bool shouldTrack: !root.isBlinking && !root.isTouched && !pressed
+
+        anchors.fill: parent
+        hoverEnabled: true
+        propagateComposedEvents: true
+
+        onMouseXChanged: {
+            if (shouldTrack && containsMouse) {
+                root.leftRightAngle = (mouseX / width) * 180;
+            }
+        }
+        onMouseYChanged: {
+            if (shouldTrack && containsMouse) {
+                root.upDownAngle = (mouseY / height) * 180;
+            }
+        }
+        onPressed: mouse => {
+            mouse.accepted = false;
+        }
+        onReleased: mouse => {
+            mouse.accepted = false;
+        }
+    }
+
     // Control panel for shader parameters
 
     Rectangle {
