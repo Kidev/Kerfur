@@ -9,8 +9,8 @@ Please configure QT_ROOT_DIR before running `make`. Either:
   - Pass it on the `make` command line:
       make QT_ROOT_DIR=/path/to/Qt <target>
 
-The folder /path/to/Qt must point to the appropriate version and architecture.
-For example, for Qt 6.8.3 (Linux gcc_64): /opt/Qt/6.8.3/gcc_64.
+The folder /path/to/Qt must point to the appropriate version and architecture for `host`.
+For example, for Qt 6.8.3 `gcc_64` (on Linux): `/opt/Qt/6.8.3/gcc_64`
 
 You must fix this
 endef
@@ -22,15 +22,16 @@ endif
 VERSION_TAG ?= "0.0.0"
 BUILD_DIR ?= build
 INSTALL_DIR ?= install
+WASM_ARCH ?= wasm_multithread
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
-QT_ROOT_DIR_TARGET := $(abspath $(QT_ROOT_DIR)/../wasm_multithread)
+QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../wasm_multithread)
 QT_VERSION := $(notdir $(abspath $(QT_ROOT_DIR)/..))
 QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
 QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
-WASM_PROJECT_NAME := kerfur
-
+WASM_PROJECT_NAME ?= kerfur
+WEBPAGE_TITLE ?= Kerfur
 
 all: wipe desktop
 
@@ -67,9 +68,10 @@ web: wipe emsdk
 	cp build/*.js install/
 	cp build/*.wasm install/
 	cp build/*.svg install/
+	cp logo.png install/
 
-	sed -i 's#<title>kerfur</title>#<title>Kerfur | Kidev.org<\/title><link rel="icon" href="assets/img/favicon.ico" type="image/x-icon">#g' install/index.html
-	sed -i "s#<strong>Qt for WebAssembly: kerfur</strong>#<h1 style='color:\#ffffff;'><strong>Kerfur</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" install/index.html
+	sed -i 's#<title>$(WASM_PROJECT_NAME)</title>#<title>$(WEBPAGE_TITLE) | Kidev.org<\/title><link rel="icon" href="assets/img/favicon.ico" type="image/x-icon">#g' install/index.html
+	sed -i "s#<strong>Qt for WebAssembly: $(WASM_PROJECT_NAME)</strong>#<h1 style='color:\#ffffff;'><strong>$(WEBPAGE_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" install/index.html
 	sed -i "s# height: 100% }# height: 100%; background-color:\#01010c; }#g" install/index.html
 	sed -i 's#<img src="qtlogo.svg" width="320" height="200" style="display:block"></img>#<img src="logo.png" width="260" height="260" style="display:block">#g' install/index.html
 	sed -i 's#<div id="qtstatus">#<div id="qtstatus" style="color:\#ffffff; font-weight:bold">#g' install/index.html
