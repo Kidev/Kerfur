@@ -43,6 +43,7 @@ desktop:
 	cmake --install $(BUILD_DIR)
 
 web: clean emsdk
+	. ./emsdk/emsdk_env.sh && \
 	./emsdk/upstream/emscripten/emcmake \
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
@@ -54,11 +55,10 @@ web: clean emsdk
 	-DQt6_DIR=$(QT_MODULE_PATH) \
 	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET)
+	. ./emsdk/emsdk_env.sh && \
 	cmake --build $(BUILD_DIR)
-	cmake --install $(BUILD_DIR)
 
 emsdk:
-	echo $(QT_NAME)
 	@EMSDK_VERSION=""; \
 	case "$(QT_VERSION)" in \
 		6.2*) EMSDK_VERSION="2.0.14" ;; \
@@ -95,12 +95,12 @@ emsdk:
 		. ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
-run-web: emsdk
-	@if [ ! -f "./install/index.html" ]; then \
+run-web:
+	@if [ ! -f "./build/index.html" ]; then \
 		echo "Error: Web build not found. Run 'make web' first."; \
 		exit 1; \
 	fi
-	./emsdk/upstream/emscripten/emrun ./install/index.html --kill_start --kill_exit
+	./emsdk/upstream/emscripten/emrun ./build/index.html --kill_start --kill_exit
 
 clean:
 	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR)

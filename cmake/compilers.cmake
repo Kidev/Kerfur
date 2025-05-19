@@ -12,4 +12,5 @@ endif ()
 
 if (EMSCRIPTEN)
     target_compile_options(${PROJECT_NAME} PUBLIC -Os -DNDEBUG)
+    target_link_options(${PROJECT_NAME} PRIVATE -sUSE_PTHREADS=1)
 endif ()
