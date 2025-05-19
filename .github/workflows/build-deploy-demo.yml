@@ -12,7 +12,7 @@ jobs:
       qt_version: '6.8.3'
       qt_host_arch: 'gcc_64'
       qt_target_arch: 'wasm_multithread'
-      qt_modules: 'wasm_multithread qtquick3d qtshadertools'
+      qt_modules: 'qtquick3d qtshadertools'
       qt_root: '/home/runner/work/Kerfur/Kerfur/Qt/6.8.3/gcc_64'
       qt_root_folder: '/home/runner/work/Kerfur/Kerfur'
       target_folder: 'Kerfur'
