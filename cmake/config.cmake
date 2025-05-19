@@ -16,7 +16,7 @@ file(
     shaders/*
 )
 set(RESOURCES_FILE "resources.qrc")
-set(SOURCES_EXTRA "Makefile" ".github/workflows/build-deploy-demo.yml")
+# set(SOURCES_EXTRA "Makefile" ".github/workflows/build-deploy-demo.yml")
 
 resolve_env_or_var(QT_ROOT_DIR "" QT_INSTALL_DIR)
 

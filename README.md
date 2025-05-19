@@ -1,5 +1,5 @@
-# Kerfur
+# Kerfur  
+Try it online [here](https://demo.kidev.org/Kerfur)
 
-![meow](assets/img/kerfur.gif)
-
-_Meow!_
+![meow](kerfur.gif)  
+_meow_
