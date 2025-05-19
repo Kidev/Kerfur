@@ -54,7 +54,7 @@ jobs:
       - name: Upload to FTP
         shell: bash
         run: |
-          lftp -u "${{ secrets.FTP_UPLOAD_USER }}","${{ secrets.FTP_UPLOAD_PW }}" ${{ secrets.FTP_UPLOAD_IP }} <<EOF
+          lftp -u ${{ secrets.FTP_UPLOAD_USER }},${{ secrets.FTP_UPLOAD_PW }} ${{ secrets.FTP_UPLOAD_IP }} <<EOF
           set ssl:verify-certificate no
           mirror -R --only-newer --verbose ${{ env.source_folder }} ${{ env.target_folder }}
           quit
