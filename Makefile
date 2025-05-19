@@ -42,7 +42,7 @@ desktop:
 	cmake --build $(BUILD_DIR)
 	cmake --install $(BUILD_DIR)
 
-web: clean emsdk
+web: wipe emsdk
 	. ./emsdk/emsdk_env.sh && \
 	./emsdk/upstream/emscripten/emcmake \
 	cmake -S . -B $(BUILD_DIR) \
