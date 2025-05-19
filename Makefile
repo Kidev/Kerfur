@@ -45,7 +45,7 @@ desktop:
 
 web: wipe emsdk
 	export EMSDK=$(shell pwd)/emsdk && \
-	source ./emsdk/emsdk_env.sh && \
+	. ./emsdk/emsdk_env.sh && \
 	./emsdk/upstream/emscripten/emcmake \
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
@@ -57,7 +57,7 @@ web: wipe emsdk
 	-DQt6_DIR=$(QT_MODULE_PATH) \
 	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET)
-	source ./emsdk/emsdk_env.sh && \
+	. ./emsdk/emsdk_env.sh && \
 	cmake --build $(BUILD_DIR)
 	mkdir -p install/assets/img install/assets/sound
 	cp -r assets/img install/assets/
@@ -114,7 +114,7 @@ emsdk:
 	if [ "$$ACTIVE_VERSION" != "$$EMSDK_VERSION" ]; then \
 		echo "Activating Emscripten version $$EMSDK_VERSION..."; \
 		./emsdk/emsdk activate $$EMSDK_VERSION || { echo "Error: Failed to activate Emscripten"; exit 1; }; \
-		source ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
+		. ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
 run-web:
@@ -122,7 +122,7 @@ run-web:
 		echo "Error: Web build install folder not found. Run 'make web' first."; \
 		exit 1; \
 	fi
-	source ./emsdk/emsdk_env.sh && \
+	. ./emsdk/emsdk_env.sh && \
 	./emsdk/upstream/emscripten/emrun ./install/index.html --kill_start --kill_exit
 
 clean:
