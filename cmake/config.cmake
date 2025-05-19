@@ -62,8 +62,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG_BUILD)
 endif ()
 
-if (EMSCRIPTEN)
-    set(QT_WASM_INITIAL_MEMORY 33554432)
+find_program(CCACHE_FOUND ccache)
+if (CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
 endif ()
 
 message(STATUS "QT_INSTALL_DIR=${QT_INSTALL_DIR}")
