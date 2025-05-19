@@ -29,6 +29,7 @@ QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
 QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
+WASM_INDEX_FILE := kerfur.html
 
 
 all: wipe desktop
@@ -96,11 +97,12 @@ emsdk:
 	fi
 
 run-web:
-	@if [ ! -f "./build/index.html" ]; then \
+	@if [ ! -f "./build/$(WASM_INDEX_FILE)" ]; then \
 		echo "Error: Web build not found. Run 'make web' first."; \
 		exit 1; \
 	fi
-	./emsdk/upstream/emscripten/emrun ./build/index.html --kill_start --kill_exit
+	. ./emsdk/emsdk_env.sh && \
+	./emsdk/upstream/emscripten/emrun ./build/$(WASM_INDEX_FILE) --kill_start --kill_exit
 
 clean:
 	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR)

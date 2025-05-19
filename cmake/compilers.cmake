@@ -15,19 +15,18 @@ if (EMSCRIPTEN)
     target_compile_options(${PROJECT_NAME} PUBLIC -Os -DNDEBUG)
     target_link_options(
         ${PROJECT_NAME}
-        PRIVATE
-        -sUSE_WEBGL2=1
-        -sMAX_WEBGL_VERSION=2
-        -sMIN_WEBGL_VERSION=2
-        -sUSE_PTHREADS=1
-        -sALLOW_MEMORY_GROWTH=1
-        -sOFFSCREENCANVAS_SUPPORT=1
-        -sUSE_GLFW=3
-        -sFULL_ES2=1
+        PUBLIC
         -sASYNCIFY
         -Os
-        -sLIBRARY_DEBUG=1
-        -sSYSCALL_DEBUG=1
-        # -sFS_LOG=1 -sSOCKET_DEBUG
     )
+    target_link_options(
+        ${PROJECT_NAME}
+        PRIVATE
+        -s
+        FULL_ES3=1
+    )
+    # target_link_options( ${PROJECT_NAME} PRIVATE -sUSE_WEBGL2=1 -sMAX_WEBGL_VERSION=2
+    # -sMIN_WEBGL_VERSION=2 -sUSE_PTHREADS=1 -sALLOW_MEMORY_GROWTH=1 -sOFFSCREENCANVAS_SUPPORT=1
+    # -sUSE_GLFW=3 -sFULL_ES2=1 -sASYNCIFY -Os -sLIBRARY_DEBUG=1 -sSYSCALL_DEBUG=1 # -sFS_LOG=1
+    # -sSOCKET_DEBUG )
 endif ()
