@@ -15,7 +15,8 @@ file(
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     shaders/*
 )
-set(RESOURCES_FILE "resources.qrc" "Makefile")
+set(RESOURCES_FILE "resources.qrc")
+set(SOURCES_EXTRA "Makefile")
 
 resolve_env_or_var(QT_ROOT_DIR "" QT_INSTALL_DIR)
 

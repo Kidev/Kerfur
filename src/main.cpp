@@ -29,16 +29,6 @@
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-
-    QSurfaceFormat format;
-    format.setVersion(4, 4);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSwapInterval(1);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    QSurfaceFormat::setDefaultFormat(format);
-
     QGuiApplication app{argc, argv};
     app.setApplicationName("Kerfur");
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
