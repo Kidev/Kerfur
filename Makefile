@@ -44,6 +44,7 @@ desktop:
 	cmake --install $(BUILD_DIR)
 
 web: wipe emsdk
+	export EMSDK=$(shell pwd)/emsdk && \
 	. ./emsdk/emsdk_env.sh && \
 	./emsdk/upstream/emscripten/emcmake \
 	cmake -S . -B $(BUILD_DIR) \
