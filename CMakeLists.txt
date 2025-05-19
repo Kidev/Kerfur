@@ -16,6 +16,7 @@ find_package(
                Qml
                Concurrent
                ShaderTools
+               Multimedia
 )
 
 qt_standard_project_setup(REQUIRES 6.8)
@@ -53,6 +54,7 @@ target_link_libraries(
            Qt6::Quick
            Qt6::Qml
            Qt6::Concurrent
+           Qt6::Multimedia
 )
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")
