@@ -28,7 +28,7 @@ jobs:
       - name: Install tools
         shell: bash
         run: |
-          sudo apt-get -y install jq lftp brotli expect
+          sudo apt-get -y install jq lftp brotli expect ccache
 
       - name: Update CMake
         uses: lukka/get-cmake@latest
@@ -39,12 +39,14 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.2.1
         with:
-          version: '6.8.3'
+          version: ${{ env.qt_version }}
           host: 'all_os'
           target: 'wasm'
-          arch: 'wasm_multithread'
+          arch: ${{ env.qt_target_arch }}
           modules: ${{ env.qt_modules }}
           dir: ${{ github.workspace }}
+          cache: 'true'
+          cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ env.qt_host_arch }}'
 
       - name: CMake Build
         shell: bash
