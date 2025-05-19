@@ -3,20 +3,19 @@ name: Build and deploy demo
 on:
   push:
     branches: ["main"]
- 
-jobs: 
+
+jobs:
   build-and-deploy:
     name: "Build and deploy"
     env:
-      workspace_root: '/home/runner/work/Kerfur/Kerfur'
       qt_version: '6.8.3'
       qt_host_arch: 'gcc_64'
       qt_target_arch: 'wasm_multithread'
       qt_modules: 'qtquick3d qtshadertools'
-      qt_root: '/home/runner/work/Kerfur/Kerfur/Qt/6.8.3/gcc_64'
-      qt_root_folder: '/home/runner/work/Kerfur/Kerfur'
+      qt_root: '${{ github.workspace }}/Qt/6.8.3/gcc_64'
       target_folder: 'Kerfur'
-      source_folder: '/home/runner/work/Kerfur/Kerfur/build/'
+      source_folder: '${{ github.workspace }}/build/'
+      EMSDK: '${{ github.workspace }}/emsdk'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -25,11 +24,11 @@ jobs:
           fetch-depth: 1
           submodules: 'recursive'
           lfs: 'true'
- 
+
       - name: Install tools
         shell: bash
         run: |
-          sudo apt-get -y install jq lftp brotli expect 
+          sudo apt-get -y install jq lftp brotli expect
 
       - name: Update CMake
         uses: lukka/get-cmake@latest
@@ -45,8 +44,8 @@ jobs:
           target: 'wasm'
           arch: 'wasm_multithread'
           modules: ${{ env.qt_modules }}
-          dir: ${{ env.qt_root_folder }}
-  
+          dir: ${{ github.workspace }}
+
       - name: CMake Build
         shell: bash
         run: |
