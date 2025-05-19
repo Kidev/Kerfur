@@ -3,7 +3,6 @@ import QtQuick
 Item {
     id: root
 
-    property int blurMax: 64
     property real blurMultiplier: 5
     property int glowBlendMode: 1
     property real glowBloom: 1.0
@@ -15,10 +14,9 @@ Item {
     BlurHelper {
         id: blurHelper
 
-        property int blurMax: root.blurMax
-        property real blurMultiplier: root.blurMultiplier
-
         anchors.fill: parent
+        blurMultiplier: root.blurMultiplier
+        source: root.source
     }
 
     ShaderEffect {

@@ -1,6 +1,4 @@
 #version 440
-#define LED_SCREEN_SIZE_FROM_COLOR 0
-#define LED_SCREEN_COLOR_FROM_SOURCE 1
 
 layout(location = 0) in vec4 qt_Vertex;
 layout(location = 1) in vec2 qt_MultiTexCoord0;
