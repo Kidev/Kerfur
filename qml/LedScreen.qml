@@ -3,7 +3,6 @@ import QtQuick
 Item {
     id: root
 
-    property int blurMax: 64
     property real blurMultiplier: 5
     property int glowBlendMode: 1
     property real glowBloom: 1.0
@@ -27,6 +26,7 @@ Item {
         blending: true
         fragmentShader: 'qrc:/shaders/kerfur.frag.qsb'
         layer.enabled: true
+        layer.smooth: true
         vertexShader: 'qrc:/shaders/kerfur.vert.qsb'
 
         ShaderEffectSource {
@@ -40,7 +40,6 @@ Item {
 
     Glow {
         anchors.fill: parent
-        blurMax: root.blurMax
         blurMultiplier: root.blurMultiplier
         glowBlendMode: root.glowBlendMode
         glowBloom: root.glowBloom

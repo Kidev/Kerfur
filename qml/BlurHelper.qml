@@ -1,77 +1,69 @@
-// Copyright (C) 2022 The Qt Company Ltd.
-// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
-
 import QtQuick
 
 Item {
-    id: rootItem
+    id: root
 
+    readonly property int blurMax: 64
+    property real blurMultiplier: 5
     property alias blurSrc1: blurredItemSource1
     property alias blurSrc2: blurredItemSource2
     property alias blurSrc3: blurredItemSource3
     property alias blurSrc4: blurredItemSource4
     property alias blurSrc5: blurredItemSource5
-
-    QtObject {
-        id: priv
-
-        property bool useBlurItem1: true
-        property bool useBlurItem2: rootItem.blurMax > 2
-        property bool useBlurItem3: rootItem.blurMax > 8
-        property bool useBlurItem4: rootItem.blurMax > 16
-        property bool useBlurItem5: rootItem.blurMax > 32
-    }
+    property Item source: null
 
     BlurItem {
         id: blurredItemSource1
 
-        // Size of the first blurred item is by default half of the source.
-        // Increase for quality and decrease for performance & more blur.
-        readonly property int blurItemSize: 8
-        property Item src: priv.useBlurItem1 ? source : null
-
-        height: src ? Math.ceil(src.height / 16) * blurItemSize : 0
-        width: src ? Math.ceil(src.width / 16) * blurItemSize : 0
+        height: blurredItemSource1.src ? Math.ceil(blurredItemSource1.src.height / 16) * blurredItemSource1.blurItemSize : 0
+        multiplier: root.blurMultiplier
+        src: root.source
+        width: blurredItemSource1.src ? Math.ceil(blurredItemSource1.src.width / 16) * blurredItemSource1.blurItemSize : 0
     }
 
     BlurItem {
         id: blurredItemSource2
 
-        property Item src: priv.useBlurItem2 ? blurredItemSource1 : null
-
         height: blurredItemSource1.height * 0.5
+        multiplier: root.blurMultiplier
+        src: root.blurMax > 2 ? blurredItemSource1 : null
         width: blurredItemSource1.width * 0.5
     }
 
     BlurItem {
         id: blurredItemSource3
 
-        property Item src: priv.useBlurItem3 ? blurredItemSource2 : null
-
         height: blurredItemSource2.height * 0.5
+        multiplier: root.blurMultiplier
+        src: root.blurMax > 8 ? blurredItemSource2 : null
         width: blurredItemSource2.width * 0.5
     }
 
     BlurItem {
         id: blurredItemSource4
 
-        property Item src: priv.useBlurItem4 ? blurredItemSource3 : null
-
         height: blurredItemSource3.height * 0.5
+        multiplier: root.blurMultiplier
+        src: root.blurMax > 16 ? blurredItemSource3 : null
         width: blurredItemSource3.width * 0.5
     }
 
     BlurItem {
         id: blurredItemSource5
 
-        property Item src: priv.useBlurItem5 ? blurredItemSource4 : null
-
         height: blurredItemSource4.height * 0.5
+        multiplier: root.blurMultiplier
+        src: root.blurMax > 32 ? blurredItemSource4 : null
         width: blurredItemSource4.width * 0.5
     }
 
     component BlurItem: ShaderEffect {
-        property vector2d offset: Qt.vector2d((1.0 + rootItem.blurMultiplier) / width, (1.0 + rootItem.blurMultiplier) / height)
+        id: self
+
+        readonly property int blurItemSize: 8
+        property real multiplier: 5
+        property vector2d offset: Qt.vector2d((1.0 + self.multiplier) / self.width, (1.0 + self.multiplier) / self.height)
+        property Item src: null
 
         fragmentShader: "qrc:/shaders/bluritems.frag.qsb"
         layer.enabled: true

@@ -11,15 +11,22 @@ Window {
     readonly property int doubleBlinkDuration: 200
     property bool isBlinking: false
     property bool isTouched: false
+    readonly property point leftEyeCenter: Qt.point(32, 22)
+    property real leftRightAngle: 0
     readonly property int maxBlinkInterval: 8000
+    readonly property int maxPupilMovement: 5
     readonly property real meowVolume: 1
     readonly property int minBlinkInterval: 2000
     readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
     readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
     readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
-    readonly property string pathEyesPupil: "qrc:/assets/img/eyes_pupil.png"
+    readonly property string pathEyesPupil: "qrc:/assets/img/pupil.png"
     readonly property string pathSoundMeow: "qrc:/assets/sound/meow.wav"
+    readonly property point rightEyeCenter: Qt.point(90, 22)
     property bool showControls: false
+    property real upDownAngle: 0
+    property bool winkLeft: false
+    property bool winkRight: false
 
     function playMeowSound() {
         meowSound.play();
@@ -58,7 +65,7 @@ Window {
     }
 
     Shortcut {
-        enabled: false
+        enabled: true
         sequence: "Tab"
 
         onActivated: root.showControls = !root.showControls
@@ -71,27 +78,66 @@ Window {
         volume: root.meowVolume
     }
 
-    Image {
-        id: displayImage
+    Item {
+        id: displayContainer
+
+        property real relativeScaleHeight: displayImage.height / displayImage.sourceSize.height
+        property real relativeScaleWidth: displayImage.width / displayImage.sourceSize.width
 
         anchors.centerIn: parent
-        fillMode: Image.PreserveAspectFit
-        height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
-        source: root.isTouched ? root.pathEyesMeow : root.isBlinking ? root.pathEyesClosed : root.pathEyesOpened
-        width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
+        height: displayImage.height
+        layer.enabled: true
+        layer.smooth: true
+        width: displayImage.width
 
-        onStatusChanged: {
-            if (displayImage.status === Image.Error) {
-                console.error("Failed to load image:", displayImage.source);
+        Image {
+            id: displayImage
+
+            anchors.centerIn: parent
+            fillMode: Image.PreserveAspectFit
+            height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
+            source: root.isTouched ? root.pathEyesMeow : root.isBlinking ? root.pathEyesClosed : root.pathEyesOpened
+            width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
+
+            onStatusChanged: {
+                if (displayImage.status === Image.Error) {
+                    console.error("Failed to load image:", displayImage.source);
+                }
             }
+        }
+
+        Image {
+            id: leftPupil
+
+            property point offset: Qt.point(0, 0)
+
+            height: leftPupil.sourceSize.height * displayContainer.relativeScaleHeight
+            source: root.pathEyesPupil
+            visible: !root.isBlinking && !root.isTouched && !root.winkLeft
+            width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
+            x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + offset.x)
+            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + offset.y)
+        }
+
+        Image {
+            id: rightPupil
+
+            property point offset: Qt.point(0, 0)
+
+            height: rightPupil.sourceSize.height * displayContainer.relativeScaleHeight
+            source: root.pathEyesPupil
+            visible: !root.isBlinking && !root.isTouched && !root.winkRight
+            width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
+            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + offset.x)
+            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + offset.y)
         }
     }
 
     LedScreen {
         id: ledScreen
 
-        anchors.fill: displayImage
-        source: displayImage
+        anchors.fill: displayContainer
+        source: displayContainer
     }
 
     Timer {
@@ -236,24 +282,6 @@ Window {
                     width: parent.width - 20
 
                     onValueChanged: ledScreen.blurMultiplier = value
-                }
-
-                // Blur Max slider
-                Text {
-                    color: "white"
-                    text: "Blur Max: " + blurMaxSlider.value
-                }
-
-                Slider {
-                    id: blurMaxSlider
-
-                    from: 2
-                    stepSize: 1
-                    to: 64
-                    value: 64
-                    width: parent.width - 20
-
-                    onValueChanged: ledScreen.blurMax = value
                 }
 
                 // Glow Blend Mode
