@@ -5,6 +5,6 @@
         <file>assets/img/eyes_opened.png</file>
         <file>assets/sound/meow.wav</file>
         <file>assets/img/pupil.png</file>
-        <file>kidev.png</file>
+        <file>assets/img/favicon.ico</file>
     </qresource>
 </RCC>
