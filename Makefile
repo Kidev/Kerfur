@@ -25,20 +25,40 @@ INSTALL_DIR ?= install
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
 QT_ROOT_DIR_TARGET := $(abspath $(QT_ROOT_DIR)/../wasm_multithread)
 QT_VERSION := $(notdir $(abspath $(QT_ROOT_DIR)/..))
+QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
+QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
+QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
+QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
+
 
 all: wipe desktop
 
 desktop:
-	cmake -S . -B $(BUILD_DIR) -DVERSION_TAG=$(VERSION_TAG) -DCMAKE_BUILD_TYPE=Release -DQT_ROOT_DIR=$(QT_ROOT_DIR) -DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR)
+	cmake -S . -B $(BUILD_DIR) \
+	-DVERSION_TAG=$(VERSION_TAG) \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
+	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR)
 	cmake --build $(BUILD_DIR)
 	cmake --install $(BUILD_DIR)
 
 web: clean emsdk
-	./emsdk/upstream/emscripten/emcmake cmake -S . -B $(BUILD_DIR) -DVERSION_TAG=$(VERSION_TAG) -DCMAKE_BUILD_TYPE=MinSizeRel -DQT_ROOT_DIR=$(QT_ROOT_DIR) -DEMSCRIPTEN=ON -DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) -DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR) -DQT_TARGET_ARCH=${QT_TARGET_ARCH}
-	./emsdk/upstream/emscripten/emcmake cmake --build $(BUILD_DIR)
-	./emsdk/upstream/emscripten/emcmake cmake --install $(BUILD_DIR)
+	./emsdk/upstream/emscripten/emcmake \
+	cmake -S . -B $(BUILD_DIR) \
+	-DVERSION_TAG=$(VERSION_TAG) \
+	-DCMAKE_BUILD_TYPE=MinSizeRel \
+	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
+	-DEMSCRIPTEN=ON \
+	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) \
+	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR) \
+	-DQt6_DIR=$(QT_MODULE_PATH) \
+	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) \
+	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET)
+	cmake --build $(BUILD_DIR)
+	cmake --install $(BUILD_DIR)
 
 emsdk:
+	echo $(QT_NAME)
 	@EMSDK_VERSION=""; \
 	case "$(QT_VERSION)" in \
 		6.2*) EMSDK_VERSION="2.0.14" ;; \
