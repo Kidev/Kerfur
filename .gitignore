@@ -4,6 +4,7 @@ emsdk/
 moc_*
 viewsvg
 .*
+!.github/
 ui_*.h
 bin/
 build/

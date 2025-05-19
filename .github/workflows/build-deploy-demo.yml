@@ -1,0 +1,62 @@
+name: Build and deploy demo
+
+on:
+  push:
+    branches: ["main"]
+ 
+jobs: 
+  build-and-deploy:
+    name: "Build and deploy"
+    env:
+      workspace_root: '/home/runner/work/Kerfur/Kerfur'
+      qt_version: '6.8.3'
+      qt_host_arch: 'gcc_64'
+      qt_target_arch: 'wasm_multithread'
+      qt_modules: 'wasm_multithread qtquick3d qtshadertools'
+      qt_root: '/home/runner/work/Kerfur/Kerfur/Qt/6.8.3/gcc_64'
+      qt_root_folder: '/home/runner/work/Kerfur/Kerfur'
+      target_folder: 'Kerfur'
+      source_folder: '/home/runner/work/Kerfur/Kerfur/build/'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: 'recursive'
+          lfs: 'true'
+ 
+      - name: Install tools
+        shell: bash
+        run: |
+          sudo apt-get -y install jq lftp brotli expect 
+
+      - name: Update CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.2.1
+        with:
+          version: '6.8.3'
+          host: 'all_os'
+          target: 'wasm'
+          arch: 'wasm_multithread'
+          modules: ${{ env.qt_modules }}
+          dir: ${{ env.qt_root_folder }}
+  
+      - name: CMake Build
+        shell: bash
+        run: |
+          make web QT_ROOT_DIR=${{ env.qt_root }}
+
+      - name: Upload to FTP
+        shell: bash
+        run: |
+          lftp -u "${{ secrets.FTP_UPLOAD_USER }}","${{ secrets.FTP_UPLOAD_PW }}" ${{ secrets.FTP_UPLOAD_IP }} <<EOF
+          set ssl:verify-certificate no
+          mirror -R --only-newer --verbose ${{ env.source_folder }} ${{ env.target_folder }}
+          quit
+          EOF
