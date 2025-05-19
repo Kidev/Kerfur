@@ -29,7 +29,7 @@ QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
 QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
-WASM_INDEX_FILE := kerfur.html
+WASM_PROJECT_NAME := kerfur
 
 
 all: wipe desktop
@@ -45,7 +45,7 @@ desktop:
 
 web: wipe emsdk
 	export EMSDK=$(shell pwd)/emsdk && \
-	. ./emsdk/emsdk_env.sh && \
+	source ./emsdk/emsdk_env.sh && \
 	./emsdk/upstream/emscripten/emcmake \
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
@@ -57,8 +57,27 @@ web: wipe emsdk
 	-DQt6_DIR=$(QT_MODULE_PATH) \
 	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET)
-	. ./emsdk/emsdk_env.sh && \
+	source ./emsdk/emsdk_env.sh && \
 	cmake --build $(BUILD_DIR)
+	mkdir -p install/assets/img install/assets/sound
+	cp -r assets/ install/
+
+	cp build/$(WASM_PROJECT_NAME).html install/index.html
+	cp build/*.js install/
+	cp build/*.wasm install/
+	cp build/*.css install/
+
+	sed -i 's#<title>kerfur</title>#<title>Kerfur | Kidev.org<\/title><link rel="icon" href="assets/img/favicon.ico" type="image/x-icon">#g' install/index.html
+	sed -i "s#<strong>Qt for WebAssembly: kerfur</strong>#<h1 style='color:\#ffffff;'><strong>Kerfur</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" install/index.html
+	sed -i "s# height: 100% }# height: 100%; background-color:\#01010c; }#g" install/index.html
+	sed -i 's#<img src="qtlogo.svg" width="320" height="200" style="display:block"></img>#<img src="logo.png" width="260" height="260" style="display:block">#g' install/index.html
+	sed -i 's#<div id="qtstatus">#<div id="qtstatus" style="color:\#ffffff; font-weight:bold">#g' install/index.html
+	sed -i 's#undefined ? ` with code ` :#undefined ? ` with code ${exitData.code}` :#g' install/index.html
+	sed -i 's#undefined ? ` ()` :#undefined ? `<br><span style="color:\#ff0000">Error: ${exitData.text}</span>` :#g' install/index.html
+	sed -i 's/\/\*.*\*\///g' install/index.html
+	sed -i '/<!--/,/-->/d' install/index.html
+
+	find install/ -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" -o -name "*.wasm" -o -name "assets/img/*.png" -o -name "assets/img/*.ico" -o -name "assets/sound/*.wav" \) -exec brotli --best --force {} \;
 
 emsdk:
 	@EMSDK_VERSION=""; \
@@ -94,16 +113,16 @@ emsdk:
 	if [ "$$ACTIVE_VERSION" != "$$EMSDK_VERSION" ]; then \
 		echo "Activating Emscripten version $$EMSDK_VERSION..."; \
 		./emsdk/emsdk activate $$EMSDK_VERSION || { echo "Error: Failed to activate Emscripten"; exit 1; }; \
-		. ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
+		source ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
 run-web:
-	@if [ ! -f "./build/$(WASM_INDEX_FILE)" ]; then \
-		echo "Error: Web build not found. Run 'make web' first."; \
+	@if [ ! -f "./install/index.html" ]; then \
+		echo "Error: Web build install folder not found. Run 'make web' first."; \
 		exit 1; \
 	fi
-	. ./emsdk/emsdk_env.sh && \
-	./emsdk/upstream/emscripten/emrun ./build/$(WASM_INDEX_FILE) --kill_start --kill_exit
+	source ./emsdk/emsdk_env.sh && \
+	./emsdk/upstream/emscripten/emrun ./install/index.html --kill_start --kill_exit
 
 clean:
 	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR)
