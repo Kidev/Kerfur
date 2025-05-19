@@ -14,7 +14,7 @@ jobs:
       qt_modules: 'qtquick3d qtshadertools'
       qt_root: '${{ github.workspace }}/Qt/6.8.3/gcc_64'
       target_folder: 'Kerfur'
-      source_folder: '${{ github.workspace }}/build/'
+      source_folder: '${{ github.workspace }}/install/'
       EMSDK: '${{ github.workspace }}/emsdk'
     runs-on: ubuntu-24.04
     steps:
