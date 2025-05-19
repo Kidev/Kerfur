@@ -60,12 +60,13 @@ web: wipe emsdk
 	source ./emsdk/emsdk_env.sh && \
 	cmake --build $(BUILD_DIR)
 	mkdir -p install/assets/img install/assets/sound
-	cp -r assets/ install/
+	cp -r assets/img install/assets/
+	cp -r assets/sound install/assets/
 
 	cp build/$(WASM_PROJECT_NAME).html install/index.html
 	cp build/*.js install/
 	cp build/*.wasm install/
-	cp build/*.css install/
+	cp build/*.svg install/
 
 	sed -i 's#<title>kerfur</title>#<title>Kerfur | Kidev.org<\/title><link rel="icon" href="assets/img/favicon.ico" type="image/x-icon">#g' install/index.html
 	sed -i "s#<strong>Qt for WebAssembly: kerfur</strong>#<h1 style='color:\#ffffff;'><strong>Kerfur</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" install/index.html
@@ -77,7 +78,7 @@ web: wipe emsdk
 	sed -i 's/\/\*.*\*\///g' install/index.html
 	sed -i '/<!--/,/-->/d' install/index.html
 
-	find install/ -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" -o -name "*.wasm" -o -name "assets/img/*.png" -o -name "assets/img/*.ico" -o -name "assets/sound/*.wav" \) -exec brotli --best --force {} \;
+	find install/ -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" -o -name "*.wasm" -o -name "*.png" -o -name "*.ico" -o -name "*.wav" -o -name "*.mp3" \) -exec brotli --best --force {} \;
 
 emsdk:
 	@EMSDK_VERSION=""; \
