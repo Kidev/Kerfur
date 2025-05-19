@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import QtMultimedia
 import QtQuick.Controls
+import QtQuick.Effects
 
 Window {
     id: root
@@ -12,7 +13,8 @@ Window {
     property bool isBlinking: false
     property bool isTouched: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
-    property real leftRightAngle: 0
+    property point leftPupilOffset: Qt.point(0, 0)
+    property real leftRightAngle: 90
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
     readonly property real meowVolume: 1
@@ -23,10 +25,21 @@ Window {
     readonly property string pathEyesPupil: "qrc:/assets/img/pupil.png"
     readonly property string pathSoundMeow: "qrc:/assets/sound/meow.wav"
     readonly property point rightEyeCenter: Qt.point(90, 22)
+    property point rightPupilOffset: root.leftPupilOffset
     property bool showControls: false
-    property real upDownAngle: 0
+    property real upDownAngle: 90
     property bool winkLeft: false
     property bool winkRight: false
+
+    function calculatePupilOffset() {
+        // Convert angles to normalized positions (-1 to 1)
+        // For leftRightAngle: 0 = far left, 90 = center, 180 = far right
+        // For upDownAngle: 0 = far up, 90 = center, 180 = far down
+        var xOffset = ((leftRightAngle - 90) / 90) * maxPupilMovement;
+        var yOffset = ((upDownAngle - 90) / 90) * maxPupilMovement;
+
+        return Qt.point(xOffset, yOffset);
+    }
 
     function playMeowSound() {
         meowSound.play();
@@ -50,12 +63,23 @@ Window {
         }
     }
 
+    // Function to update pupil positions based on angles
+    function updatePupilPositions(leftRight, upDown) {
+        // Update angles with bounds checking
+        root.leftRightAngle = Math.max(0, Math.min(180, leftRight));
+        root.upDownAngle = Math.max(0, Math.min(180, upDown));
+
+        root.rightPupilOffset = calculatePupilOffset();
+        root.leftPupilOffset = calculatePupilOffset();
+    }
+
     color: "black"
     visibility: Window.FullScreen
     visible: true
 
     Component.onCompleted: {
         root.resetBlinkTimer();
+        updatePupilPositions(leftRightAngle, upDownAngle);
     }
 
     Shortcut {
@@ -85,19 +109,15 @@ Window {
         property real relativeScaleWidth: displayImage.width / displayImage.sourceSize.width
 
         anchors.centerIn: parent
-        height: displayImage.height
-        layer.enabled: true
-        layer.smooth: true
-        width: displayImage.width
+        height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
+        width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
 
         Image {
             id: displayImage
 
-            anchors.centerIn: parent
+            anchors.fill: parent
             fillMode: Image.PreserveAspectFit
-            height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
             source: root.isTouched ? root.pathEyesMeow : root.isBlinking ? root.pathEyesClosed : root.pathEyesOpened
-            width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
 
             onStatusChanged: {
                 if (displayImage.status === Image.Error) {
@@ -109,35 +129,51 @@ Window {
         Image {
             id: leftPupil
 
-            property point offset: Qt.point(0, 0)
-
             height: leftPupil.sourceSize.height * displayContainer.relativeScaleHeight
             source: root.pathEyesPupil
-            visible: !root.isBlinking && !root.isTouched && !root.winkLeft
+            visible: !root.winkLeft
             width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
-            x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + offset.x)
-            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + offset.y)
+            x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + root.leftPupilOffset.x)
+            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + root.leftPupilOffset.y)
         }
 
         Image {
             id: rightPupil
 
-            property point offset: Qt.point(0, 0)
-
             height: rightPupil.sourceSize.height * displayContainer.relativeScaleHeight
             source: root.pathEyesPupil
-            visible: !root.isBlinking && !root.isTouched && !root.winkRight
+            visible: !root.winkRight
             width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
-            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + offset.x)
-            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + offset.y)
+            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + root.rightPupilOffset.x)
+            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + root.rightPupilOffset.y)
+        }
+    }
+
+    MultiEffect {
+        id: maskedDisplayImage
+
+        anchors.fill: displayContainer
+        layer.enabled: true
+        maskEnabled: !root.isBlinking && !root.isTouched
+        maskInverted: true
+        maskSpreadAtMin: 0.1
+        maskThresholdMin: 0.1
+
+        maskSource: ShaderEffectSource {
+            hideSource: true
+            sourceItem: displayContainer
+        }
+        source: ShaderEffectSource {
+            hideSource: true
+            sourceItem: displayImage
         }
     }
 
     LedScreen {
         id: ledScreen
 
-        anchors.fill: displayContainer
-        source: displayContainer
+        anchors.fill: maskedDisplayImage
+        source: maskedDisplayImage
     }
 
     Timer {
@@ -282,6 +318,40 @@ Window {
                     width: parent.width - 20
 
                     onValueChanged: ledScreen.blurMultiplier = value
+                }
+
+                // Up down angle
+                Text {
+                    color: "white"
+                    text: "Up/down angle: " + root.upDownAngle.toFixed(0)
+                }
+
+                Slider {
+                    id: upDownAngleSlider
+
+                    from: 0
+                    to: 180
+                    value: 90
+                    width: parent.width - 20
+
+                    onValueChanged: root.updatePupilPositions(leftRightAngleSlider.value, upDownAngleSlider.value)
+                }
+
+                // Left right angle
+                Text {
+                    color: "white"
+                    text: "Left/right angle: " + root.leftRightAngle.toFixed(0)
+                }
+
+                Slider {
+                    id: leftRightAngleSlider
+
+                    from: 0
+                    to: 180
+                    value: 90
+                    width: parent.width - 20
+
+                    onValueChanged: root.updatePupilPositions(leftRightAngleSlider.value, upDownAngleSlider.value)
                 }
 
                 // Glow Blend Mode

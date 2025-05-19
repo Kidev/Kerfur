@@ -9,3 +9,7 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 else ()
     message(FATAL_ERROR "Unknown compiler")
 endif ()
+
+if (EMSCRIPTEN)
+    target_compile_options(${PROJECT_NAME} PUBLIC -Os -DNDEBUG)
+endif ()
