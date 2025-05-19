@@ -19,19 +19,21 @@ ifndef QT_ROOT_DIR
 $(error $(MISSING_QT_ROOT))
 endif
 
+WASM_PROJECT_NAME ?= kerfur
+WEBPAGE_TITLE ?= Kerfur
 VERSION_TAG ?= "0.0.0"
+ASSETS_DIR ?= assets
 BUILD_DIR ?= build
 INSTALL_DIR ?= install
 WASM_ARCH ?= wasm_multithread
+BROTLI_EXTENSIONS ?= js css html wasm png ico wav mp3
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
-QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../wasm_multithread)
+QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../$(WASM_ARCH))
 QT_VERSION := $(notdir $(abspath $(QT_ROOT_DIR)/..))
 QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
 QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
-WASM_PROJECT_NAME ?= kerfur
-WEBPAGE_TITLE ?= Kerfur
 
 all: wipe desktop
 
@@ -60,27 +62,37 @@ web: wipe emsdk
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET)
 	. ./emsdk/emsdk_env.sh && \
 	cmake --build $(BUILD_DIR)
-	mkdir -p install/assets/img install/assets/sound
-	cp -r assets/img install/assets/
-	cp -r assets/sound install/assets/
 
-	cp build/$(WASM_PROJECT_NAME).html install/index.html
-	cp build/*.js install/
-	cp build/*.wasm install/
-	cp build/*.svg install/
-	cp logo.png install/
+	mkdir -p $(ABS_INSTALL_DIR)
+	cp -r $(ASSETS_DIR) $(ABS_INSTALL_DIR)
 
-	sed -i 's#<title>$(WASM_PROJECT_NAME)</title>#<title>$(WEBPAGE_TITLE) | Kidev.org<\/title><link rel="icon" href="assets/img/favicon.ico" type="image/x-icon">#g' install/index.html
-	sed -i "s#<strong>Qt for WebAssembly: $(WASM_PROJECT_NAME)</strong>#<h1 style='color:\#ffffff;'><strong>$(WEBPAGE_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" install/index.html
-	sed -i "s# height: 100% }# height: 100%; background-color:\#01010c; }#g" install/index.html
-	sed -i 's#<img src="qtlogo.svg" width="320" height="200" style="display:block"></img>#<img src="logo.png" width="260" height="260" style="display:block">#g' install/index.html
-	sed -i 's#<div id="qtstatus">#<div id="qtstatus" style="color:\#ffffff; font-weight:bold">#g' install/index.html
-	sed -i 's#undefined ? ` with code ` :#undefined ? ` with code ${exitData.code}` :#g' install/index.html
-	sed -i 's#undefined ? ` ()` :#undefined ? `<br><span style="color:\#ff0000">Error: ${exitData.text}</span>` :#g' install/index.html
-	sed -i 's/\/\*.*\*\///g' install/index.html
-	sed -i '/<!--/,/-->/d' install/index.html
+	cp $(BUILD_DIR)/$(WASM_PROJECT_NAME).html $(ABS_INSTALL_DIR)/index.html
+	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
+	cp $(BUILD_DIR)/*.wasm $(ABS_INSTALL_DIR)
+	cp $(BUILD_DIR)/*.svg $(ABS_INSTALL_DIR)
+	cp logo.png $(ABS_INSTALL_DIR)
 
-	find install/ -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" -o -name "*.wasm" -o -name "*.png" -o -name "*.ico" -o -name "*.wav" -o -name "*.mp3" \) -exec brotli --best --force {} \;
+	sed -i 's#<title>$(WASM_PROJECT_NAME)</title>#<title>$(WEBPAGE_TITLE) | Kidev.org<\/title><link rel="icon" href="favicon.ico" type="image/x-icon">#g' $(ABS_INSTALL_DIR)/index.html
+	sed -i "s#<strong>Qt for WebAssembly: $(WASM_PROJECT_NAME)</strong>#<h1 style='color:\#ffffff;'><strong>$(WEBPAGE_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" $(ABS_INSTALL_DIR)/index.html
+	sed -i "s# height: 100% }# height: 100%; background-color:\#01010c; }#g" $(ABS_INSTALL_DIR)/index.html
+	sed -i 's#<img src="qtlogo.svg" width="320" height="200" style="display:block"></img>#<img src="logo.png" width="260" height="260" style="display:block">#g' $(ABS_INSTALL_DIR)/index.html
+	sed -i 's#<div id="qtstatus">#<div id="qtstatus" style="color:\#ffffff; font-weight:bold">#g' $(ABS_INSTALL_DIR)/index.html
+	sed -i 's#undefined ? ` with code ` :#undefined ? ` with code ${exitData.code}` :#g' $(ABS_INSTALL_DIR)/index.html
+	sed -i 's#undefined ? ` ()` :#undefined ? `<br><span style="color:\#ff0000">Error: ${exitData.text}</span>` :#g' $(ABS_INSTALL_DIR)/index.html
+	sed -i 's/\/\*.*\*\///g' $(ABS_INSTALL_DIR)/index.html
+	sed -i '/<!--/,/-->/d' $(ABS_INSTALL_DIR)/index.html
+
+	@extensions_expr=""; \
+	for ext in $(BROTLI_EXTENSIONS); do \
+		if [ -z "$$extensions_expr" ]; then \
+			extensions_expr="-name \"*.$${ext}\""; \
+		else \
+			extensions_expr="$${extensions_expr} -o -name \"*.$${ext}\""; \
+		fi; \
+	done; \
+	cmd="find $(ABS_INSTALL_DIR)/ -type f \( $$extensions_expr \) -exec brotli --best --force {} \;"; \
+	echo "Compressing files with extensions: $(BROTLI_EXTENSIONS)"; \
+	eval $$cmd
 
 emsdk:
 	@EMSDK_VERSION=""; \
@@ -120,12 +132,12 @@ emsdk:
 	fi
 
 run-web:
-	@if [ ! -f "./install/index.html" ]; then \
+	@if [ ! -f "$(ABS_INSTALL_DIR)/index.html" ]; then \
 		echo "Error: Web build install folder not found. Run 'make web' first."; \
 		exit 1; \
 	fi
 	. ./emsdk/emsdk_env.sh && \
-	./emsdk/upstream/emscripten/emrun ./install/index.html --kill_start --kill_exit
+	./emsdk/upstream/emscripten/emrun $(ABS_INSTALL_DIR)/index.html --kill_start --kill_exit
 
 clean:
 	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR)

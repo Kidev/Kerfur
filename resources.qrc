@@ -3,8 +3,8 @@
         <file>assets/img/eyes_closed.png</file>
         <file>assets/img/eyes_meow.png</file>
         <file>assets/img/eyes_opened.png</file>
-        <file>assets/sound/meow.wav</file>
         <file>assets/img/pupil.png</file>
-        <file>assets/img/favicon.ico</file>
+        <file>assets/sound/meow.wav</file>
+        <file>logo.png</file>
     </qresource>
 </RCC>
