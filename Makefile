@@ -34,6 +34,7 @@ QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
 QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
+SHELL = /bin/bash
 
 all: wipe desktop
 
@@ -80,7 +81,7 @@ emsdk:
 	if [ "$$ACTIVE_VERSION" != "$$EMSDK_VERSION" ]; then \
 		echo "Activating Emscripten version $$EMSDK_VERSION..."; \
 		./emsdk/emsdk activate $$EMSDK_VERSION || { echo "Error: Failed to activate Emscripten"; exit 1; }; \
-		. ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
+		source ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
 web: wipe emsdk
@@ -135,7 +136,7 @@ run-web:
 		echo "Error: Web build install folder not found. Run 'make web' first."; \
 		exit 1; \
 	fi; \
-	. ./emsdk/emsdk_env.sh && \
+	source ./emsdk/emsdk_env.sh && \
 	emrun $(ABS_INSTALL_DIR)/index.html --kill_start --kill_exit
 
 clean:
