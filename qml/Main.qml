@@ -60,7 +60,7 @@ Window {
     }
 
     color: "black"
-    visibility: Window.Maximized
+    visibility: Window.FullScreen
     visible: true
 
     Behavior on leftRightAngle {
