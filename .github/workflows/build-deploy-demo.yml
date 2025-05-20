@@ -11,7 +11,7 @@ jobs:
       qt_version: '6.8.3'
       qt_host_arch: 'gcc_64'
       qt_target_arch: 'wasm_multithread'
-      qt_modules: 'qtquick3d qtshadertools'
+      qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
       qt_root: '${{ github.workspace }}/Qt/6.8.3/gcc_64'
       target_folder: 'Kerfur'
       source_folder: '${{ github.workspace }}/install/'
