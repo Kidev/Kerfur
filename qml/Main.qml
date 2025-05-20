@@ -12,6 +12,7 @@ Window {
     readonly property int doubleBlinkDuration: 200
     property bool isBlinking: false
     property bool isTouched: false
+    property alias kSettings: settings
     readonly property point leftEyeCenter: Qt.point(32, 22)
     property point leftPupilOffset: Qt.point(((root.leftRightAngle - 90) / 90) * root.maxPupilMovement, ((root.upDownAngle - 90) / 90) * root.maxPupilMovement)
     property real leftRightAngle: 90
@@ -59,7 +60,7 @@ Window {
     }
 
     color: "black"
-    visibility: Window.FullScreen
+    visibility: Window.Maximized
     visible: true
 
     Behavior on leftRightAngle {
@@ -84,7 +85,13 @@ Window {
         root.updatePupilPositions(leftRightAngle, upDownAngle);
     }
 
+    KSettings {
+        id: settings
+
+    }
+
     Shortcut {
+        enabled: false
         sequence: "Esc"
 
         onActivated: root.requestExit()
@@ -155,14 +162,14 @@ Window {
         id: maskedDisplayImage
 
         anchors.fill: displayContainer
-        autoPaddingEnabled: true
+        autoPaddingEnabled: settings.autoPaddingEnabled
         layer.enabled: true
         maskEnabled: !root.isBlinking && !root.isTouched
         maskInverted: true
-        maskSpreadAtMax: 0.1
-        maskSpreadAtMin: 0
-        maskThresholdMax: 0.1
-        maskThresholdMin: 0
+        maskSpreadAtMax: settings.maskSpreadAtMax
+        maskSpreadAtMin: settings.maskSpreadAtMin
+        maskThresholdMax: settings.maskThresholdMax
+        maskThresholdMin: settings.maskThresholdMin
 
         maskSource: ShaderEffectSource {
             hideSource: true
@@ -178,6 +185,14 @@ Window {
         id: ledScreen
 
         anchors.fill: maskedDisplayImage
+        blurMultiplier: settings.blurMultiplier
+        glowBlendMode: settings.glowBlendMode
+        glowBloom: settings.glowBloom
+        glowBlurAmount: settings.glowBlurAmount
+        glowColor: settings.glowColor
+        glowMaxBrightness: settings.glowMaxBrightness
+        ledScreenLedColor: settings.glowColor
+        ledScreenLedSize: settings.ledScreenLedSize
         source: maskedDisplayImage
     }
 
@@ -281,7 +296,7 @@ Window {
 
         onTriggered: {
             hue = (hue + 0.005) % 1.0;
-            ledScreen.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
+            settings.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
         }
     }
 
@@ -336,15 +351,14 @@ Window {
                     text: "LED Size: " + ledSizeSlider.value.toFixed(1)
                 }
 
-                Slider {
+                KSlider {
                     id: ledSizeSlider
 
                     from: 1
+                    settingName: "ledScreenLedSize"
+                    settingsObject: settings
                     to: 50
-                    value: 8
                     width: parent.width - 20
-
-                    onValueChanged: ledScreen.ledScreenLedSize = value
                 }
 
                 // Blur Multiplier slider
@@ -353,117 +367,117 @@ Window {
                     text: "Blur Mult: " + blurMultiplierSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: blurMultiplierSlider
 
+                    decimals: 2
                     from: 0
+                    settingName: "blurMultiplier"
+                    settingsObject: settings
                     to: 5
-                    value: 5
                     width: parent.width - 20
-
-                    onValueChanged: ledScreen.blurMultiplier = value
                 }
 
                 // Up down angle
                 Text {
                     color: "white"
-                    text: "Up/down angle: " + root.upDownAngle.toFixed(0)
+                    text: "Up/down angle: " + upDownAngleSlider.value.toFixed(0)
                 }
 
-                Slider {
+                KSlider {
                     id: upDownAngleSlider
 
+                    decimals: 0
                     from: 0
+                    settingName: "upDownAngle"
+                    settingsObject: root
                     to: 180
-                    value: 90
                     width: parent.width - 20
-
-                    onValueChanged: root.updatePupilPositions(leftRightAngleSlider.value, upDownAngleSlider.value)
                 }
 
                 // Left right angle
                 Text {
                     color: "white"
-                    text: "Left/right angle: " + root.leftRightAngle.toFixed(0)
+                    text: "Left/right angle: " + leftRightAngleSlider.value.toFixed(0)
                 }
 
-                Slider {
+                KSlider {
                     id: leftRightAngleSlider
 
+                    decimals: 0
                     from: 0
+                    settingName: "leftRightAngle"
+                    settingsObject: root
                     to: 180
-                    value: 90
                     width: parent.width - 20
-
-                    onValueChanged: root.updatePupilPositions(leftRightAngleSlider.value, upDownAngleSlider.value)
                 }
 
                 // Spread min
                 Text {
                     color: "white"
-                    text: "Spread min: " + maskedDisplayImage.maskSpreadAtMin.toFixed(2)
+                    text: "Spread min: " + spreadMinSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: spreadMinSlider
 
+                    decimals: 2
                     from: 0.0
+                    settingName: "maskSpreadAtMin"
+                    settingsObject: settings
                     to: 1.0
-                    value: 0.1
                     width: parent.width - 20
-
-                    onValueChanged: maskedDisplayImage.maskSpreadAtMin = spreadMinSlider.value
                 }
 
                 // Spread max
                 Text {
                     color: "white"
-                    text: "Spread max: " + maskedDisplayImage.maskSpreadAtMax.toFixed(2)
+                    text: "Spread max: " + spreadMaxSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: spreadMaxSlider
 
+                    decimals: 2
                     from: 0.0
+                    settingName: "maskSpreadAtMax"
+                    settingsObject: settings
                     to: 1.0
-                    value: 0.1
                     width: parent.width - 20
-
-                    onValueChanged: maskedDisplayImage.maskSpreadAtMax = spreadMaxSlider.value
                 }
 
                 // Threshold min
                 Text {
                     color: "white"
-                    text: "threshold min: " + maskedDisplayImage.maskThresholdMin.toFixed(2)
+                    text: "threshold min: " + thresholdMinSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: thresholdMinSlider
 
+                    decimals: 2
                     from: 0.0
+                    settingName: "maskThresholdMin"
+                    settingsObject: settings
                     to: 1.0
-                    value: 0.1
                     width: parent.width - 20
-
-                    onValueChanged: maskedDisplayImage.maskThresholdMin = thresholdMinSlider.value
                 }
 
                 // Threshold max
                 Text {
                     color: "white"
-                    text: "Threshold max: " + maskedDisplayImage.maskThresholdMax.toFixed(2)
+                    text: "Threshold max: " + thresholdMaxSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: thresholdMaxSlider
 
+                    decimals: 2
                     from: 0.0
+                    settingName: "maskThresholdMax"
+                    settingsObject: settings
                     to: 1.0
-                    value: 0.1
                     width: parent.width - 20
-
-                    onValueChanged: maskedDisplayImage.maskThresholdMax = thresholdMaxSlider.value
                 }
 
                 // Glow Blend Mode
@@ -472,16 +486,16 @@ Window {
                     text: "Blend Mode: " + ["Additive", "Screen", "Replace", "Outer"][glowBlendModeSlider.value]
                 }
 
-                Slider {
+                KSlider {
                     id: glowBlendModeSlider
 
+                    decimals: 0
                     from: 0
+                    settingName: "glowBlendMode"
+                    settingsObject: settings
                     stepSize: 1
                     to: 3
-                    value: 1
                     width: parent.width - 20
-
-                    onValueChanged: ledScreen.glowBlendMode = value
                 }
 
                 // Glow Bloom slider
@@ -490,15 +504,15 @@ Window {
                     text: "Glow Bloom: " + glowBloomSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: glowBloomSlider
 
+                    decimals: 2
                     from: 0
+                    settingName: "glowBloom"
+                    settingsObject: settings
                     to: 2
-                    value: 1.0
                     width: parent.width - 20
-
-                    onValueChanged: ledScreen.glowBloom = value
                 }
 
                 // Glow Blur Amount slider
@@ -507,15 +521,15 @@ Window {
                     text: "Glow Blur: " + glowBlurAmountSlider.value.toFixed(3)
                 }
 
-                Slider {
+                KSlider {
                     id: glowBlurAmountSlider
 
+                    decimals: 3
                     from: 0
+                    settingName: "glowBlurAmount"
+                    settingsObject: settings
                     to: 1
-                    value: 0.4
                     width: parent.width - 20
-
-                    onValueChanged: ledScreen.glowBlurAmount = value
                 }
 
                 // Glow Max Brightness slider
@@ -524,15 +538,15 @@ Window {
                     text: "Glow Max: " + glowMaxBrightnessSlider.value.toFixed(2)
                 }
 
-                Slider {
+                KSlider {
                     id: glowMaxBrightnessSlider
 
+                    decimals: 2
                     from: 0
+                    settingName: "glowMaxBrightness"
+                    settingsObject: settings
                     to: 2
-                    value: 2
                     width: parent.width - 20
-
-                    onValueChanged: ledScreen.glowMaxBrightness = value
                 }
 
                 // Glow Color
@@ -555,7 +569,7 @@ Window {
 
                             onClicked: {
                                 colorAnimationTimer.running = false;
-                                ledScreen.glowColor = Qt.rgba(0, 1, 1, 1);
+                                settings.glowColor = Qt.rgba(0, 1, 1, 1);
                             }
                         }
                     }
@@ -571,7 +585,7 @@ Window {
 
                             onClicked: {
                                 colorAnimationTimer.running = false;
-                                ledScreen.glowColor = Qt.rgba(0, 1, 0, 1);
+                                settings.glowColor = Qt.rgba(0, 1, 0, 1);
                             }
                         }
                     }
@@ -587,7 +601,7 @@ Window {
 
                             onClicked: {
                                 colorAnimationTimer.running = false;
-                                ledScreen.glowColor = Qt.rgba(1, 0, 1, 1);
+                                settings.glowColor = Qt.rgba(1, 0, 1, 1);
                             }
                         }
                     }

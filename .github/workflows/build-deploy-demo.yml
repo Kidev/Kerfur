@@ -29,6 +29,8 @@ jobs:
         shell: bash
         run: |
           sudo apt-get -y install jq lftp brotli expect ccache
+          make emsdk
+          echo 'source "./emsdk/emsdk_env.sh"' >> "$GITHUB_PATH"
 
       - name: Update CMake
         uses: lukka/get-cmake@latest
@@ -50,8 +52,7 @@ jobs:
 
       - name: CMake Build
         shell: bash
-        run: |
-          make web QT_ROOT_DIR=${{ env.qt_root }}
+        run: make web QT_ROOT_DIR=${{ env.qt_root }}
 
       - name: Upload to FTP
         shell: bash
