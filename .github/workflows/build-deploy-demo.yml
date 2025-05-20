@@ -25,13 +25,6 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: Install tools
-        shell: bash
-        run: |
-          sudo apt-get -y install jq lftp brotli expect ccache
-          make emsdk
-          echo 'source "./emsdk/emsdk_env.sh"' >> "$GITHUB_PATH"
-
       - name: Update CMake
         uses: lukka/get-cmake@latest
 
@@ -49,6 +42,13 @@ jobs:
           dir: ${{ github.workspace }}
           cache: 'true'
           cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ env.qt_host_arch }}'
+
+      - name: Install tools
+        shell: bash
+        run: |
+          sudo apt-get -y install jq lftp brotli expect ccache
+          make emsdk QT_ROOT_DIR=${{ env.qt_root }}
+          echo 'source "./emsdk/emsdk_env.sh"' >> "$GITHUB_PATH"
 
       - name: CMake Build
         shell: bash
