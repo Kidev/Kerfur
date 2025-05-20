@@ -18,6 +18,7 @@ Item {
 
         readonly property vector3d iResolution: Qt.vector3d(root.width, root.height, 1.0)
         readonly property alias iSource: root.source
+        readonly property alias ledScreenGridStep: root.ledScreenLedSize
         readonly property alias ledScreenLedColor: root.ledScreenLedColor
         readonly property alias ledScreenLedSize: root.ledScreenLedSize
         property var scaledSourceImage: scaledSource
