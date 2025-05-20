@@ -8,7 +8,7 @@ Window {
     id: root
 
     readonly property int blinkDuration: 150
-    readonly property real doubleBlinkChance: 0.2
+    readonly property real doubleBlinkChance: 0.1
     readonly property int doubleBlinkDuration: 200
     property bool isBlinking: false
     property bool isTouched: false
@@ -18,7 +18,7 @@ Window {
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
     readonly property real meowVolume: 1
-    readonly property int minBlinkInterval: 2000
+    readonly property int minBlinkInterval: 4000
     readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
     readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
     readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
@@ -81,7 +81,7 @@ Window {
 
     Component.onCompleted: {
         root.resetBlinkTimer();
-        updatePupilPositions(leftRightAngle, upDownAngle);
+        root.updatePupilPositions(leftRightAngle, upDownAngle);
     }
 
     Shortcut {
@@ -107,8 +107,8 @@ Window {
     Item {
         id: displayContainer
 
-        property real relativeScaleHeight: displayImage.height / displayImage.sourceSize.height
-        property real relativeScaleWidth: displayImage.width / displayImage.sourceSize.width
+        property real relativeScaleHeight: displayImage.height / (displayImage.sourceSize.height)
+        property real relativeScaleWidth: displayImage.width / (displayImage.sourceSize.width)
 
         anchors.centerIn: parent
         height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
@@ -155,11 +155,14 @@ Window {
         id: maskedDisplayImage
 
         anchors.fill: displayContainer
+        autoPaddingEnabled: true
         layer.enabled: true
         maskEnabled: !root.isBlinking && !root.isTouched
         maskInverted: true
-        maskSpreadAtMin: 0.1
-        maskThresholdMin: 0.1
+        maskSpreadAtMax: 0.1
+        maskSpreadAtMin: 0
+        maskThresholdMax: 0.1
+        maskThresholdMin: 0
 
         maskSource: ShaderEffectSource {
             hideSource: true
@@ -227,16 +230,15 @@ Window {
 
         anchors.fill: parent
 
-        onPressed: touchPoints => {
-            if (touchPoints.length >= 4) {
-                root.requestExit();
-            } else {
-                root.isTouched = true;
-                root.playMeowSound();
-            }
+        onPressed: {
+            root.isTouched = true;
+            root.playMeowSound();
+            blinkTimer.stop();
         }
         onReleased: {
             root.isTouched = false;
+
+            root.resetBlinkTimer();
         }
     }
 
@@ -268,6 +270,20 @@ Window {
     }
 
     // Control panel for shader parameters
+    Timer {
+        id: colorAnimationTimer
+
+        property real hue: 0
+
+        interval: 16 // approximately 60 FPS
+        repeat: true
+        running: false
+
+        onTriggered: {
+            hue = (hue + 0.005) % 1.0;
+            ledScreen.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
+        }
+    }
 
     Rectangle {
         id: controlPanel
@@ -382,6 +398,74 @@ Window {
                     onValueChanged: root.updatePupilPositions(leftRightAngleSlider.value, upDownAngleSlider.value)
                 }
 
+                // Spread min
+                Text {
+                    color: "white"
+                    text: "Spread min: " + maskedDisplayImage.maskSpreadAtMin.toFixed(2)
+                }
+
+                Slider {
+                    id: spreadMinSlider
+
+                    from: 0.0
+                    to: 1.0
+                    value: 0.1
+                    width: parent.width - 20
+
+                    onValueChanged: maskedDisplayImage.maskSpreadAtMin = spreadMinSlider.value
+                }
+
+                // Spread max
+                Text {
+                    color: "white"
+                    text: "Spread max: " + maskedDisplayImage.maskSpreadAtMax.toFixed(2)
+                }
+
+                Slider {
+                    id: spreadMaxSlider
+
+                    from: 0.0
+                    to: 1.0
+                    value: 0.1
+                    width: parent.width - 20
+
+                    onValueChanged: maskedDisplayImage.maskSpreadAtMax = spreadMaxSlider.value
+                }
+
+                // Threshold min
+                Text {
+                    color: "white"
+                    text: "threshold min: " + maskedDisplayImage.maskThresholdMin.toFixed(2)
+                }
+
+                Slider {
+                    id: thresholdMinSlider
+
+                    from: 0.0
+                    to: 1.0
+                    value: 0.1
+                    width: parent.width - 20
+
+                    onValueChanged: maskedDisplayImage.maskThresholdMin = thresholdMinSlider.value
+                }
+
+                // Threshold max
+                Text {
+                    color: "white"
+                    text: "Threshold max: " + maskedDisplayImage.maskThresholdMax.toFixed(2)
+                }
+
+                Slider {
+                    id: thresholdMaxSlider
+
+                    from: 0.0
+                    to: 1.0
+                    value: 0.1
+                    width: parent.width - 20
+
+                    onValueChanged: maskedDisplayImage.maskThresholdMax = thresholdMaxSlider.value
+                }
+
                 // Glow Blend Mode
                 Text {
                     color: "white"
@@ -462,27 +546,17 @@ Window {
 
                     Rectangle {
                         border.color: "gray"
-                        color: "#C100B2"
+                        color: "cyan"
                         height: 30
                         width: 30
 
                         MouseArea {
                             anchors.fill: parent
 
-                            onClicked: ledScreen.glowColor = Qt.rgba(0.757, 0, 0.697002, 1)
-                        }
-                    }
-
-                    Rectangle {
-                        border.color: "gray"
-                        color: "red"
-                        height: 30
-                        width: 30
-
-                        MouseArea {
-                            anchors.fill: parent
-
-                            onClicked: ledScreen.glowColor = Qt.rgba(1, 0, 0, 1)
+                            onClicked: {
+                                colorAnimationTimer.running = false;
+                                ledScreen.glowColor = Qt.rgba(0, 1, 1, 1);
+                            }
                         }
                     }
 
@@ -495,20 +569,82 @@ Window {
                         MouseArea {
                             anchors.fill: parent
 
-                            onClicked: ledScreen.glowColor = Qt.rgba(0, 1, 0, 1)
+                            onClicked: {
+                                colorAnimationTimer.running = false;
+                                ledScreen.glowColor = Qt.rgba(0, 1, 0, 1);
+                            }
                         }
                     }
 
                     Rectangle {
                         border.color: "gray"
-                        color: "blue"
+                        color: "magenta"
                         height: 30
                         width: 30
 
                         MouseArea {
                             anchors.fill: parent
 
-                            onClicked: ledScreen.glowColor = Qt.rgba(0, 0, 1, 1)
+                            onClicked: {
+                                colorAnimationTimer.running = false;
+                                ledScreen.glowColor = Qt.rgba(1, 0, 1, 1);
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        id: gamerColorRect
+
+                        border.color: "gray"
+                        height: 30
+                        width: 30
+
+                        gradient: Gradient {
+                            GradientStop {
+                                color: "red"
+                                position: 0.0
+                            }
+
+                            GradientStop {
+                                color: "yellow"
+                                position: 0.2
+                            }
+
+                            GradientStop {
+                                color: "green"
+                                position: 0.4
+                            }
+
+                            GradientStop {
+                                color: "cyan"
+                                position: 0.6
+                            }
+
+                            GradientStop {
+                                color: "blue"
+                                position: 0.8
+                            }
+
+                            GradientStop {
+                                color: "magenta"
+                                position: 1.0
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            color: "white"
+                            font.bold: true
+                            font.pixelSize: 8
+                            text: "GAMER"
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+
+                            onClicked: {
+                                colorAnimationTimer.running = true;
+                            }
                         }
                     }
                 }
