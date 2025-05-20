@@ -1,16 +1,30 @@
 import QtQuick
+import QtQuick.Window
+import QtQuick.Controls
 
 Rectangle {
     id: root
 
-    anchors.right: parent.right
-    anchors.top: parent.top
+    required property KSettings settings
+
     color: "#333333"
-    height: parent.height
     opacity: 0.7
-    visible: root.showControls
-    width: 150
     z: 100
+
+    Timer {
+        id: colorAnimationTimer
+
+        property real hue: 0
+
+        interval: 16 // approximately 60 FPS
+        repeat: true
+        running: false
+
+        onTriggered: {
+            hue = (hue + 0.005) % 1.0;
+            root.settings.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
+        }
+    }
 
     Flickable {
         anchors.fill: parent
@@ -51,18 +65,14 @@ Rectangle {
                 text: "LED Size: " + ledSizeSlider.value.toFixed(1)
             }
 
-            Slider {
+            KSlider {
                 id: ledSizeSlider
-                from: 1
-                to: 50
-                value: settings.ledScreenLedSize
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "ledScreenLedSize"
-                value: ledSizeSlider.value
+                from: 1
+                settingName: "ledScreenLedSize"
+                settingsObject: root.settings
+                to: 50
+                width: parent.width - 20
             }
 
             // Blur Multiplier slider
@@ -71,18 +81,15 @@ Rectangle {
                 text: "Blur Mult: " + blurMultiplierSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: blurMultiplierSlider
-                from: 0
-                to: 5
-                value: settings.blurMultiplier
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "blurMultiplier"
-                value: blurMultiplierSlider.value
+                decimals: 2
+                from: 0
+                settingName: "blurMultiplier"
+                settingsObject: root.settings
+                to: 5
+                width: parent.width - 20
             }
 
             // Up down angle
@@ -91,18 +98,15 @@ Rectangle {
                 text: "Up/down angle: " + upDownAngleSlider.value.toFixed(0)
             }
 
-            Slider {
+            KSlider {
                 id: upDownAngleSlider
-                from: 0
-                to: 180
-                value: root.upDownAngle
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: root
-                property: "upDownAngle"
-                value: upDownAngleSlider.value
+                decimals: 0
+                from: 0
+                settingName: "upDownAngle"
+                settingsObject: root.settings
+                to: 180
+                width: parent.width - 20
             }
 
             // Left right angle
@@ -111,18 +115,15 @@ Rectangle {
                 text: "Left/right angle: " + leftRightAngleSlider.value.toFixed(0)
             }
 
-            Slider {
+            KSlider {
                 id: leftRightAngleSlider
-                from: 0
-                to: 180
-                value: root.leftRightAngle
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: root
-                property: "leftRightAngle"
-                value: leftRightAngleSlider.value
+                decimals: 0
+                from: 0
+                settingName: "leftRightAngle"
+                settingsObject: root.settings
+                to: 180
+                width: parent.width - 20
             }
 
             // Spread min
@@ -131,18 +132,15 @@ Rectangle {
                 text: "Spread min: " + spreadMinSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: spreadMinSlider
-                from: 0.0
-                to: 1.0
-                value: settings.maskSpreadAtMin
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "maskSpreadAtMin"
-                value: spreadMinSlider.value
+                decimals: 2
+                from: 0.0
+                settingName: "maskSpreadAtMin"
+                settingsObject: root.settings
+                to: 1.0
+                width: parent.width - 20
             }
 
             // Spread max
@@ -151,18 +149,15 @@ Rectangle {
                 text: "Spread max: " + spreadMaxSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: spreadMaxSlider
-                from: 0.0
-                to: 1.0
-                value: settings.maskSpreadAtMax
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "maskSpreadAtMax"
-                value: spreadMaxSlider.value
+                decimals: 2
+                from: 0.0
+                settingName: "maskSpreadAtMax"
+                settingsObject: root.settings
+                to: 1.0
+                width: parent.width - 20
             }
 
             // Threshold min
@@ -171,18 +166,15 @@ Rectangle {
                 text: "threshold min: " + thresholdMinSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: thresholdMinSlider
-                from: 0.0
-                to: 1.0
-                value: settings.maskThresholdMin
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "maskThresholdMin"
-                value: thresholdMinSlider.value
+                decimals: 2
+                from: 0.0
+                settingName: "maskThresholdMin"
+                settingsObject: root.settings
+                to: 1.0
+                width: parent.width - 20
             }
 
             // Threshold max
@@ -191,18 +183,15 @@ Rectangle {
                 text: "Threshold max: " + thresholdMaxSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: thresholdMaxSlider
-                from: 0.0
-                to: 1.0
-                value: settings.maskThresholdMax
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "maskThresholdMax"
-                value: thresholdMaxSlider.value
+                decimals: 2
+                from: 0.0
+                settingName: "maskThresholdMax"
+                settingsObject: root.settings
+                to: 1.0
+                width: parent.width - 20
             }
 
             // Glow Blend Mode
@@ -211,19 +200,16 @@ Rectangle {
                 text: "Blend Mode: " + ["Additive", "Screen", "Replace", "Outer"][glowBlendModeSlider.value]
             }
 
-            Slider {
+            KSlider {
                 id: glowBlendModeSlider
+
+                decimals: 0
                 from: 0
+                settingName: "glowBlendMode"
+                settingsObject: root.settings
                 stepSize: 1
                 to: 3
-                value: settings.glowBlendMode
                 width: parent.width - 20
-            }
-
-            Binding {
-                target: settings
-                property: "glowBlendMode"
-                value: glowBlendModeSlider.value
             }
 
             // Glow Bloom slider
@@ -232,18 +218,15 @@ Rectangle {
                 text: "Glow Bloom: " + glowBloomSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: glowBloomSlider
-                from: 0
-                to: 2
-                value: settings.glowBloom
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "glowBloom"
-                value: glowBloomSlider.value
+                decimals: 2
+                from: 0
+                settingName: "glowBloom"
+                settingsObject: root.settings
+                to: 2
+                width: parent.width - 20
             }
 
             // Glow Blur Amount slider
@@ -252,18 +235,15 @@ Rectangle {
                 text: "Glow Blur: " + glowBlurAmountSlider.value.toFixed(3)
             }
 
-            Slider {
+            KSlider {
                 id: glowBlurAmountSlider
-                from: 0
-                to: 1
-                value: settings.glowBlurAmount
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "glowBlurAmount"
-                value: glowBlurAmountSlider.value
+                decimals: 3
+                from: 0
+                settingName: "glowBlurAmount"
+                settingsObject: root.settings
+                to: 1
+                width: parent.width - 20
             }
 
             // Glow Max Brightness slider
@@ -272,18 +252,15 @@ Rectangle {
                 text: "Glow Max: " + glowMaxBrightnessSlider.value.toFixed(2)
             }
 
-            Slider {
+            KSlider {
                 id: glowMaxBrightnessSlider
-                from: 0
-                to: 2
-                value: settings.glowMaxBrightness
-                width: parent.width - 20
-            }
 
-            Binding {
-                target: settings
-                property: "glowMaxBrightness"
-                value: glowMaxBrightnessSlider.value
+                decimals: 2
+                from: 0
+                settingName: "glowMaxBrightness"
+                settingsObject: root.settings
+                to: 2
+                width: parent.width - 20
             }
 
             // Glow Color
@@ -303,9 +280,10 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
+
                         onClicked: {
                             colorAnimationTimer.running = false;
-                            settings.glowColor = Qt.rgba(0, 1, 1, 1);
+                            root.settings.glowColor = Qt.rgba(0, 1, 1, 1);
                         }
                     }
                 }
@@ -318,9 +296,10 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
+
                         onClicked: {
                             colorAnimationTimer.running = false;
-                            settings.glowColor = Qt.rgba(0, 1, 0, 1);
+                            root.settings.glowColor = Qt.rgba(0, 1, 0, 1);
                         }
                     }
                 }
@@ -333,15 +312,17 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
+
                         onClicked: {
                             colorAnimationTimer.running = false;
-                            settings.glowColor = Qt.rgba(1, 0, 1, 1);
+                            root.settings.glowColor = Qt.rgba(1, 0, 1, 1);
                         }
                     }
                 }
 
                 Rectangle {
                     id: gamerColorRect
+
                     border.color: "gray"
                     height: 30
                     width: 30
@@ -388,6 +369,7 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
+
                         onClicked: {
                             colorAnimationTimer.running = true;
                         }
