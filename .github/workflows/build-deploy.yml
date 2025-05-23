@@ -11,69 +11,62 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "Linux x64"
+          - name: 'Linux x64'
             os: ubuntu-24.04
             qt_host: linux
             qt_target: desktop
             qt_arch: linux_gcc_64
-            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "linux-x64"
-            build_command: "make desktop"
+            artifact_name: linux-x64
+            build_command: 'make desktop'
 
-          - name: "Windows x64"
+          - name: 'Windows x64'
             os: windows-2025
             qt_host: windows
             qt_target: desktop
             qt_arch: win64_msvc2022_64
-            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "windows-x64"
-            build_command: "make desktop"
+            artifact_name: windows-x64
+            build_command: 'make desktop'
 
-          - name: "Windows ARM64"
+          - name: 'Windows ARM64'
             os: windows-11-arm
             qt_host: windows_arm64
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
-            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "windows-arm64"
-            build_command: "make desktop"
+            artifact_name: windows-arm64
+            build_command: 'make desktop'
 
-          - name: "Linux ARM64"
+          - name: 'Linux ARM64 (GLIBC 2.38)'
             os: ubuntu-24.04-arm
             qt_host: linux_arm64
             qt_target: desktop
             qt_arch: linux_gcc_arm64
-            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "linux-arm64"
-            build_command: "make desktop"
+            artifact_name: linux-arm64-glibc238
+            build_command: 'make desktop'
 
-          - name: "macOS-15 ARM64"
+          - name: 'Linux ARM64 (GLIBC 2.35)'
+            os: ubuntu-22.04-arm
+            qt_host: linux_arm64
+            qt_target: desktop
+            qt_arch: linux_gcc_arm64
+            artifact_name: linux-arm64-glibc235
+            build_command: 'make desktop'
+
+          - name: 'macOS-15 ARM64'
             os: macos-15
             qt_host: mac
             qt_target: desktop
             qt_arch: clang_64
-            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "macos-15-arm64"
-            build_command: "make desktop"
+            artifact_name: macos-15-arm64
+            build_command: 'make desktop'
 
-          - name: "macOS-13 x64"
-            os: macos-13
-            qt_host: mac
-            qt_target: desktop
-            qt_arch: clang_64
-            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "macos-13-x64"
-            build_command: "make desktop"
-
-          - name: "Web"
+          - name: 'Web'
             os: ubuntu-24.04
             qt_host: all_os
             qt_target: wasm
             qt_arch: wasm_multithread
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "web"
-            build_command: "make web"
-            is_web: true
+            artifact_name: web
+            build_command: 'make web'
 
     env:
       qt_version: '6.8.3'
@@ -122,7 +115,7 @@ jobs:
           cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ matrix.qt_arch }}'
 
       - name: Install Emscripten SDK (Web only)
-        if: matrix.is_web
+        if: (matrix.artifact_name == 'web')
         shell: bash
         run: |
           make emsdk
@@ -172,7 +165,7 @@ jobs:
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
 
       - name: Upload to FTP (Web only)
-        if: matrix.is_web
+        if: (matrix.artifact_name == 'web')
         shell: bash
         run: |
           lftp -u ${{ secrets.FTP_UPLOAD_USER }},${{ secrets.FTP_UPLOAD_PW }} ${{ secrets.FTP_UPLOAD_IP }} <<EOF
@@ -182,7 +175,7 @@ jobs:
           EOF
 
       - name: Package artifacts
-        if: "!matrix.is_web"
+        if: "!(matrix.artifact_name == 'web')"
         shell: bash
         run: |
           mkdir -p artifacts
@@ -200,7 +193,7 @@ jobs:
           fi
 
       - name: Create and Upload Release
-        if: "!matrix.is_web && startsWith(github.ref, 'refs/tags/')"
+        if: "!(matrix.artifact_name == 'web') && startsWith(github.ref, 'refs/tags/')"
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
@@ -212,9 +205,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload development artifacts
-        if: "!matrix.is_web && !startsWith(github.ref, 'refs/tags/')"
+        if: "!(matrix.artifact_name == 'web') && !startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v4
         with:
           name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
           path: artifacts/*
-          retention-days: 30
+          retention-days: 1
