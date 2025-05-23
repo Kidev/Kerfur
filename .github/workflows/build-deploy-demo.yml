@@ -1,4 +1,4 @@
-name: Build and deploy demo
+name: Build and deploy
 
 on:
   push:
@@ -6,17 +6,75 @@ on:
 
 jobs:
   build-and-deploy:
-    name: "Build and deploy"
+    name: "Build and deploy (${{ matrix.name }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Linux"
+            os: ubuntu-24.04
+            qt_host: linux
+            qt_target: desktop
+            qt_arch: gcc_64
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "linux-x64"
+            build_command: "make desktop"
+
+          - name: "Windows"
+            os: windows-2025
+            qt_host: windows
+            qt_target: desktop
+            qt_arch: win64_msvc2022_64
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "windows-x64"
+            build_command: "make desktop"
+
+          - name: "Windows ARM64"
+            os: windows-11-arm64
+            qt_host: windows_arm64
+            qt_target: desktop
+            qt_arch: win64_msvc2022_arm64
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "windows-arm64"
+            build_command: "make desktop"
+
+          - name: "Linux ARM64"
+            os: ubuntu-24.04-arm
+            qt_host: linux_arm64
+            qt_target: desktop
+            qt_arch: gcc_arm64
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "linux-arm64"
+            build_command: "make desktop"
+
+          - name: "macOS"
+            os: macos-15
+            qt_host: macos
+            qt_target: desktop
+            qt_arch: clang_64
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "macos-15"
+            build_command: "make desktop"
+
+          - name: "Web"
+            os: ubuntu-24.04
+            qt_host: all_os
+            qt_target: wasm
+            qt_arch: wasm_multithread
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "web"
+            build_command: "make web"
+            is_web: true
+
     env:
       qt_version: '6.8.3'
-      qt_host_arch: 'gcc_64'
-      qt_target_arch: 'wasm_multithread'
-      qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-      qt_root: '${{ github.workspace }}/Qt/6.8.3/gcc_64'
+      qt_modules:  'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
       target_folder: 'Kerfur'
       source_folder: '${{ github.workspace }}/install/'
       EMSDK: '${{ github.workspace }}/emsdk'
-    runs-on: ubuntu-24.04
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,30 +89,59 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v5
 
+      # Linux-specific dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install jq lftp brotli expect ccache
+
+      # Windows-specific setup
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.2.1
+        uses: Kidev/install-qt-action@v5
         with:
           version: ${{ env.qt_version }}
-          host: 'all_os'
-          target: 'wasm'
-          arch: ${{ env.qt_target_arch }}
+          host: ${{ matrix.qt_host }}
+          target: ${{ matrix.qt_target }}
+          arch: ${{ matrix.qt_arch }}
           modules: ${{ env.qt_modules }}
           dir: ${{ github.workspace }}
           cache: 'true'
-          cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ env.qt_host_arch }}'
+          cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ matrix.qt_arch }}'
 
-      - name: Install tools
+      # Web-specific setup (Emscripten)
+      - name: Install Emscripten SDK (Web only)
+        if: matrix.is_web
         shell: bash
         run: |
-          sudo apt-get -y install jq lftp brotli expect ccache
-          make emsdk QT_ROOT_DIR=${{ env.qt_root }}
+          make emsdk
           echo 'source "./emsdk/emsdk_env.sh"' >> "$GITHUB_PATH"
 
-      - name: CMake Build
+      # Extract version from git tag (for releases)
+      - name: Get Version
+        id: get_version
         shell: bash
-        run: make web QT_ROOT_DIR=${{ env.qt_root }}
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Upload to FTP
+      # Build step
+      - name: Build
+        shell: bash
+        run: |
+          ${{ matrix.build_command }}
+
+      # Web deployment (FTP upload)
+      - name: Upload to FTP (Web only)
+        if: matrix.is_web
         shell: bash
         run: |
           lftp -u ${{ secrets.FTP_UPLOAD_USER }},${{ secrets.FTP_UPLOAD_PW }} ${{ secrets.FTP_UPLOAD_IP }} <<EOF
@@ -62,3 +149,44 @@ jobs:
           mirror -R --only-newer --verbose ${{ env.source_folder }} ${{ env.target_folder }}
           quit
           EOF
+
+      # Package artifacts for release (non-web builds)
+      - name: Package artifacts
+        if: "!matrix.is_web"
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # Windows: create zip
+            7z a "artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.zip" "${{ env.source_folder }}*"
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            # macOS: create dmg or zip
+            cd "${{ env.source_folder }}"
+            tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
+          else
+            # Linux: create AppImage or tar.gz
+            cd "${{ env.source_folder }}"
+            tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
+          fi
+
+      # Create release and upload artifacts (non-web builds, only on tag push)
+      - name: Create and Upload Release
+        if: "!matrix.is_web && startsWith(github.ref, 'refs/tags/')"
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          name: Kerfur ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload artifacts for development builds (non-web builds, not on tag push)
+      - name: Upload development artifacts
+        if: "!matrix.is_web && !startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
+          path: artifacts/*
+          retention-days: 30
