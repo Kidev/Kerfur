@@ -89,13 +89,12 @@ jobs:
           submodules: 'recursive'
           lfs: 'true'
 
-      - name: Update CMake
-        uses: lukka/get-cmake@latest
+      - name: Get latest CMake and Ninja
+        uses: lukka/get-cmake@v4.0.2
+        with:
+            cmakeVersion: latest
+            ninjaVersion: latest
 
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@v5
-
-      # Linux-specific dependencies
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         shell: bash
@@ -103,7 +102,6 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install jq lftp brotli expect ccache
 
-      # Windows-specific setup
       - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v2
@@ -120,7 +118,6 @@ jobs:
           cache: 'true'
           cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ matrix.qt_arch }}'
 
-      # Web-specific setup (Emscripten)
       - name: Install Emscripten SDK (Web only)
         if: matrix.is_web
         shell: bash
@@ -128,24 +125,41 @@ jobs:
           make emsdk
           echo 'source "./emsdk/emsdk_env.sh"' >> "$GITHUB_PATH"
 
-      # Extract version from git tag (for releases)
       - name: Get Version
         id: get_version
         shell: bash
         run: |
           if [[ $GITHUB_REF == refs/tags/* ]]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            TAG="${GITHUB_REF#refs/tags/}"
+            # Ensure VERSION always has 'v' prefix
+            if [[ $TAG == v* ]]; then
+              VERSION="$TAG"
+              VERSION_TAG="${TAG#v}"
+            else
+              VERSION="v$TAG"
+              VERSION_TAG="$TAG"
+            fi
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+            echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+            # Get the latest "v" prefixed tag, or use "v0.0.0" if none exists
+            LATEST_V_TAG=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "v0.0.0")
+            # Strip 'v' prefix from the tag for base version
+            BASE_VERSION="${LATEST_V_TAG#v}"
+            # Get short commit hash
+            SHORT_HASH=$(git rev-parse --short HEAD)
+            # Construct development version (VERSION always has 'v' prefix)
+            VERSION="v${BASE_VERSION}-dev-${SHORT_HASH}"
+            VERSION_TAG="${BASE_VERSION}-dev-${SHORT_HASH}"
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+            echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_OUTPUT
           fi
 
-      # Build step
       - name: Build
         shell: bash
         run: |
-          ${{ matrix.build_command }}
+          ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
 
-      # Web deployment (FTP upload)
       - name: Upload to FTP (Web only)
         if: matrix.is_web
         shell: bash
@@ -156,7 +170,6 @@ jobs:
           quit
           EOF
 
-      # Package artifacts for release (non-web builds)
       - name: Package artifacts
         if: "!matrix.is_web"
         shell: bash
@@ -175,7 +188,6 @@ jobs:
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
           fi
 
-      # Create release and upload artifacts (non-web builds, only on tag push)
       - name: Create and Upload Release
         if: "!matrix.is_web && startsWith(github.ref, 'refs/tags/')"
         uses: softprops/action-gh-release@v2
@@ -188,7 +200,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Upload artifacts for development builds (non-web builds, not on tag push)
       - name: Upload development artifacts
         if: "!matrix.is_web && !startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v4

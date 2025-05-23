@@ -243,7 +243,7 @@ Window {
         property bool shouldTrack: !root.isBlinking && !root.isTouched && !pressed
 
         anchors.fill: parent
-        cursorShape: Qt.BlankCursor
+        cursorShape: root.showControls ? Qt.ArrowCursor : Qt.BlankCursor
         hoverEnabled: true
         propagateComposedEvents: true
 
