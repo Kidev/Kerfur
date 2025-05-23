@@ -1,6 +1,8 @@
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(${PROJECT_NAME} PUBLIC -Wall -Werror -Wpedantic)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(${PROJECT_NAME} PUBLIC -Wall -Werror -Wpedantic)
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE TRUE)
     target_compile_options(${PROJECT_NAME} PUBLIC -Wall -Werror -Wpedantic)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
