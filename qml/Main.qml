@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Window
 import QtMultimedia
-import QtQuick.Controls
 import QtQuick.Effects
 
 Window {
