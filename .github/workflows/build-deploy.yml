@@ -40,15 +40,7 @@ jobs:
             qt_host: linux_arm64
             qt_target: desktop
             qt_arch: linux_gcc_arm64
-            artifact_name: linux-arm64-glibc238
-            build_command: 'make desktop'
-
-          - name: 'Linux ARM64 (GLIBC 2.35)'
-            os: ubuntu-22.04-arm
-            qt_host: linux_arm64
-            qt_target: desktop
-            qt_arch: linux_gcc_arm64
-            artifact_name: linux-arm64-glibc235
+            artifact_name: linux-arm64
             build_command: 'make desktop'
 
           - name: 'macOS-15 ARM64'
@@ -164,6 +156,16 @@ jobs:
         run: |
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
 
+      - name: Create AppImage
+        id: appimage
+        if: "!(matrix.artifact_name == 'web') && matrix.qt_host == 'linux'"
+        uses: Kidev/qt-appimage@v0.0.5
+        with:
+          install_folder: ${{ env.source_folder }}
+          app_name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
+          category: 'Graphics'
+          icon: 'logo.png'
+
       - name: Upload to FTP (Web only)
         if: (matrix.artifact_name == 'web')
         shell: bash
@@ -180,16 +182,14 @@ jobs:
         run: |
           mkdir -p artifacts
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows: create zip
             7z a "artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.zip" "${{ env.source_folder }}*"
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            # macOS: create dmg or zip
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
           else
-            # Linux: create AppImage or tar.gz
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
+            cp ${{ steps.appimage.outputs.appimage }} ../artifacts/
           fi
 
       - name: Create and Upload Release
