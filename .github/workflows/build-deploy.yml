@@ -32,7 +32,7 @@ jobs:
             build_command: "make desktop"
 
           - name: "Windows ARM64"
-            os: windows-11-arm64
+            os: windows-11-arm
             qt_host: windows_arm64
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
@@ -146,11 +146,19 @@ jobs:
             LATEST_V_TAG=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "v0.0.0")
             # Strip 'v' prefix from the tag for base version
             BASE_VERSION="${LATEST_V_TAG#v}"
-            # Get short commit hash
-            SHORT_HASH=$(git rev-parse --short HEAD)
-            # Construct development version (VERSION always has 'v' prefix)
-            VERSION="v${BASE_VERSION}-dev-${SHORT_HASH}"
-            VERSION_TAG="${BASE_VERSION}-dev-${SHORT_HASH}"
+
+            # Get numeric commit count since the latest tag (or since beginning if no tags)
+            if git describe --tags --match "v*" --abbrev=0 >/dev/null 2>&1; then
+              # Count commits since the latest v* tag
+              TWEAK=$(git rev-list --count ${LATEST_V_TAG}..HEAD)
+            else
+              # No tags exist, count all commits
+              TWEAK=$(git rev-list --count HEAD)
+            fi
+
+            # Construct development version
+            VERSION="v${BASE_VERSION}-dev-${TWEAK}"
+            VERSION_TAG="${BASE_VERSION}.${TWEAK}"
             echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
             echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_OUTPUT
           fi
