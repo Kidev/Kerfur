@@ -26,6 +26,8 @@ ASSETS_DIR ?= assets
 BUILD_DIR ?= build
 INSTALL_DIR ?= install
 WASM_ARCH ?= wasm_multithread
+BUILD_MODE ?= Release
+BUILD_MODE_WEB ?= MinSizeRel
 BROTLI_EXTENSIONS ?= js css html wasm png ico wav mp3
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
 QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../$(WASM_ARCH))
@@ -41,11 +43,11 @@ all: wipe desktop
 desktop:
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
-	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR)
-	cmake --build $(BUILD_DIR)
-	cmake --install $(BUILD_DIR)
+	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
+	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
 emsdk:
 	@EMSDK_VERSION=""; \
@@ -89,7 +91,7 @@ web: wipe emsdk
 	emcmake \
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
-	-DCMAKE_BUILD_TYPE=MinSizeRel \
+	-DCMAKE_BUILD_TYPE=$(BUILD_MODE_WEB) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=ON \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) \

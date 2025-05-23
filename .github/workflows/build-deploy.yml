@@ -15,7 +15,8 @@ jobs:
             os: ubuntu-24.04
             qt_host: linux
             qt_target: desktop
-            qt_arch: gcc_64
+            qt_arch: linux_gcc_64
+            qt_arch_folder: gcc_64
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: "linux-x64"
             build_command: "make desktop"
@@ -25,6 +26,7 @@ jobs:
             qt_host: windows
             qt_target: desktop
             qt_arch: win64_msvc2022_64
+            qt_arch_folder: win64_msvc2022_64
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: "windows-x64"
             build_command: "make desktop"
@@ -34,6 +36,7 @@ jobs:
             qt_host: windows_arm64
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
+            qt_arch_folder: win64_msvc2022_arm64
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: "windows-arm64"
             build_command: "make desktop"
@@ -43,15 +46,17 @@ jobs:
             qt_host: linux_arm64
             qt_target: desktop
             qt_arch: gcc_arm64
+            qt_arch_folder: linux_gcc_arm64
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: "linux-arm64"
             build_command: "make desktop"
 
           - name: "macOS"
             os: macos-15
-            qt_host: macos
+            qt_host: mac
             qt_target: desktop
             qt_arch: clang_64
+            qt_arch_folder: clang_64
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: "macos-15"
             build_command: "make desktop"
@@ -61,6 +66,7 @@ jobs:
             qt_host: all_os
             qt_target: wasm
             qt_arch: wasm_multithread
+            qt_arch_folder: wasm_multithread
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: "web"
             build_command: "make web"
