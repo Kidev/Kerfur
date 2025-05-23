@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "Linux"
+          - name: "Linux x64"
             os: ubuntu-24.04
             qt_host: linux
             qt_target: desktop
@@ -20,7 +20,7 @@ jobs:
             artifact_name: "linux-x64"
             build_command: "make desktop"
 
-          - name: "Windows"
+          - name: "Windows x64"
             os: windows-2025
             qt_host: windows
             qt_target: desktop
@@ -47,13 +47,22 @@ jobs:
             artifact_name: "linux-arm64"
             build_command: "make desktop"
 
-          - name: "macOS"
+          - name: "macOS-15 ARM64"
             os: macos-15
             qt_host: mac
             qt_target: desktop
             qt_arch: clang_64
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
-            artifact_name: "macos-15"
+            artifact_name: "macos-15-arm64"
+            build_command: "make desktop"
+
+          - name: "macOS-13 x64"
+            os: macos-13
+            qt_host: mac
+            qt_target: desktop
+            qt_arch: clang_64
+            qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+            artifact_name: "macos-13-x64"
             build_command: "make desktop"
 
           - name: "Web"
