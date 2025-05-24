@@ -175,12 +175,20 @@ jobs:
           # Copy logo from repo root
           cp logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
 
-          # Create a desktop file
+          # Create AppRun script
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          exec "${HERE}/usr/bin/kerfur" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          # Create a desktop file pointing to AppRun
           cat > AppDir/usr/share/applications/kerfur.desktop << EOF
           [Desktop Entry]
           Type=Application
           Name=Kerfur
-          Exec=bin/kerfur
+          Exec=AppRun
           Icon=kerfur
           Categories=Utility;
           EOF
@@ -216,8 +224,13 @@ jobs:
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
           else
+            # Linux: create both tar.gz and include AppImage
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
+            # Copy AppImage to artifacts if it exists
+            if [ -f "../Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" ]; then
+              cp "../Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" "../artifacts/"
+            fi
           fi
 
       - name: Create and Upload Release
