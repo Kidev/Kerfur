@@ -19,16 +19,31 @@ jobs:
             qt_target: desktop
             qt_arch: linux_gcc_64
             artifact_name: linux-x64
+            qt_tools: ''
             build_command: 'make desktop'
+            installer_command: ''
 
-          - name: 'Linux ARM64 (RPI)'
+          - name: 'Linux ARM64'
+            os: ubuntu-24.04-arm
+            qt_version: '6.8.3'
+            qt_host: linux_arm64
+            qt_target: desktop
+            qt_arch: linux_gcc_arm64
+            artifact_name: linux-arm64
+            qt_tools: ''
+            build_command: 'make desktop'
+            installer_command: ''
+
+          - name: 'Linux ARM64 (Bookworn GLIBC)'
             os: ubuntu-22.04-arm
             qt_version: '6.7.0'
             qt_host: linux_arm64
             qt_target: desktop
             qt_arch: linux_gcc_arm64
-            artifact_name: bookworm-arm64
+            artifact_name: bookworm-arm64-rpi
+            qt_tools: 'tools_ifw'
             build_command: 'make desktop'
+            installer_command: 'make installer'
 
           - name: 'Windows x64'
             os: windows-2025
@@ -37,7 +52,9 @@ jobs:
             qt_target: desktop
             qt_arch: win64_msvc2022_64
             artifact_name: windows-x64
+            qt_tools: ''
             build_command: 'make desktop'
+            installer_command: ''
 
           - name: 'Windows ARM64'
             os: windows-11-arm
@@ -46,7 +63,9 @@ jobs:
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
             artifact_name: windows-arm64
+            qt_tools: ''
             build_command: 'make desktop'
+            installer_command: ''
 
           - name: 'macOS-15 ARM64'
             os: macos-15
@@ -55,7 +74,9 @@ jobs:
             qt_target: desktop
             qt_arch: clang_64
             artifact_name: macos-15-arm64
+            qt_tools: ''
             build_command: 'make desktop'
+            installer_command: ''
 
           - name: 'Web'
             os: ubuntu-24.04
@@ -65,7 +86,9 @@ jobs:
             qt_arch: wasm_multithread
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: web
+            qt_tools: ''
             build_command: 'make web'
+            installer_command: ''
 
     env:
       qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
@@ -120,6 +143,7 @@ jobs:
           dir: ${{ github.workspace }}
           cache: 'true'
           cache-key-prefix: 'install-qt-${{ matrix.qt_version }}-${{ matrix.qt_arch }}'
+          tools: ${{ matrix.qt_tools }}
 
       - name: Install Emscripten SDK (Web only)
         if: (matrix.artifact_name == 'web')
@@ -163,6 +187,12 @@ jobs:
         shell: bash
         run: |
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
+
+     - name: Craft installer
+       if: ${{ matrix.installer_command }} != ''
+       shell: bash
+       run: |
+         ${{ matrix.installer_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
 
       - name: Create AppImage (Linux only)
         if: runner.os == 'Linux' && matrix.artifact_name != 'web'

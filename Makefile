@@ -19,8 +19,9 @@ ifndef QT_ROOT_DIR
 $(error $(MISSING_QT_ROOT))
 endif
 
-WASM_PROJECT_NAME ?= kerfur
-WEBPAGE_TITLE ?= Kerfur
+OS_NAME := $(shell uname -s)
+PROJECT_BINARY ?= kerfur
+PROJECT_TITLE ?= Kerfur
 VERSION_TAG ?= "0.0.0"
 ASSETS_DIR ?= assets
 BUILD_DIR ?= build
@@ -29,6 +30,7 @@ WASM_ARCH ?= wasm_multithread
 BUILD_MODE ?= Release
 BUILD_MODE_WEB ?= MinSizeRel
 BROTLI_EXTENSIONS ?= js css html wasm png ico wav mp3
+QT_IFW_VERSION ?= 4.9
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
 QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../$(WASM_ARCH))
 QT_VERSION := $(notdir $(abspath $(QT_ROOT_DIR)/..))
@@ -36,9 +38,89 @@ QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
 QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
+QT_TOOLS_DIR := $(QT_ROOT_DIR)/../../Tools
 SHELL = /bin/bash
+INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
+REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(OS_NAME)
+TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(OS_NAME)
+INSTALLER_NAME ?= InstallKerfur-$(OS_NAME)
 
 all: wipe desktop
+
+repo:
+	mkdir -p "installer/packages/$(TARGET_PACKAGE)/data"
+	cp -R "$(ABS_INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/"
+	mv "installer/packages/$(TARGET_PACKAGE)/data/$(INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/$(PROJECT_TITLE)"
+	$(INSTALLER_BIN_DIR)/repogen -p installer/packages -i $(TARGET_PACKAGE) $(REPO_NAME)
+
+installer: setup-installer repo
+	$(INSTALLER_BIN_DIR)/binarycreator -p packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
+
+setup-installer:
+	@echo "Setting up installer configuration..."
+
+	mkdir -p installer/config/meta
+	mkdir -p installer/packages/$(TARGET_PACKAGE)/meta
+
+	@echo '<?xml version="1.0"?>' > installer/config/config.xml
+	@echo '<Installer>' >> installer/config/config.xml
+	@echo '    <Name>$(PROJECT_TITLE) Installer for $(OS_NAME)</Name>' >> installer/config/config.xml
+	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/config.xml
+	@echo '    <Title>$(PROJECT_TITLE) Installer</Title>' >> installer/config/config.xml
+	@echo '    <Publisher>Kidev.org</Publisher>' >> installer/config/config.xml
+	@echo '    <ProductUrl>https://www.kidev.org</ProductUrl>' >> installer/config/config.xml
+	@echo '    <InstallerWindowIcon>icon</InstallerWindowIcon>' >> installer/config/config.xml
+	@echo '    <InstallerApplicationIcon>icon</InstallerApplicationIcon>' >> installer/config/config.xml
+	@echo '    <Banner>banner.gif</Banner>' >> installer/config/config.xml
+	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)/bin/$(PROJECT_BINARY)</RunProgram>' >> installer/config/config.xml
+	@echo '    <RunProgramDescription>Run $(PROJECT_TITLE)</RunProgramDescription>' >> installer/config/config.xml
+	@echo '    <StartMenuDir>$(PROJECT_TITLE)</StartMenuDir>' >> installer/config/config.xml
+	@echo '    <MaintenanceToolName>$(PROJECT_TITLE)Updater</MaintenanceToolName>' >> installer/config/config.xml
+	@echo '    <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>' >> installer/config/config.xml
+	@echo '    <WizardStyle>Modern</WizardStyle>' >> installer/config/config.xml
+	@echo '    <TargetDir>@ApplicationsDir@/$(PROJECT_TITLE)</TargetDir>' >> installer/config/config.xml
+	@echo '    <AdminTargetDir>@ApplicationsDir@/$(PROJECT_TITLE)</AdminTargetDir>' >> installer/config/config.xml
+	@echo '    <WizardDefaultWidth>800</WizardDefaultWidth>' >> installer/config/config.xml
+	@echo '    <WizardDefaultHeight>500</WizardDefaultHeight>' >> installer/config/config.xml
+	@echo '    <WizardMinimumWidth>800</WizardMinimumWidth>' >> installer/config/config.xml
+	@echo '    <WizardMinimumHeight>500</WizardMinimumHeight>' >> installer/config/config.xml
+	@echo '    <WizardShowPageList>true</WizardShowPageList>' >> installer/config/config.xml
+	@echo '    <InstallActionColumnVisible>true</InstallActionColumnVisible>' >> installer/config/config.xml
+	@echo '    <RemoteRepositories>' >> installer/config/config.xml
+	@echo '        <Repository>' >> installer/config/config.xml
+	@echo '            <DisplayName>Kidev.org CDN</DisplayName>' >> installer/config/config.xml
+	@echo '            <Url>https://cdn.kidev.org/$(OS_NAME)</Url>' >> installer/config/config.xml
+	@echo '            <Enabled>1</Enabled>' >> installer/config/config.xml
+	@echo '        </Repository>' >> installer/config/config.xml
+	@echo '    </RemoteRepositories>' >> installer/config/config.xml
+	@echo '</Installer>' >> installer/config/config.xml
+
+	@echo '<?xml version="1.0"?>' > installer/config/meta/package.xml
+	@echo '<Package>' >> installer/config/meta/package.xml
+	@echo '    <DisplayName>$(PROJECT_TITLE)</DisplayName>' >> installer/config/meta/package.xml
+	@echo '    <Description>$(PROJECT_TITLE) by Kidev.org</Description>' >> installer/config/meta/package.xml
+	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/meta/package.xml
+	@echo '    <ReleaseDate>'$$(date +%Y-%m-%d)'</ReleaseDate>' >> installer/config/meta/package.xml
+	@echo '    <Name>$(TARGET_PACKAGE)</Name>' >> installer/config/meta/package.xml
+	@echo '    <Licenses>' >> installer/config/meta/package.xml
+	@echo '        <License name="$(PROJECT_TITLE)'"'"'s Software License Agreement" file="license.txt" />' >> installer/config/meta/package.xml
+	@echo '    </Licenses>' >> installer/config/meta/package.xml
+	@echo '    <Script>installer_script.qs</Script>' >> installer/config/meta/package.xml
+	@echo '    <SortingPriority>10</SortingPriority>' >> installer/config/meta/package.xml
+	@echo '    <UpdateText>A cute little robot</UpdateText>' >> installer/config/meta/package.xml
+	@echo '    <Default>true</Default>' >> installer/config/meta/package.xml
+	@echo '    <RequiresAdminRights>false</RequiresAdminRights>' >> installer/config/meta/package.xml
+	@echo '    <ForcedInstallation>true</ForcedInstallation>' >> installer/config/meta/package.xml
+	@echo '    <ForcedUpdate>false</ForcedUpdate>' >> installer/config/meta/package.xml
+	@echo '</Package>' >> installer/config/meta/package.xml
+
+	cp -r installer/config/meta installer/packages/$(TARGET_PACKAGE)/
+
+	@echo "Installer configuration completed!"
+	@echo "Generated files:"
+	@echo "  - installer/config/config.xml"
+	@echo "  - installer/config/meta/package.xml"
+	@echo "  - installer/packages/$(TARGET_PACKAGE)/meta/package.xml"
 
 desktop:
 	cmake -S . -B $(BUILD_DIR) \
@@ -104,15 +186,15 @@ web: wipe emsdk
 	mkdir -p $(ABS_INSTALL_DIR)
 	cp -r $(ASSETS_DIR) $(ABS_INSTALL_DIR)
 
-	cp $(BUILD_DIR)/$(WASM_PROJECT_NAME).html $(ABS_INSTALL_DIR)/index.html
+	cp $(BUILD_DIR)/$(PROJECT_BINARY).html $(ABS_INSTALL_DIR)/index.html
 	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.wasm $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.svg $(ABS_INSTALL_DIR)
 	cp logo.png $(ABS_INSTALL_DIR)
 	cp favicon.ico $(ABS_INSTALL_DIR)
 
-	sed -i 's#<title>$(WASM_PROJECT_NAME)</title>#<title>$(WEBPAGE_TITLE) | Kidev.org<\/title><link rel="icon" href="favicon.ico" type="image/x-icon">#g' $(ABS_INSTALL_DIR)/index.html
-	sed -i "s#<strong>Qt for WebAssembly: $(WASM_PROJECT_NAME)</strong>#<h1 style='color:\#ffffff;'><strong>$(WEBPAGE_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" $(ABS_INSTALL_DIR)/index.html
+	sed -i 's#<title>$(PROJECT_BINARY)</title>#<title>$(PROJECT_TITLE) | Kidev.org<\/title><link rel="icon" href="favicon.ico" type="image/x-icon">#g' $(ABS_INSTALL_DIR)/index.html
+	sed -i "s#<strong>Qt for WebAssembly: $(PROJECT_BINARY)</strong>#<h1 style='color:\#ffffff;'><strong>$(PROJECT_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" $(ABS_INSTALL_DIR)/index.html
 	sed -i "s# height: 100% }# height: 100%; background-color:\#01010c; }#g" $(ABS_INSTALL_DIR)/index.html
 	sed -i 's#<img src="qtlogo.svg" width="320" height="200" style="display:block"></img>#<img src="logo.png" width="260" height="260" style="display:block">#g' $(ABS_INSTALL_DIR)/index.html
 	sed -i 's#<div id="qtstatus">#<div id="qtstatus" style="color:\#ffffff; font-weight:bold">#g' $(ABS_INSTALL_DIR)/index.html
@@ -142,10 +224,10 @@ run-web:
 	emrun $(ABS_INSTALL_DIR)/index.html --kill_start --kill_exit
 
 clean:
-	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR)
+	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR) installer/packages installer/config/config.xml installer/config/meta/package.xml
 
 wipe:
-	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk
+	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 
-.PHONY: desktop clean wipe web run-web emsdk
+.PHONY: desktop clean wipe web run-web emsdk repo installer setup-installer
 .IGNORE: clean
