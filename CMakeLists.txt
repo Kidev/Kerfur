@@ -39,6 +39,7 @@ qt_add_qml_module(
     QML_FILES ${SOURCES_QML}
     RESOURCE_PREFIX "/qt/qml"
     OUTPUT_DIRECTORY "qml"
+    SOURCES ${SOURCES_QMLDIR}
 )
 
 qt_add_shaders(

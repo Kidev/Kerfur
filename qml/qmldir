@@ -1,0 +1,9 @@
+module qml
+
+Main 1.0 Main.qml
+ControlPanel 1.0 ControlPanel.qml
+KSettings 1.0 KSettings.qml
+LedScreen 1.0 LedScreen.qml
+KSlider 1.0 KSlider.qml
+Glow 1.0 Glow.qml
+BlurHelper 1.0 BlurHelper.qml
