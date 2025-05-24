@@ -88,7 +88,14 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get -y install jq lftp brotli expect ccache
+          sudo apt-get -y install jq lftp brotli expect ccache \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-good1.0-dev libgstreamer-plugins-bad1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x \
+            gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 \
+            gstreamer1.0-qt5 gstreamer1.0-pulseaudio
 
       - name: Setup MSVC
         if: runner.os == 'Windows'
@@ -210,11 +217,25 @@ jobs:
           export QT_DIR="$(dirname $(which qmake))/.."
           export QML_SOURCES_PATHS="$(pwd)"
 
-          # Create AppImage using architecture-specific binaries
-          ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
+          # Set environment variables to handle missing multimedia dependencies
+          export LINUXDEPLOY_PLUGIN_QT_IGNORE_PLATFORMS="minimal"
+          export LINUXDEPLOY_PLUGIN_QT_IGNORE_IMAGEFORMATS=""
+
+          # Try to create AppImage with multimedia support first, fallback if it fails
+          if ! ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage; then
+            echo "Failed with multimedia plugins, trying without problematic multimedia plugins..."
+
+            # Remove problematic multimedia plugins if they exist
+            find AppDir -name "*gstreamer*" -type f -delete 2>/dev/null || true
+            find AppDir -name "*multimedia*" -path "*/plugins/*" -type f -delete 2>/dev/null || true
+
+            # Try again
+            ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
+          fi
 
           # Rename the created AppImage
           find . -name "*.AppImage" -exec mv {} "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" \;
+
 
       - name: Upload to FTP (Web only)
         if: (matrix.artifact_name == 'web')
@@ -237,20 +258,28 @@ jobs:
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
           else
-            # Linux: create both tar.gz and include AppImage
+            # Linux: create tar.gz only (AppImage handled separately)
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
-            # Copy AppImage to artifacts if it exists
-            if [ -f "../Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" ]; then
-              cp "../Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" "../artifacts/"
-            fi
+          fi
+
+      - name: Package AppImage artifact (Linux only)
+        if: runner.os == 'Linux' && matrix.artifact_name != 'web'
+        shell: bash
+        run: |
+          mkdir -p appimage-artifacts
+          # Copy AppImage to separate artifacts folder
+          if [ -f "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" ]; then
+            cp "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" "appimage-artifacts/"
           fi
 
       - name: Create and Upload Release
         if: "!(matrix.artifact_name == 'web') && startsWith(github.ref, 'refs/tags/')"
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
+          files: |
+            artifacts/*
+            appimage-artifacts/*
           name: Kerfur ${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
@@ -264,4 +293,12 @@ jobs:
         with:
           name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
           path: artifacts/*
+          retention-days: 1
+
+      - name: Upload AppImage development artifacts (Linux only)
+        if: runner.os == 'Linux' && matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kerfur-${{ matrix.artifact_name }}-AppImage-${{ steps.get_version.outputs.VERSION }}
+          path: appimage-artifacts/*
           retention-days: 1
