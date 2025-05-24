@@ -2,8 +2,7 @@ name: Build and deploy
 
 on:
   push:
-    branches: ["main"]
-    tags: ["v*"]
+    tags: ["v*", "dev*"]
 
 jobs:
   build-and-deploy:
@@ -125,7 +124,7 @@ jobs:
         id: get_version
         shell: bash
         run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             # Ensure VERSION always has 'v' prefix
             if [[ $TAG == v* ]]; then
@@ -285,7 +284,7 @@ jobs:
           fi
 
       - name: Create and Upload Release
-        if: "!(matrix.artifact_name == 'web') && startsWith(github.ref, 'refs/tags/')"
+        if: "!(matrix.artifact_name == 'web') && startsWith(github.ref, 'refs/tags/v')"
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -296,10 +295,10 @@ jobs:
           prerelease: false
           tag_name: ${{ steps.get_version.outputs.VERSION }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload development artifacts
-        if: "!(matrix.artifact_name == 'web') && !startsWith(github.ref, 'refs/tags/')"
+        if: "!(matrix.artifact_name == 'web') && !startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
           name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
@@ -307,7 +306,7 @@ jobs:
           retention-days: 1
 
       - name: Upload AppImage development artifacts (Linux only)
-        if: runner.os == 'Linux' && matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/')
+        if: runner.os == 'Linux' && matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
           name: Kerfur-${{ matrix.artifact_name }}-AppImage-${{ steps.get_version.outputs.VERSION }}
