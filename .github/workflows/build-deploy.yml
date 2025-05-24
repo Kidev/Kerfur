@@ -234,8 +234,18 @@ jobs:
           fi
 
           # Rename the created AppImage
-          find . -name "*.AppImage" -exec mv {} "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" \;
+          echo "Available AppImages before rename:"
+          ls -la *.AppImage
 
+          # Find and rename the generated AppImage (exclude linuxdeploy tools)
+          GENERATED_APPIMAGE=$(find . -name "*.AppImage" -not -name "linuxdeploy*" | head -1)
+          if [ -n "$GENERATED_APPIMAGE" ]; then
+            echo "Renaming $GENERATED_APPIMAGE to Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage"
+            mv "$GENERATED_APPIMAGE" "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage"
+          else
+            echo "Warning: No generated AppImage found to rename"
+            ls -la *.AppImage
+          fi
 
       - name: Upload to FTP (Web only)
         if: (matrix.artifact_name == 'web')
