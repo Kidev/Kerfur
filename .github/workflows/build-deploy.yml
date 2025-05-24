@@ -5,6 +5,7 @@ on:
     tags: ["v*", "dev*"]
 
 jobs:
+
   build-and-deploy:
     name: "Build and deploy (${{ matrix.name }})"
     strategy:
@@ -13,14 +14,25 @@ jobs:
         include:
           - name: 'Linux x64'
             os: ubuntu-24.04
+            qt_version: '6.8.3'
             qt_host: linux
             qt_target: desktop
             qt_arch: linux_gcc_64
             artifact_name: linux-x64
             build_command: 'make desktop'
 
+          - name: 'Linux ARM64 (RPI)'
+            os: ubuntu-22.04-arm
+            qt_version: '6.7.0'
+            qt_host: linux_arm64
+            qt_target: desktop
+            qt_arch: linux_gcc_arm64
+            artifact_name: bookworm-arm64
+            build_command: 'make desktop'
+
           - name: 'Windows x64'
             os: windows-2025
+            qt_version: '6.8.3'
             qt_host: windows
             qt_target: desktop
             qt_arch: win64_msvc2022_64
@@ -29,22 +41,16 @@ jobs:
 
           - name: 'Windows ARM64'
             os: windows-11-arm
+            qt_version: '6.8.3'
             qt_host: windows_arm64
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
             artifact_name: windows-arm64
             build_command: 'make desktop'
 
-          - name: 'Linux ARM64'
-            os: ubuntu-22.04-arm
-            qt_host: linux_arm64
-            qt_target: desktop
-            qt_arch: linux_gcc_arm64
-            artifact_name: linux-arm64
-            build_command: 'make desktop'
-
           - name: 'macOS-15 ARM64'
             os: macos-15
+            qt_version: '6.8.3'
             qt_host: mac
             qt_target: desktop
             qt_arch: clang_64
@@ -53,6 +59,7 @@ jobs:
 
           - name: 'Web'
             os: ubuntu-24.04
+            qt_version: '6.8.3'
             qt_host: all_os
             qt_target: wasm
             qt_arch: wasm_multithread
@@ -61,8 +68,7 @@ jobs:
             build_command: 'make web'
 
     env:
-      qt_version: '6.8.3'
-      qt_modules:  'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
+      qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
       target_folder: 'Kerfur'
       source_folder: '${{ github.workspace }}/install/'
       EMSDK: '${{ github.workspace }}/emsdk'
@@ -86,9 +92,11 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         shell: bash
+        continue-on-error: true
         run: |
           sudo apt-get update
           sudo apt-get -y install jq lftp brotli expect ccache \
+            libunwind-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-good1.0-dev libgstreamer-plugins-bad1.0-dev \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
@@ -104,14 +112,14 @@ jobs:
       - name: Install Qt
         uses: Kidev/install-qt-action@v5
         with:
-          version: ${{ env.qt_version }}
+          version: ${{ matrix.qt_version }}
           host: ${{ matrix.qt_host }}
           target: ${{ matrix.qt_target }}
           arch: ${{ matrix.qt_arch }}
           modules: ${{ env.qt_modules }}
           dir: ${{ github.workspace }}
           cache: 'true'
-          cache-key-prefix: 'install-qt-${{ env.qt_version }}-${{ matrix.qt_arch }}'
+          cache-key-prefix: 'install-qt-${{ matrix.qt_version }}-${{ matrix.qt_arch }}'
 
       - name: Install Emscripten SDK (Web only)
         if: (matrix.artifact_name == 'web')
@@ -126,7 +134,6 @@ jobs:
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
-            # Ensure VERSION always has 'v' prefix
             if [[ $TAG == v* ]]; then
               VERSION="$TAG"
               VERSION_TAG="${TAG#v}"
@@ -137,21 +144,15 @@ jobs:
             echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
             echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_OUTPUT
           else
-            # Get the latest "v" prefixed tag, or use "v0.0.0" if none exists
             LATEST_V_TAG=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "v0.0.0")
-            # Strip 'v' prefix from the tag for base version
             BASE_VERSION="${LATEST_V_TAG#v}"
 
-            # Get numeric commit count since the latest tag (or since beginning if no tags)
             if git describe --tags --match "v*" --abbrev=0 >/dev/null 2>&1; then
-              # Count commits since the latest v* tag
               TWEAK=$(git rev-list --count ${LATEST_V_TAG}..HEAD)
             else
-              # No tags exist, count all commits
               TWEAK=$(git rev-list --count HEAD)
             fi
 
-            # Construct development version
             VERSION="v${BASE_VERSION}-dev-${TWEAK}"
             VERSION_TAG="${BASE_VERSION}.${TWEAK}"
             echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
@@ -167,7 +168,6 @@ jobs:
         if: runner.os == 'Linux' && matrix.artifact_name != 'web'
         shell: bash
         run: |
-          # Detect architecture and download appropriate versions
           ARCH=$(uname -m)
           if [ "$ARCH" = "x86_64" ]; then
             LINUXDEPLOY_ARCH="x86_64"
@@ -180,22 +180,17 @@ jobs:
 
           echo "Downloading linuxdeploy for architecture: $LINUXDEPLOY_ARCH"
 
-          # Download linuxdeploy and appimagetool for detected architecture
           wget -O linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage"
           wget -O linuxdeploy-plugin-qt-${LINUXDEPLOY_ARCH}.AppImage "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${LINUXDEPLOY_ARCH}.AppImage"
           chmod +x linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage linuxdeploy-plugin-qt-${LINUXDEPLOY_ARCH}.AppImage
 
-          # Create AppDir structure
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 
-          # Copy the entire application structure to AppDir/usr/
           cp -r ${{ env.source_folder }}/* AppDir/usr/
 
-          # Copy logo from repo root
           cp logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
 
-          # Create AppRun script
           cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
@@ -203,7 +198,6 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
 
-          # Create a desktop file pointing to AppRun
           cat > AppDir/usr/share/applications/kerfur.desktop << EOF
           [Desktop Entry]
           Type=Application
@@ -213,31 +207,24 @@ jobs:
           Categories=Utility;
           EOF
 
-          # Set environment variables for linuxdeploy
           export QT_DIR="$(dirname $(which qmake))/.."
           export QML_SOURCES_PATHS="$(pwd)"
 
-          # Set environment variables to handle missing multimedia dependencies
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_PLATFORMS="minimal"
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_IMAGEFORMATS=""
 
-          # Try to create AppImage with multimedia support first, fallback if it fails
           if ! ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage; then
             echo "Failed with multimedia plugins, trying without problematic multimedia plugins..."
 
-            # Remove problematic multimedia plugins if they exist
             find AppDir -name "*gstreamer*" -type f -delete 2>/dev/null || true
             find AppDir -name "*multimedia*" -path "*/plugins/*" -type f -delete 2>/dev/null || true
 
-            # Try again
             ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
           fi
 
-          # Rename the created AppImage
           echo "Available AppImages before rename:"
           ls -la *.AppImage
 
-          # Find and rename the generated AppImage (exclude linuxdeploy tools)
           GENERATED_APPIMAGE=$(find . -name "*.AppImage" -not -name "linuxdeploy*" | head -1)
           if [ -n "$GENERATED_APPIMAGE" ]; then
             echo "Renaming $GENERATED_APPIMAGE to Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage"
@@ -268,7 +255,6 @@ jobs:
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
           else
-            # Linux: create tar.gz only (AppImage handled separately)
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
           fi
@@ -278,7 +264,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p appimage-artifacts
-          # Copy AppImage to separate artifacts folder
           if [ -f "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" ]; then
             cp "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" "appimage-artifacts/"
           fi

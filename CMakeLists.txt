@@ -19,7 +19,7 @@ find_package(
                Multimedia
 )
 
-qt_standard_project_setup(REQUIRES 6.8)
+qt_standard_project_setup()
 
 set(TOTAL_RESOURCES "")
 qt_add_big_resources(TOTAL_RESOURCES ${RESOURCES_FILE})
