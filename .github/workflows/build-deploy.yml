@@ -35,7 +35,7 @@ jobs:
             artifact_name: windows-arm64
             build_command: 'make desktop'
 
-          - name: 'Linux ARM64 (GLIBC 2.38)'
+          - name: 'Linux ARM64'
             os: ubuntu-24.04-arm
             qt_host: linux_arm64
             qt_target: desktop
@@ -156,15 +156,44 @@ jobs:
         run: |
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
 
-      - name: Create AppImage
-        id: appimage
-        if: "!(matrix.artifact_name == 'web') && matrix.qt_host == 'linux'"
-        uses: Kidev/qt-appimage@v0.0.5
-        with:
-          install_folder: ${{ env.source_folder }}
-          app_name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
-          category: 'Graphics'
-          icon: 'logo.png'
+      - name: Create AppImage (Linux only)
+        if: runner.os == 'Linux' && matrix.artifact_name != 'web'
+        shell: bash
+        run: |
+          # Download linuxdeploy and appimagetool
+          wget -O linuxdeploy-x86_64.AppImage "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          wget -O linuxdeploy-plugin-qt-x86_64.AppImage "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+          # Create AppDir structure
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          # Copy the entire application structure to AppDir/usr/
+          cp -r ${{ env.source_folder }}/* AppDir/usr/
+
+          # Copy logo from repo root
+          cp logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
+
+          # Create a desktop file
+          cat > AppDir/usr/share/applications/kerfur.desktop << EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Kerfur
+          Exec=bin/kerfur
+          Icon=kerfur
+          Categories=Utility;
+          EOF
+
+          # Set environment variables for linuxdeploy
+          export QT_DIR="$(dirname $(which qmake))/.."
+          export QML_SOURCES_PATHS="$(pwd)"
+
+          # Create AppImage
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
+
+          # Rename the created AppImage
+          find . -name "*.AppImage" -exec mv {} "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" \;
 
       - name: Upload to FTP (Web only)
         if: (matrix.artifact_name == 'web')
@@ -189,7 +218,6 @@ jobs:
           else
             cd "${{ env.source_folder }}"
             tar -czf "../artifacts/Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.tar.gz" *
-            cp ${{ steps.appimage.outputs.appimage }} ../artifacts/
           fi
 
       - name: Create and Upload Release
