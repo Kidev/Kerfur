@@ -17,9 +17,12 @@ find_package(
                Concurrent
                ShaderTools
                Multimedia
+               QuickControls2
 )
 
-qt_standard_project_setup()
+qt_standard_project_setup(REQUIRES 6.5)
+qt_policy(SET QTP0004 NEW)
+qt_policy(SET QTP0005 NEW)
 
 set(TOTAL_RESOURCES "")
 qt_add_big_resources(TOTAL_RESOURCES ${RESOURCES_FILE})
@@ -33,19 +36,19 @@ qt_add_executable(
     ${SOURCES_EXTRA}
 )
 
+qt_add_shaders(
+    ${PROJECT_NAME} ${PROJECT_NAME}_shaders
+    FILES ${SOURCES_SHADERS}
+    BATCHABLE PRECOMPILE OPTIMIZED
+)
+
+add_subdirectory(qml)
+
 qt_add_qml_module(
     ${PROJECT_NAME}
     URI "qml"
-    QML_FILES ${SOURCES_QML}
-    RESOURCE_PREFIX "/qt/qml"
-    OUTPUT_DIRECTORY "qml"
-    SOURCES ${SOURCES_QMLDIR}
-)
-
-qt_add_shaders(
-    ${PROJECT_NAME} ${PROJECT_NAME}_shaders
-    FILES ${SOURCES_SHADERS} BATCHABLE
-    PRECOMPILE OPTIMIZED
+    QML_FILES qml/Main.qml
+    DEPENDENCIES TARGET Display Tools
 )
 
 target_link_libraries(
@@ -56,6 +59,7 @@ target_link_libraries(
            Qt6::Qml
            Qt6::Concurrent
            Qt6::Multimedia
+           Qt6::QuickControls2
 )
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")

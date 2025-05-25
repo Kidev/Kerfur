@@ -44,17 +44,32 @@ INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
 REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(OS_NAME)
 TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(OS_NAME)
 INSTALLER_NAME ?= InstallKerfur-$(OS_NAME)
+CDN_UPLOAD_SOCKET ?=
+CDN_UPLOAD_USERNAME ?=
+CDN_UPLOAD_PASSWORD ?=
 
-all: wipe desktop
+all: clean desktop
 
 repo:
 	mkdir -p "installer/packages/$(TARGET_PACKAGE)/data"
-	cp -R "$(ABS_INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/"
-	mv "installer/packages/$(TARGET_PACKAGE)/data/$(INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/$(PROJECT_TITLE)"
+	cp -Rf "$(ABS_INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/"
+	mv -f "installer/packages/$(TARGET_PACKAGE)/data/$(INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/$(PROJECT_TITLE)"
+	rm -rf $(REPO_NAME)
 	$(INSTALLER_BIN_DIR)/repogen -p installer/packages -i $(TARGET_PACKAGE) $(REPO_NAME)
 
-installer: setup-installer repo
-	$(INSTALLER_BIN_DIR)/binarycreator -p packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
+upload-repo:
+	@if [ -n "$(CDN_UPLOAD_USERNAME)" ] && [ -n "$(CDN_UPLOAD_PASSWORD)" ] && [ -n "$(CDN_UPLOAD_SOCKET)" ]; then \
+		lftp -u "$(CDN_UPLOAD_USERNAME),$(CDN_UPLOAD_PASSWORD)" "$(CDN_UPLOAD_SOCKET)" -e "\
+		set ssl:verify-certificate no; \
+		mirror -R --only-newer --verbose $(REPO_NAME) $(OS_NAME); \
+		quit"; \
+	else \
+		echo "No CDN credential, will NOT upload the repo $(REPO_NAME)"; \
+	fi
+
+installer: setup-installer repo upload-repo
+	rm -rf $(INSTALLER_NAME)
+	$(INSTALLER_BIN_DIR)/binarycreator -p installer/packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
 
 setup-installer:
 	@echo "Setting up installer configuration..."
@@ -168,7 +183,7 @@ emsdk:
 		source ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
-web: wipe emsdk
+web: clean emsdk
 	@. ./emsdk/emsdk_env.sh && \
 	emcmake \
 	cmake -S . -B $(BUILD_DIR) \
@@ -190,8 +205,8 @@ web: wipe emsdk
 	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.wasm $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.svg $(ABS_INSTALL_DIR)
-	cp logo.png $(ABS_INSTALL_DIR)
-	cp favicon.ico $(ABS_INSTALL_DIR)
+	cp $(ASSETS_DIR)/logo.png $(ABS_INSTALL_DIR)/logo.png
+	cp $(ASSETS_DIR)/favicon.ico $(ABS_INSTALL_DIR)/favicon.ico
 
 	sed -i 's#<title>$(PROJECT_BINARY)</title>#<title>$(PROJECT_TITLE) | Kidev.org<\/title><link rel="icon" href="favicon.ico" type="image/x-icon">#g' $(ABS_INSTALL_DIR)/index.html
 	sed -i "s#<strong>Qt for WebAssembly: $(PROJECT_BINARY)</strong>#<h1 style='color:\#ffffff;'><strong>$(PROJECT_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" $(ABS_INSTALL_DIR)/index.html
@@ -224,10 +239,8 @@ run-web:
 	emrun $(ABS_INSTALL_DIR)/index.html --kill_start --kill_exit
 
 clean:
-	- rm -rI $(BUILD_DIR) $(ABS_INSTALL_DIR) installer/packages installer/config/config.xml installer/config/meta/package.xml
+	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml org_kidev*
+	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
 
-wipe:
-	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
-
-.PHONY: desktop clean wipe web run-web emsdk repo installer setup-installer
+.PHONY: desktop clean web run-web emsdk repo update-repo installer setup-installer
 .IGNORE: clean
