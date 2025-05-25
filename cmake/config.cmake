@@ -6,18 +6,12 @@ file(
     src/*.c*
 )
 file(
-    GLOB_RECURSE SOURCES_QML
-    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-    qml/*.qml
-)
-set(qml/qmldir SOURCES_QMLDIR)
-file(
     GLOB_RECURSE SOURCES_SHADERS
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     shaders/*
 )
+set(SOURCES_QML qml/Main.qml)
 set(RESOURCES_FILE "resources.qrc")
-# set(SOURCES_EXTRA "Makefile" ".github/workflows/build-deploy-demo.yml")
 
 resolve_env_or_var(QT_ROOT_DIR "" QT_INSTALL_DIR)
 
@@ -28,6 +22,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_PREFIX_PATH "${QT_INSTALL_DIR};${CMAKE_PREFIX_PATH}")
+set(QT_QML_GENERATE_QMLLS_INI ON)
 
 resolve_env_or_var(QT_QML_SOURCES "${CMAKE_SOURCE_DIR}/qml" QML_SOURCES_PATHS)
 append_env_path(QT_PLUGIN_PATH "${QT_INSTALL_DIR}/plugins")
