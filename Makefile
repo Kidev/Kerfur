@@ -1,3 +1,8 @@
+ifneq ("$(wildcard .env)","")
+$(info A '.env' file was found and included)
+include .env
+export
+endif
 define MISSING_QT_ROOT
 Error: QT_ROOT_DIR is not defined!
 
