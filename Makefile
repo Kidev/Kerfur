@@ -47,6 +47,9 @@ INSTALLER_NAME ?= InstallKerfur-$(OS_NAME)
 CDN_UPLOAD_SOCKET ?=
 CDN_UPLOAD_USERNAME ?=
 CDN_UPLOAD_PASSWORD ?=
+WASM_UPLOAD_SOCKET ?=
+WASM_UPLOAD_USERNAME ?=
+WASM_UPLOAD_PASSWORD ?=
 
 all: clean desktop
 
@@ -64,7 +67,17 @@ upload-repo:
 		mirror -R --only-newer --verbose $(REPO_NAME) $(OS_NAME); \
 		quit"; \
 	else \
-		echo "No CDN credential, will NOT upload the repo $(REPO_NAME)"; \
+		echo "No CDN credentials, will NOT update the remote with repo $(REPO_NAME)"; \
+	fi
+
+upload-web:
+	@if [ -n "$(WASM_UPLOAD_USERNAME)" ] && [ -n "$(WASM_UPLOAD_PASSWORD)" ] && [ -n "$(WASM_UPLOAD_SOCKET)" ]; then \
+		lftp -u "$(WASM_UPLOAD_USERNAME),$(WASM_UPLOAD_PASSWORD)" "$(WASM_UPLOAD_SOCKET)" -e "\
+		set ssl:verify-certificate no; \
+		mirror -R --only-newer --verbose $(ABS_INSTALL_DIR) $(PROJECT_TITLE); \
+		quit"; \
+	else \
+		echo "No WASM webserver credentials, will NOT update the WASM demo"; \
 	fi
 
 installer: setup-installer repo upload-repo
