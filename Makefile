@@ -252,8 +252,8 @@ run-web:
 	emrun $(ABS_INSTALL_DIR)/index.html --kill_start --kill_exit
 
 clean:
-	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml org_kidev*
+	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
 
-.PHONY: desktop clean web run-web emsdk repo update-repo installer setup-installer
+.PHONY: all repo upload-repo upload-web installer setup-installer desktop emsdk web run-web clean
 .IGNORE: clean
