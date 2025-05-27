@@ -44,8 +44,10 @@ QT_ROOT_DIR_HOST ?= $(abspath $(QT_ROOT_DIR))
 QT_VERSION := $(notdir $(abspath $(QT_ROOT_DIR)/..))
 QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
-QT_MODULE_PATH := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
-QT_TOOLCHAIN := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
+QT_MODULE_PATH_TARGET := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)
+QT_TOOLCHAIN_TARGET := $(QT_ROOT_DIR_TARGET)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
+QT_MODULE_PATH_HOST := $(QT_ROOT_DIR_HOST)/lib/cmake/$(QT_NAME)
+QT_TOOLCHAIN_HOST := $(QT_ROOT_DIR_HOST)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
 QT_TOOLS_DIR := $(QT_ROOT_DIR)/../../Tools
 SHELL = /bin/bash
 QT_IFW_VERSION ?= $(shell find $(QT_TOOLS_DIR)/QtInstallerFramework -mindepth 1 -maxdepth 1 -type d -printf "%f")
@@ -167,10 +169,10 @@ desktop:
 	-DEMSCRIPTEN=OFF \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_HOST) \
 	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR) \
-	-DQt6_DIR=$(QT_MODULE_PATH) \
+	-DQt6_DIR=$(QT_MODULE_PATH_HOST) \
 	-DBUILD_TIME="$(BUILD_TIME)" \
 	-DBUILD_NAME="$(BUILD_NAME)" \
-	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN)
+	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_HOST)
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
@@ -221,10 +223,10 @@ web: clean emsdk
 	-DEMSCRIPTEN=ON \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) \
 	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR) \
-	-DQt6_DIR=$(QT_MODULE_PATH) \
+	-DQt6_DIR=$(QT_MODULE_PATH_TARGET) \
 	-DBUILD_TIME=$(BUILD_TIME) \
 	-DBUILD_NAME=$(BUILD_NAME) \
-	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) && \
+	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_TARGET) && \
 	cmake --build $(BUILD_DIR)
 
 	mkdir -p $(ABS_INSTALL_DIR)
