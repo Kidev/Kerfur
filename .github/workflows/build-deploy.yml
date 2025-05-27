@@ -136,7 +136,12 @@ jobs:
             gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x \
             gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 \
             gstreamer1.0-qt5 gstreamer1.0-pulseaudio
-          sudo apt-get -y install libwebp
+
+      - name: Fix WebP library dependency
+        if: matrix.os == 'ubuntu-22.04-arm'
+        run: |
+          sudo apt-get install -y libwebp-dev libwebp7
+          sudo ln -sf /usr/lib/aarch64-linux-gnu/libwebp.so.7 /usr/lib/aarch64-linux-gnu/libwebp.so.6 || true
 
       - name: Setup MSVC
         if: runner.os == 'Windows'
@@ -156,7 +161,7 @@ jobs:
           tools: ${{ matrix.qt_tools }}
 
       - name: Install Emscripten SDK (Web only)
-        if: (matrix.artifact_name == 'web')
+        if: matrix.artifact_name == 'web'
         shell: bash
         run: |
           make emsdk
@@ -199,7 +204,7 @@ jobs:
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
 
       - name: Craft installer
-        if: ${{ matrix.installer_command }} != ''
+        if: matrix.installer_command != ''
         shell: bash
         run: |
           ${{ matrix.installer_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
@@ -275,7 +280,7 @@ jobs:
           fi
 
       - name: Package artifacts
-        if: "!(matrix.artifact_name == 'web')"
+        if: matrix.artifact_name != 'web'
         shell: bash
         run: |
           mkdir -p artifacts
@@ -311,7 +316,7 @@ jobs:
           fi
 
       - name: Create and Upload Release
-        if: "!(matrix.artifact_name == 'web') && startsWith(github.ref, 'refs/tags/v')"
+        if: matrix.artifact_name != 'web' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -326,7 +331,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload development artifacts
-        if: "!(matrix.artifact_name == 'web') && !startsWith(github.ref, 'refs/tags/v')"
+        if: matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
           name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
