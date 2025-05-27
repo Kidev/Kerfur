@@ -21,8 +21,12 @@ find_package(
 )
 
 qt_standard_project_setup(REQUIRES 6.5)
-qt_policy(SET QTP0004 NEW)
-qt_policy(SET QTP0005 NEW)
+if (QT_KNOWN_POLICY_QTP0004)
+    qt_policy(SET QTP0004 NEW)
+endif ()
+if (QT_KNOWN_POLICY_QTP0005)
+    qt_policy(SET QTP0005 NEW)
+endif ()
 
 set(TOTAL_RESOURCES "")
 qt_add_big_resources(TOTAL_RESOURCES ${RESOURCES_FILE})

@@ -294,12 +294,14 @@ jobs:
 
       - name: Package Installer
         if: matrix.artifact_name != 'web'
+        id: package_installer
         shell: bash
         run: |
           mkdir -p installer-artifacts
           file=$(find . -maxdepth 1 -type f -name 'InstallKerfur-*' | head -n 1)
           if [ -n "$file" ]; then
             cp "$file" installer-artifacts/
+             echo "INSTALLER_CREATED=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Create and Upload Release
@@ -329,14 +331,14 @@ jobs:
         if: runner.os == 'Linux' && matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
-          name: Kerfur-${{ matrix.artifact_name }}-AppImage-${{ steps.get_version.outputs.VERSION }}
+          name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage
           path: appimage-artifacts/*
           retention-days: 1
 
       - name: Upload Installer development artifacts
         uses: actions/upload-artifact@v4
-        continue-on-error: true
+        if: matrix.artifact_name != 'web' && steps.package_installer.outputs.INSTALLER_CREATED == 'true'
         with:
-          name: InstallKerfur-${{ matrix.artifact_name }}
-          path: appimage-artifacts/*
+          name: KerfurInstaller-${{ matrix.artifact_name }}
+          path: installer-artifacts/*
           retention-days: 5
