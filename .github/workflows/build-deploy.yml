@@ -298,7 +298,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p installer-artifacts
-          file=$(find . -maxdepth 1 -type f -name 'InstallKerfur-*' | head -n 1)
+          file=$(find . -maxdepth 1 -type f -name 'KerfurInstaller-*' | head -n 1)
           if [ -n "$file" ]; then
             cp "$file" installer-artifacts/
              echo "INSTALLER_CREATED=true" >> $GITHUB_OUTPUT
