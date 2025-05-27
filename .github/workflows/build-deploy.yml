@@ -223,7 +223,7 @@ jobs:
 
           cp -r ${{ env.source_folder }}/* AppDir/usr/
 
-          cp logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
+          cp assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
 
           cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
@@ -297,10 +297,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p installer-artifacts
-          CURRENT_OS_NAME=`bash uname -s`
-          echo "CURRENT_OS_NAME=${CURRENT_OS_NAME}" >> $GITHUB_ENV
-          if [ -f "InstallKerfur-${CURRENT_OS_NAME}" ]; then
-            cp "InstallKerfur-${CURRENT_OS_NAME}" "installer-artifacts/"
+          file=$(find . -maxdepth 1 -type f -name 'InstallKerfur-*' | head -n 1)
+          if [ -n "$file" ]; then
+            cp "$file" installer-artifacts/
           fi
 
       - name: Create and Upload Release
@@ -338,6 +337,6 @@ jobs:
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: InstallKerfur-${{ env.CURRENT_OS_NAME }}
+          name: InstallKerfur-${{ matrix.artifact_name }}
           path: appimage-artifacts/*
           retention-days: 5
