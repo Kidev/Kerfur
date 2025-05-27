@@ -104,7 +104,7 @@ setup-installer:
 	@echo '    <ProductUrl>https://www.kidev.org</ProductUrl>' >> installer/config/config.xml
 	@echo '    <InstallerWindowIcon>icon</InstallerWindowIcon>' >> installer/config/config.xml
 	@echo '    <InstallerApplicationIcon>icon</InstallerApplicationIcon>' >> installer/config/config.xml
-	@echo '    <Banner>banner.gif</Banner>' >> installer/config/config.xml
+	@echo '    <Banner>banner.png</Banner>' >> installer/config/config.xml
 	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)/bin/$(PROJECT_BINARY)</RunProgram>' >> installer/config/config.xml
 	@echo '    <RunProgramDescription>Run $(PROJECT_TITLE)</RunProgramDescription>' >> installer/config/config.xml
 	@echo '    <StartMenuDir>$(PROJECT_TITLE)</StartMenuDir>' >> installer/config/config.xml
