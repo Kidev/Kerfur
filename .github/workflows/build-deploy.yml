@@ -125,7 +125,6 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         shell: bash
-        continue-on-error: true
         run: |
           sudo apt-get update
           sudo apt-get -y install jq lftp brotli expect ccache \
@@ -136,8 +135,8 @@ jobs:
             gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
             gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x \
             gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 \
-            gstreamer1.0-qt5 gstreamer1.0-pulseaudio \
-            libwebp6
+            gstreamer1.0-qt5 gstreamer1.0-pulseaudio
+          sudo apt-get -y install libwebp7
 
       - name: Setup MSVC
         if: runner.os == 'Windows'
