@@ -88,13 +88,19 @@ jobs:
             artifact_name: web
             qt_tools: ''
             build_command: 'make web'
-            installer_command: ''
+            installer_command: 'make upload-web'
 
     env:
       qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
       target_folder: 'Kerfur'
       source_folder: '${{ github.workspace }}/install/'
       EMSDK: '${{ github.workspace }}/emsdk'
+      CDN_UPLOAD_SOCKET: ${{ secrets.CDN_UPLOAD_IP }}
+      CDN_UPLOAD_USERNAME: ${{ secrets.CDN_UPLOAD_USER }}
+      CDN_UPLOAD_PASSWORD: ${{ secrets.CDN_UPLOAD_PW }}
+      WASM_UPLOAD_SOCKET: ${{ secrets.WASM_UPLOAD_IP }}
+      WASM_UPLOAD_USERNAME: ${{ secrets.WASM_UPLOAD_USER }}
+      WASM_UPLOAD_PASSWORD: ${{ secrets.WASM_UPLOAD_PW }}
 
     runs-on: ${{ matrix.os }}
 
@@ -264,16 +270,6 @@ jobs:
             ls -la *.AppImage
           fi
 
-      - name: Upload to FTP (Web only)
-        if: (matrix.artifact_name == 'web')
-        shell: bash
-        run: |
-          lftp -u ${{ secrets.FTP_UPLOAD_USER }},${{ secrets.FTP_UPLOAD_PW }} ${{ secrets.FTP_UPLOAD_IP }} <<EOF
-          set ssl:verify-certificate no
-          mirror -R --only-newer --verbose ${{ env.source_folder }} ${{ env.target_folder }}
-          quit
-          EOF
-
       - name: Package artifacts
         if: "!(matrix.artifact_name == 'web')"
         shell: bash
@@ -298,6 +294,17 @@ jobs:
             cp "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage" "appimage-artifacts/"
           fi
 
+      - name: Package Installer
+        if: matrix.artifact_name != 'web'
+        shell: bash
+        run: |
+          mkdir -p installer-artifacts
+          CURRENT_OS_NAME=`bash uname -s`
+          echo "CURRENT_OS_NAME=${CURRENT_OS_NAME}" >> $GITHUB_ENV
+          if [ -f "InstallKerfur-${CURRENT_OS_NAME}" ]; then
+            cp "InstallKerfur-${CURRENT_OS_NAME}" "installer-artifacts/"
+          fi
+
       - name: Create and Upload Release
         if: "!(matrix.artifact_name == 'web') && startsWith(github.ref, 'refs/tags/v')"
         uses: softprops/action-gh-release@v2
@@ -305,6 +312,7 @@ jobs:
           files: |
             artifacts/*
             appimage-artifacts/*
+            installer-artifacts/*
           name: Kerfur ${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
@@ -327,3 +335,11 @@ jobs:
           name: Kerfur-${{ matrix.artifact_name }}-AppImage-${{ steps.get_version.outputs.VERSION }}
           path: appimage-artifacts/*
           retention-days: 1
+
+      - name: Upload Installer development artifacts
+        uses: actions/upload-artifact@v4
+        continue-on-fail: true
+        with:
+          name: InstallKerfur-${{ env.CURRENT_OS_NAME }}
+          path: appimage-artifacts/*
+          retention-days: 5
