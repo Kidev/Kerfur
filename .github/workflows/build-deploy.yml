@@ -336,7 +336,7 @@ jobs:
 
       - name: Upload Installer development artifacts
         uses: actions/upload-artifact@v4
-        continue-on-fail: true
+        continue-on-error: true
         with:
           name: InstallKerfur-${{ env.CURRENT_OS_NAME }}
           path: appimage-artifacts/*
