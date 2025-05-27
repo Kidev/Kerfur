@@ -32,11 +32,15 @@ ASSETS_DIR ?= assets
 BUILD_DIR ?= build
 INSTALL_DIR ?= install
 WASM_ARCH ?= wasm_multithread
+BUILD_NAME ?=
+BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
+BUILD_QUALIFIER := $(OS_NAME)$(BUILD_NAME)
 BUILD_MODE ?= Release
 BUILD_MODE_WEB ?= MinSizeRel
 BROTLI_EXTENSIONS ?= js css html wasm png ico wav mp3
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
 QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../$(WASM_ARCH))
+QT_ROOT_DIR_HOST ?= $(abspath $(QT_ROOT_DIR))
 QT_VERSION := $(notdir $(abspath $(QT_ROOT_DIR)/..))
 QT_NAME := Qt$(shell echo $(QT_VERSION) | cut -c1)
 QT_HOST_CMAKE_DIR := $(QT_ROOT_DIR)/lib/cmake
@@ -46,9 +50,9 @@ QT_TOOLS_DIR := $(QT_ROOT_DIR)/../../Tools
 SHELL = /bin/bash
 QT_IFW_VERSION ?= $(shell find $(QT_TOOLS_DIR)/QtInstallerFramework -mindepth 1 -maxdepth 1 -type d -printf "%f")
 INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
-REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(OS_NAME)
-TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(OS_NAME)
-INSTALLER_NAME ?= $(PROJECT_TITLE)Installer-$(OS_NAME)
+REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
+TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(BUILD_QUALIFIER)
+INSTALLER_NAME ?= $(PROJECT_TITLE)Installer-$(BUILD_QUALIFIER)
 CDN_UPLOAD_SOCKET ?=
 CDN_UPLOAD_USERNAME ?=
 CDN_UPLOAD_PASSWORD ?=
@@ -69,7 +73,7 @@ upload-repo:
 	@if [ -n "$(CDN_UPLOAD_USERNAME)" ] && [ -n "$(CDN_UPLOAD_PASSWORD)" ] && [ -n "$(CDN_UPLOAD_SOCKET)" ]; then \
 		lftp -u "$(CDN_UPLOAD_USERNAME),$(CDN_UPLOAD_PASSWORD)" "$(CDN_UPLOAD_SOCKET)" -e "\
 		set ssl:verify-certificate no; \
-		mirror -R --only-newer --verbose $(REPO_NAME) $(OS_NAME); \
+		mirror -R --only-newer --verbose $(REPO_NAME) $(BUILD_QUALIFIER); \
 		quit"; \
 	else \
 		echo "No CDN credentials, will NOT update the remote with repo $(REPO_NAME)"; \
@@ -97,7 +101,7 @@ setup-installer:
 
 	@echo '<?xml version="1.0"?>' > installer/config/config.xml
 	@echo '<Installer>' >> installer/config/config.xml
-	@echo '    <Name>$(PROJECT_TITLE) Installer for $(OS_NAME)</Name>' >> installer/config/config.xml
+	@echo '    <Name>$(PROJECT_TITLE) Installer for $(BUILD_QUALIFIER)</Name>' >> installer/config/config.xml
 	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/config.xml
 	@echo '    <Title>$(PROJECT_TITLE) Installer</Title>' >> installer/config/config.xml
 	@echo '    <Publisher>Kidev.org</Publisher>' >> installer/config/config.xml
@@ -122,7 +126,7 @@ setup-installer:
 	@echo '    <RemoteRepositories>' >> installer/config/config.xml
 	@echo '        <Repository>' >> installer/config/config.xml
 	@echo '            <DisplayName>Kidev.org CDN</DisplayName>' >> installer/config/config.xml
-	@echo '            <Url>https://cdn.kidev.org/$(OS_NAME)</Url>' >> installer/config/config.xml
+	@echo '            <Url>https://cdn.kidev.org/$(BUILD_QUALIFIER)</Url>' >> installer/config/config.xml
 	@echo '            <Enabled>1</Enabled>' >> installer/config/config.xml
 	@echo '        </Repository>' >> installer/config/config.xml
 	@echo '    </RemoteRepositories>' >> installer/config/config.xml
@@ -133,7 +137,7 @@ setup-installer:
 	@echo '    <DisplayName>$(PROJECT_TITLE)</DisplayName>' >> installer/config/meta/package.xml
 	@echo '    <Description>$(PROJECT_TITLE) by Kidev.org</Description>' >> installer/config/meta/package.xml
 	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/meta/package.xml
-	@echo '    <ReleaseDate>'$$(date +%Y-%m-%d)'</ReleaseDate>' >> installer/config/meta/package.xml
+	@echo '    <ReleaseDate>$(BUILD_TIME)</ReleaseDate>' >> installer/config/meta/package.xml
 	@echo '    <Name>$(TARGET_PACKAGE)</Name>' >> installer/config/meta/package.xml
 	@echo '    <Licenses>' >> installer/config/meta/package.xml
 	@echo '        <License name="$(PROJECT_TITLE)'"'"'s Software License Agreement" file="license.txt" />' >> installer/config/meta/package.xml
@@ -160,7 +164,13 @@ desktop:
 	-DVERSION_TAG=$(VERSION_TAG) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
-	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR)
+	-DEMSCRIPTEN=OFF \
+	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_HOST) \
+	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR) \
+	-DQt6_DIR=$(QT_MODULE_PATH) \
+	-DBUILD_TIME="$(BUILD_TIME)" \
+	-DBUILD_NAME="$(BUILD_NAME)" \
+	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN)
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
@@ -212,8 +222,9 @@ web: clean emsdk
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) \
 	-DCMAKE_INSTALL_PREFIX=$(ABS_INSTALL_DIR) \
 	-DQt6_DIR=$(QT_MODULE_PATH) \
-	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) \
-	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) && \
+	-DBUILD_TIME=$(BUILD_TIME) \
+	-DBUILD_NAME=$(BUILD_NAME) \
+	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN) && \
 	cmake --build $(BUILD_DIR)
 
 	mkdir -p $(ABS_INSTALL_DIR)

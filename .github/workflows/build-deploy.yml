@@ -18,6 +18,7 @@ jobs:
             qt_target: desktop
             qt_arch: linux_gcc_64
             artifact_name: linux-x64
+            build_name: 'x64'
             qt_tools: ''
             build_command: 'make desktop'
             installer_command: ''
@@ -29,6 +30,7 @@ jobs:
             qt_target: desktop
             qt_arch: linux_gcc_arm64
             artifact_name: linux-arm64
+            build_name: 'arm64'
             qt_tools: ''
             build_command: 'make desktop'
             installer_command: ''
@@ -40,6 +42,7 @@ jobs:
             qt_target: desktop
             qt_arch: linux_gcc_arm64
             artifact_name: bookworm-arm64-rpi
+            build_name: 'arm64-RaspberryPI'
             qt_tools: 'tools_ifw'
             build_command: 'make desktop'
             installer_command: 'make installer'
@@ -51,6 +54,7 @@ jobs:
             qt_target: desktop
             qt_arch: win64_msvc2022_64
             artifact_name: windows-x64
+            build_name: 'x64'
             qt_tools: ''
             build_command: 'make desktop'
             installer_command: ''
@@ -62,6 +66,7 @@ jobs:
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
             artifact_name: windows-arm64
+            build_name: 'arm64'
             qt_tools: ''
             build_command: 'make desktop'
             installer_command: ''
@@ -73,6 +78,7 @@ jobs:
             qt_target: desktop
             qt_arch: clang_64
             artifact_name: macos-15-arm64
+            build_name: 'arm64'
             qt_tools: ''
             build_command: 'make desktop'
             installer_command: ''
@@ -85,6 +91,7 @@ jobs:
             qt_arch: wasm_multithread
             qt_modules: 'qtquick3d qtshadertools qtmultimedia qtquicktimeline'
             artifact_name: web
+            build_name: 'wasm'
             qt_tools: ''
             build_command: 'make web'
             installer_command: 'make upload-web'
@@ -190,13 +197,13 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
+          ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
 
       - name: Craft installer
         if: ${{ matrix.installer_command }} != ''
         shell: bash
         run: |
-          ${{ matrix.installer_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }}
+          ${{ matrix.installer_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
 
       - name: Create AppImage (Linux only)
         if: runner.os == 'Linux' && matrix.artifact_name != 'web'
