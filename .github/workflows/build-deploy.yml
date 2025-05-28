@@ -236,11 +236,12 @@ jobs:
 
           cp assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
 
-          cat > AppDir/AppRun << 'EOF'
+          cat > AppDir/AppRun << EOF
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
           exec "${HERE}/usr/bin/kerfur" "$@"
           EOF
+
           chmod +x AppDir/AppRun
 
           cat > AppDir/usr/share/applications/kerfur.desktop << EOF
@@ -252,18 +253,21 @@ jobs:
           Categories=Utility;
           EOF
 
-          export QT_DIR="$(dirname $(which qmake))/.."
+          export QT_DIR=${QT_ROOT_DIR}
           export QML_SOURCES_PATHS="$(pwd)"
+          export QMAKE=${QT_DIR}/bin/qmake
+          export NO_STRIP=1
 
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_PLATFORMS="minimal"
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_IMAGEFORMATS=""
 
-          if ! ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage; then
+          ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
+
+          if [[ $? != 0 ]]; then
             echo "Failed with multimedia plugins, trying without problematic multimedia plugins..."
 
             find AppDir -name "*gstreamer*" -type f -delete 2>/dev/null || true
             find AppDir -name "*multimedia*" -path "*/plugins/*" -type f -delete 2>/dev/null || true
-
             ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
           fi
 
@@ -271,9 +275,9 @@ jobs:
           ls -la *.AppImage
 
           GENERATED_APPIMAGE=$(find . -name "*.AppImage" -not -name "linuxdeploy*" | head -1)
-          if [ -n "$GENERATED_APPIMAGE" ]; then
-            echo "Renaming $GENERATED_APPIMAGE to Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage"
-            mv "$GENERATED_APPIMAGE" "Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage"
+          if [[ -n "$GENERATED_APPIMAGE" ]]; then
+            echo "Renaming $GENERATED_APPIMAGE to Kerfur.AppImage"
+            mv "$GENERATED_APPIMAGE" "Kerfur.AppImage"
           else
             echo "Warning: No generated AppImage found to rename"
             ls -la *.AppImage
