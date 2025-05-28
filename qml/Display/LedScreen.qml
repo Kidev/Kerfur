@@ -35,7 +35,8 @@ Item {
 
             hideSource: true
             sourceItem: root.source
-            textureSize: Qt.size(root.source.width / root.ledScreenLedSize, root.source.height / root.ledScreenLedSize)
+            textureSize: Qt.size(root.source.width / root.ledScreenLedSize, root.source.height
+                                 / root.ledScreenLedSize)
         }
     }
 

@@ -29,7 +29,7 @@
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app{argc, argv};
+    QGuiApplication app {argc, argv};
     app.setApplicationName("Kerfur");
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
     app.setOrganizationName("Kidev");
