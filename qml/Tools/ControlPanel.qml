@@ -196,7 +196,8 @@ Rectangle {
             // Glow Blend Mode
             Text {
                 color: "white"
-                text: "Blend Mode: " + ["Additive", "Screen", "Replace", "Outer"][glowBlendModeSlider.value]
+                text: "Blend Mode: " + ["Additive", "Screen", "Replace",
+                    "Outer"][glowBlendModeSlider.value]
             }
 
             KSlider {

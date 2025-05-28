@@ -15,10 +15,12 @@ Item {
     BlurItem {
         id: blurredItemSource1
 
-        height: blurredItemSource1.src ? Math.ceil(blurredItemSource1.src.height / 16) * blurredItemSource1.blurItemSize : 0
+        height: blurredItemSource1.src ? Math.ceil(blurredItemSource1.src.height / 16)
+                                         * blurredItemSource1.blurItemSize : 0
         multiplier: root.blurMultiplier
         src: root.source
-        width: blurredItemSource1.src ? Math.ceil(blurredItemSource1.src.width / 16) * blurredItemSource1.blurItemSize : 0
+        width: blurredItemSource1.src ? Math.ceil(blurredItemSource1.src.width / 16)
+                                        * blurredItemSource1.blurItemSize : 0
     }
 
     BlurItem {
@@ -62,7 +64,9 @@ Item {
 
         readonly property int blurItemSize: 8
         property real multiplier: 5
-        property vector2d offset: Qt.vector2d((1.0 + self.multiplier) / self.width, (1.0 + self.multiplier) / self.height)
+        property vector2d offset: Qt.vector2d((1.0 + self.multiplier) / self.width, (1.0
+                                                                                     + self.multiplier)
+                                              / self.height)
         property Item src: null
 
         fragmentShader: "qrc:/shaders/bluritems.frag.qsb"

@@ -15,7 +15,8 @@ Window {
     property bool isTouched: false
     property alias kSettings: settings
     readonly property point leftEyeCenter: Qt.point(32, 22)
-    property point leftPupilOffset: Qt.point(((settings.leftRightAngle - 90) / 90) * root.maxPupilMovement, ((settings.upDownAngle - 90) / 90) * root.maxPupilMovement)
+    readonly property real leftOffset: ((settings.leftRightAngle - 90) / 90) * root.maxPupilMovement
+    property point leftPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
     readonly property real meowVolume: 1
@@ -26,7 +27,8 @@ Window {
     readonly property string pathEyesPupil: "qrc:/assets/img/pupil.png"
     readonly property string pathSoundMeow: "qrc:/assets/sound/meow.wav"
     readonly property point rightEyeCenter: Qt.point(90, 22)
-    property point rightPupilOffset: root.leftPupilOffset
+    readonly property real rightOffset: ((settings.upDownAngle - 90) / 90) * root.maxPupilMovement
+    property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool showControls: false
     property bool winkLeft: false
     property bool winkRight: false
@@ -40,7 +42,9 @@ Window {
     }
 
     function resetBlinkTimer() {
-        blinkTimer.interval = Math.floor(Math.random() * (root.maxBlinkInterval - root.minBlinkInterval)) + root.minBlinkInterval;
+        blinkTimer.interval = Math.floor(Math.random() * (root.maxBlinkInterval
+                                                          - root.minBlinkInterval))
+                + root.minBlinkInterval;
         blinkTimer.restart();
     }
 
@@ -100,15 +104,18 @@ Window {
         property real relativeScaleWidth: displayImage.width / (displayImage.sourceSize.width)
 
         anchors.centerIn: parent
-        height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
-        width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
+        height: Math.min(root.height, root.width * (displayImage.sourceSize.height
+                                                    / displayImage.sourceSize.width))
+        width: Math.min(root.width, root.height * (displayImage.sourceSize.width
+                                                   / displayImage.sourceSize.height))
 
         Image {
             id: displayImage
 
             anchors.fill: parent
             fillMode: Image.PreserveAspectFit
-            source: root.isTouched ? root.pathEyesMeow : root.isBlinking ? root.pathEyesClosed : root.pathEyesOpened
+            source: root.isTouched ? root.pathEyesMeow : root.isBlinking ? root.pathEyesClosed :
+                                                                           root.pathEyesOpened
 
             onStatusChanged: {
                 if (displayImage.status === Image.Error) {
@@ -125,7 +132,8 @@ Window {
             visible: !root.winkLeft
             width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
             x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + root.leftPupilOffset.x)
-            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + root.leftPupilOffset.y)
+            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y
+                                                       + root.leftPupilOffset.y)
         }
 
         Image {
@@ -135,8 +143,10 @@ Window {
             source: root.pathEyesPupil
             visible: !root.winkRight
             width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
-            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + root.rightPupilOffset.x)
-            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + root.rightPupilOffset.y)
+            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x
+                                                      + root.rightPupilOffset.x)
+            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y
+                                                       + root.rightPupilOffset.y)
         }
     }
 
@@ -260,11 +270,11 @@ Window {
             }
         }
         onPressed: mouse => {
-            mouse.accepted = false;
-        }
+                       mouse.accepted = false;
+                   }
         onReleased: mouse => {
-            mouse.accepted = false;
-        }
+                        mouse.accepted = false;
+                    }
     }
 
     ControlPanel {
