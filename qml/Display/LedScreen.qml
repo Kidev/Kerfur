@@ -25,10 +25,10 @@ Item {
 
         anchors.fill: parent
         blending: true
-        fragmentShader: 'qrc:/shaders/kerfur.frag.qsb'
+        fragmentShader: ':/shaders/kerfur.frag.qsb'
         layer.enabled: true
         layer.smooth: true
-        vertexShader: 'qrc:/shaders/kerfur.vert.qsb'
+        vertexShader: ':/shaders/kerfur.vert.qsb'
 
         ShaderEffectSource {
             id: scaledSource

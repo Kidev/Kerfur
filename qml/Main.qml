@@ -21,11 +21,11 @@ Window {
     readonly property int maxPupilMovement: 5
     readonly property real meowVolume: 1
     readonly property int minBlinkInterval: 4000
-    readonly property string pathEyesClosed: "qrc:/assets/img/eyes_closed.png"
-    readonly property string pathEyesMeow: "qrc:/assets/img/eyes_meow.png"
-    readonly property string pathEyesOpened: "qrc:/assets/img/eyes_opened.png"
-    readonly property string pathEyesPupil: "qrc:/assets/img/pupil.png"
-    readonly property string pathSoundMeow: "qrc:/assets/sound/meow.wav"
+    readonly property string pathEyesClosed: ":/assets/img/eyes_closed.png"
+    readonly property string pathEyesMeow: ":/assets/img/eyes_meow.png"
+    readonly property string pathEyesOpened: ":/assets/img/eyes_opened.png"
+    readonly property string pathEyesPupil: ":/assets/img/pupil.png"
+    readonly property string pathSoundMeow: ":/assets/sound/meow.wav"
     readonly property point rightEyeCenter: Qt.point(90, 22)
     readonly property real rightOffset: ((settings.upDownAngle - 90) / 90) * root.maxPupilMovement
     property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
@@ -260,13 +260,14 @@ Window {
         propagateComposedEvents: true
 
         onMouseXChanged: {
-            if (shouldTrack && containsMouse) {
-                settings.leftRightAngle = (mouseX / width) * 180;
+            if (pupilTrackingArea.shouldTrack && pupilTrackingArea.containsMouse) {
+                settings.leftRightAngle = (pupilTrackingArea.mouseX / pupilTrackingArea.width)
+                        * 180;
             }
         }
         onMouseYChanged: {
-            if (shouldTrack && containsMouse) {
-                settings.upDownAngle = (mouseY / height) * 180;
+            if (pupilTrackingArea.shouldTrack && pupilTrackingArea.containsMouse) {
+                settings.upDownAngle = (pupilTrackingArea.mouseY / pupilTrackingArea.height) * 180;
             }
         }
         onPressed: mouse => {

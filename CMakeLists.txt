@@ -28,11 +28,6 @@ if (QT_KNOWN_POLICY_QTP0005)
     qt_policy(SET QTP0005 NEW)
 endif ()
 
-set(TOTAL_RESOURCES "")
-qt_add_big_resources(TOTAL_RESOURCES ${RESOURCES_FILE})
-list(APPEND TOTAL_RESOURCES ${RESOURCES_FILE})
-set_property(SOURCE ${RESOURCES_FILE} PROPERTY SKIP_AUTORCC ON)
-
 qt_add_executable(
     ${PROJECT_NAME}
     ${SOURCES_CPP}
@@ -53,6 +48,8 @@ qt_add_qml_module(
     URI "qml"
     QML_FILES qml/Main.qml
     DEPENDENCIES TARGET Display Tools
+    RESOURCE_PREFIX "/"
+    RESOURCES ${RESOURCES_FILE}
 )
 
 target_link_libraries(
@@ -64,6 +61,8 @@ target_link_libraries(
            Qt6::Concurrent
            Qt6::Multimedia
            Qt6::QuickControls2
+           Display
+           Tools
 )
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")

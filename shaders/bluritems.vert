@@ -17,9 +17,9 @@ out gl_PerVertex { vec4 gl_Position; };
 
 void main() {
     float dither = 0.33;
-    texCoord0 = vec2(qt_MultiTexCoord0.x + offset.x, qt_MultiTexCoord0.y + offset.y * dither);
-    texCoord1 = vec2(qt_MultiTexCoord0.x + offset.x * dither, qt_MultiTexCoord0.y - offset.y);
-    texCoord2 = vec2(qt_MultiTexCoord0.x - offset.x * dither, qt_MultiTexCoord0.y + offset.y);
-    texCoord3 = vec2(qt_MultiTexCoord0.x - offset.x, qt_MultiTexCoord0.y - offset.y * dither);
-    gl_Position = qt_Matrix * qt_Vertex;
+    texCoord0 = vec2(qt_MultiTexCoord0.x + buf.offset.x, qt_MultiTexCoord0.y + buf.offset.y * dither);
+    texCoord1 = vec2(qt_MultiTexCoord0.x + buf.offset.x * dither, qt_MultiTexCoord0.y - buf.offset.y);
+    texCoord2 = vec2(qt_MultiTexCoord0.x - buf.offset.x * dither, qt_MultiTexCoord0.y + buf.offset.y);
+    texCoord3 = vec2(qt_MultiTexCoord0.x - buf.offset.x, qt_MultiTexCoord0.y - buf.offset.y * dither);
+    gl_Position = buf.qt_Matrix * qt_Vertex;
 }

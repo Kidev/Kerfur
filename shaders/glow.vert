@@ -1,5 +1,4 @@
 #version 440
-#define BLUR_HELPER_MAX_LEVEL 64
 
 layout(location = 0) in vec4 qt_Vertex;
 layout(location = 1) in vec2 qt_MultiTexCoord0;
@@ -31,7 +30,7 @@ void main() {
     fragCoord = qt_Vertex.xy;
     vec2 vertCoord = qt_Vertex.xy;
     {
-        float blurLod = sqrt(glowBlurAmount * (BLUR_HELPER_MAX_LEVEL / 64.0)) * 1.2 - 0.2;
+        float blurLod = sqrt(buf.glowBlurAmount) * 1.2 - 0.2;
         float bw1 = blurWeight(abs(blurLod - 0.1));
         float bw2 = blurWeight(abs(blurLod - 0.3));
         float bw3 = blurWeight(abs(blurLod - 0.5));
@@ -43,5 +42,5 @@ void main() {
         blurWeight1 = vec4(bw1 / bsum, bw2 / bsum, bw3 / bsum, bw4 / bsum);
         blurWeight2 = vec2(bw5 / bsum, bw6 / bsum);
     }
-    gl_Position = qt_Matrix * vec4(vertCoord, 0.0, 1.0);
+    gl_Position = buf.qt_Matrix * vec4(vertCoord, 0.0, 1.0);
 }
