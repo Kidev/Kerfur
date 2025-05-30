@@ -41,17 +41,17 @@ float calculateAlpha(vec2 center, vec2 fragCoord, float ledSize) {
 void main() {
     fragColor = texture(iSource, texCoord);
     {
-        const float maxLedSize = ledScreenLedSize;
+        const float maxLedSize = buf.ledScreenLedSize;
         // Use grid step for positioning if provided, otherwise use led size
-        float gridStep = (ledScreenGridStep > 0.0) ? ledScreenGridStep : maxLedSize;
+        float gridStep = (buf.ledScreenGridStep > 0.0) ? buf.ledScreenGridStep : maxLedSize;
 
         vec2 center = floor(fragCoord / gridStep) * gridStep + gridStep * 0.5;
-        vec3 ledColor = texture(scaledSourceImage, center / iResolution.xy).rgb;
+        vec3 ledColor = texture(scaledSourceImage, center / buf.iResolution.xy).rgb;
         float ledSize = maxLedSize;
 
         float alpha = calculateAlpha(center, fragCoord, ledSize);
 
         fragColor.rgb = ledColor.rgb * alpha;
     }
-    fragColor = fragColor * qt_Opacity;
+    fragColor = fragColor * buf.qt_Opacity;
 }

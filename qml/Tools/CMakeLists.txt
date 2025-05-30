@@ -6,5 +6,4 @@ qt_add_qml_module(
     ${TOOLS_MODULE}
     URI "qml.Tools"
     QML_FILES ControlPanel.qml KSettings.qml KSlider.qml
-    DEPENDENCIES TARGET
 )

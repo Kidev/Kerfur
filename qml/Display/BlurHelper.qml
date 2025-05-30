@@ -69,10 +69,10 @@ Item {
                                               / self.height)
         property Item src: null
 
-        fragmentShader: "qrc:/shaders/bluritems.frag.qsb"
+        fragmentShader: ":/shaders/bluritems.frag.qsb"
         layer.enabled: true
         layer.smooth: true
-        vertexShader: "qrc:/shaders/bluritems.vert.qsb"
+        vertexShader: ":/shaders/bluritems.vert.qsb"
         visible: false
     }
 }

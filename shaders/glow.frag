@@ -1,5 +1,4 @@
 #version 440
-#define BLUR_HELPER_MAX_LEVEL 64
 
 layout(location = 0) in vec2 texCoord;
 layout(location = 1) in vec2 fragCoord;
@@ -32,31 +31,23 @@ void main() {
     {
         vec4 glow = texture(iSource, texCoord) * blurWeight1[0];
         glow += texture(iSourceBlur1, texCoord) * blurWeight1[1];
-    #if (BLUR_HELPER_MAX_LEVEL > 2)
         glow += texture(iSourceBlur2, texCoord) * blurWeight1[2];
-    #endif
-    #if (BLUR_HELPER_MAX_LEVEL > 8)
         glow += texture(iSourceBlur3, texCoord) * blurWeight1[3];
-    #endif
-    #if (BLUR_HELPER_MAX_LEVEL > 16)
         glow += texture(iSourceBlur4, texCoord) * blurWeight2[0];
-    #endif
-    #if (BLUR_HELPER_MAX_LEVEL > 32)
         glow += texture(iSourceBlur5, texCoord) * blurWeight2[1];
-    #endif
 
-        glow = min(glow * glowBloom, vec4(glowMaxBrightness));
-        glow = mix(glow, glow.a * glowColor, glowColor.a);
+        glow = min(glow * buf.glowBloom, vec4(buf.glowMaxBrightness));
+        glow = mix(glow, glow.a * buf.glowColor, buf.glowColor.a);
 
         // Blend in the Glow
-        if (glowBlendMode == 0) {
+        if (buf.glowBlendMode == 0) {
             // Additive
             fragColor += glow;
-        } else if (glowBlendMode == 1) {
+        } else if (buf.glowBlendMode == 1) {
             // Screen
             fragColor = clamp(fragColor, vec4(0.0), vec4(1.0));
             fragColor = max((fragColor + glow) - (fragColor * glow), vec4(0.0));
-        } else if (glowBlendMode == 2) {
+        } else if (buf.glowBlendMode == 2) {
             // Replace
             fragColor = glow;
         } else {
@@ -64,5 +55,5 @@ void main() {
             fragColor = mix(glow, fragColor, fragColor.a);
         }
     }
-    fragColor = fragColor * qt_Opacity;
+    fragColor = fragColor * buf.qt_Opacity;
 }

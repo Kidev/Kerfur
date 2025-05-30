@@ -14,16 +14,16 @@ Slider {
 
     // Set the initial value after creation
     Component.onCompleted: {
-        updatingFromSettings = true;
-        value = settingsObject[settingName];
-        initialValueSet = true;
-        updatingFromSettings = false;
+        root.updatingFromSettings = true;
+        root.value = root.settingsObject[root.settingName];
+        root.initialValueSet = true;
+        root.updatingFromSettings = false;
     }
 
     // Update the settings when the value changes
     onValueChanged: {
-        if (initialValueSet && !updatingFromSettings) {
-            settingsObject[settingName] = value;
+        if (root.initialValueSet && !root.updatingFromSettings) {
+            root.settingsObject[root.settingName] = value;
         }
     }
 
@@ -35,12 +35,12 @@ Slider {
         running: root.visible
 
         onTriggered: {
-            if (!root.pressed && initialValueSet) {
-                var settingValue = settingsObject[settingName];
+            if (!root.pressed && root.initialValueSet) {
+                var settingValue = root.settingsObject[root.settingName];
                 if (Math.abs(settingValue - root.value) > 0.001) {
-                    updatingFromSettings = true;
+                    root.updatingFromSettings = true;
                     root.value = settingValue;
-                    updatingFromSettings = false;
+                    root.updatingFromSettings = false;
                 }
             }
         }
