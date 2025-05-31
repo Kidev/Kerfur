@@ -185,9 +185,9 @@ ifeq ($(IS_WINDOWS),1)
 	@echo @echo off > "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
 	@echo set "HERE=%~dp0" >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
 	@echo set "PATH=%HERE%bin;%HERE%lib;%PATH%" >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
-	@echo if exist "%HERE%bin\$(PROJECT_BINARY).exe" ( >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo if exist "%HERE%bin\$(PROJECT_BINARY).exe" ^( >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
 	@echo   "%HERE%bin\$(PROJECT_BINARY).exe" %* >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
-	@echo ^) else ( >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo ^) else ^( >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
 	@echo   "%HERE%bin\$(PROJECT_BINARY)" %* >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
 	@echo ^) >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
 	@echo Creating Windows launcher: $(PROJECT_TITLE).bat
