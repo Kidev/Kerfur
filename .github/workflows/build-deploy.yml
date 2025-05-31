@@ -21,7 +21,7 @@ jobs:
             build_name: '-x64'
             qt_tools: ''
             build_command: 'make desktop'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'Linux ARM64'
             os: ubuntu-24.04-arm
@@ -33,7 +33,7 @@ jobs:
             build_name: '-arm64'
             qt_tools: ''
             build_command: 'make desktop'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'Linux ARM64 (Bookworn GLIBC)'
             os: ubuntu-22.04-arm
@@ -57,7 +57,7 @@ jobs:
             build_name: '-x64'
             qt_tools: ''
             build_command: 'make desktop'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'Windows ARM64'
             os: windows-11-arm
@@ -69,7 +69,7 @@ jobs:
             build_name: '-arm64'
             qt_tools: ''
             build_command: 'make desktop'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'macOS-15 ARM64'
             os: macos-15
@@ -81,7 +81,7 @@ jobs:
             build_name: '-arm64'
             qt_tools: ''
             build_command: 'make desktop'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'Web'
             os: ubuntu-24.04
