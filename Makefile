@@ -25,6 +25,7 @@ $(error $(MISSING_QT_ROOT))
 endif
 
 OS_NAME := $(shell uname -s)
+IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME)),$(findstring MSYS,$(OS_NAME)),$(findstring CYGWIN,$(OS_NAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
 VERSION_TAG ?= "0.0.0"
@@ -55,6 +56,7 @@ INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
 REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
 TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(BUILD_QUALIFIER)
 INSTALLER_NAME ?= $(PROJECT_TITLE)Installer-$(BUILD_QUALIFIER)
+SCRIPT_EXT := $(if $(filter 1,$(IS_WINDOWS)),.bat,)
 CDN_UPLOAD_SOCKET ?=
 CDN_UPLOAD_USERNAME ?=
 CDN_UPLOAD_PASSWORD ?=
@@ -111,7 +113,7 @@ setup-installer:
 	@echo '    <InstallerWindowIcon>icon</InstallerWindowIcon>' >> installer/config/config.xml
 	@echo '    <InstallerApplicationIcon>icon</InstallerApplicationIcon>' >> installer/config/config.xml
 	@echo '    <Banner>banner.png</Banner>' >> installer/config/config.xml
-	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)/bin/$(PROJECT_BINARY)</RunProgram>' >> installer/config/config.xml
+	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)$(SCRIPT_EXT)</RunProgram>' >> installer/config/config.xml
 	@echo '    <RunProgramDescription>Run $(PROJECT_TITLE)</RunProgramDescription>' >> installer/config/config.xml
 	@echo '    <StartMenuDir>$(PROJECT_TITLE)</StartMenuDir>' >> installer/config/config.xml
 	@echo '    <MaintenanceToolName>$(PROJECT_TITLE)Updater</MaintenanceToolName>' >> installer/config/config.xml
@@ -161,7 +163,7 @@ setup-installer:
 	@echo "  - installer/config/meta/package.xml"
 	@echo "  - installer/packages/$(TARGET_PACKAGE)/meta/package.xml"
 
-desktop:
+desktop-build:
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
@@ -175,6 +177,33 @@ desktop:
 	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_HOST)
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
+
+desktop: desktop-build shortcut
+
+shortcut:
+ifeq ($(IS_WINDOWS),1)
+	@echo @echo off > "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo set "HERE=%~dp0" >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo set "PATH=%HERE%bin;%HERE%lib;%PATH%" >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo if exist "%HERE%bin\$(PROJECT_BINARY).exe" ( >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo   "%HERE%bin\$(PROJECT_BINARY).exe" %* >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo ^) else ( >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo   "%HERE%bin\$(PROJECT_BINARY)" %* >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo ^) >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE).bat"
+	@echo Creating Windows launcher: $(PROJECT_TITLE).bat
+else
+	@echo '#!/bin/bash' > "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo 'HERE="$$(dirname "$$(readlink -f "$${0}")")"' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo 'export LD_LIBRARY_PATH="$${HERE}/lib:$$LD_LIBRARY_PATH"' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo 'if [ -n "$$WAYLAND_DISPLAY" ] && command -v qt6-wayland >/dev/null 2>&1; then' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo '    export QT_QPA_PLATFORM=wayland' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo 'elif [ -n "$$DISPLAY" ]; then' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo '    export QT_QPA_PLATFORM=xcb' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo 'fi' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo 'exec "$${HERE}/bin/$(PROJECT_BINARY)" "$$@"' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	chmod +x "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@echo Creating Linux launcher: $(PROJECT_TITLE)
+endif
 
 emsdk:
 	@EMSDK_VERSION=""; \
