@@ -77,7 +77,7 @@ Window {
     }
 
     Shortcut {
-        enabled: false
+        enabled: true
         sequence: "Esc"
 
         onActivated: root.requestExit()
