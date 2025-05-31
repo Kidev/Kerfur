@@ -7,6 +7,12 @@ import Tools
 Item {
     id: root
 
+    enum WinkType {
+        None,
+        Left,
+        Right
+    }
+
     property bool allowsBlinks: true
     readonly property int blinkDuration: 150
     property string currentEyesImage: root.pathEyesOpened
@@ -41,7 +47,7 @@ Item {
     readonly property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool rightPupilVisible: true
     required property KSettings settings
-    property string winkType: ""
+    property int winkType: Face.WinkType.None
 
     function cancelDoubleBlink() {
         root.pendingDoubleBlink = false;
@@ -88,7 +94,7 @@ Item {
 
     function stopWinking() {
         root.isWinking = false;
-        root.winkType = "";
+        root.winkType = Face.WinkType.None;
     }
 
     function updatePupilPositions(leftRight, upDown) {
@@ -132,7 +138,7 @@ Item {
         },
         State {
             name: "wink_left"
-            when: root.isWinking && root.winkType === "left"
+            when: root.isWinking && root.winkType === Face.WinkType.Left
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesLeftWink
@@ -142,7 +148,7 @@ Item {
         },
         State {
             name: "wink_right"
-            when: root.isWinking && root.winkType === "right"
+            when: root.isWinking && root.winkType === Face.WinkType.Right
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesRightWink
@@ -412,7 +418,8 @@ Item {
                            root.isTouched = true;
                            mouse.accepted = true;
                        } else if (mouse.button === Qt.RightButton) {
-                           var winkSide = Math.random() < 0.5 ? "left" : "right";
+                           var winkSide = Math.random() < 0.5 ? Face.WinkType.Left :
+                                                                Face.WinkType.Right;
                            root.startWinking(winkSide);
                            mouse.accepted = true;
                        }
