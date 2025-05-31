@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Window
 import QtMultimedia
 import QtQuick.Effects
-import qml.Tools
-import qml.Display
+import Tools
+import Display
 
 Window {
     id: root

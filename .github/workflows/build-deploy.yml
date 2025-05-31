@@ -236,14 +236,6 @@ jobs:
 
           cp assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/kerfur.png
 
-          cat > AppDir/AppRun << EOF
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "${0}")")"
-          exec "${HERE}/usr/bin/kerfur" "$@"
-          EOF
-
-          chmod +x AppDir/AppRun
-
           cat > AppDir/usr/share/applications/kerfur.desktop << EOF
           [Desktop Entry]
           Type=Application
@@ -261,14 +253,52 @@ jobs:
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_PLATFORMS="minimal"
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_IMAGEFORMATS=""
 
-          ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
+          ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt
+
+          cat > AppDir/AppRun << EOF
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+
+          # Set up library paths
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          export QT_PLUGIN_PATH="${HERE}/usr/plugins:${QT_PLUGIN_PATH}"
+          export QML2_IMPORT_PATH="${HERE}/usr/qml:${QML2_IMPORT_PATH}"
+
+          # Set Qt configuration
+          export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+
+          exec "${HERE}/usr/bin/kerfur" "$@"
+          EOF
+
+          chmod +x AppDir/AppRun
+
+          # Now generate the final AppImage
+          ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --output appimage
 
           if [[ $? != 0 ]]; then
             echo "Failed with multimedia plugins, trying without problematic multimedia plugins..."
 
             find AppDir -name "*gstreamer*" -type f -delete 2>/dev/null || true
             find AppDir -name "*multimedia*" -path "*/plugins/*" -type f -delete 2>/dev/null || true
-            ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
+
+            # Recreate the custom AppRun script and try again
+            cat > AppDir/AppRun << EOF
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+
+          # Set up library paths
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          export QT_PLUGIN_PATH="${HERE}/usr/plugins:${QT_PLUGIN_PATH}"
+          export QML2_IMPORT_PATH="${HERE}/usr/qml:${QML2_IMPORT_PATH}"
+
+          # Set Qt configuration
+          export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+
+          exec "${HERE}/usr/bin/kerfur" "$@"
+          EOF
+
+            chmod +x AppDir/AppRun
+            ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --output appimage
           fi
 
           echo "Available AppImages before rename:"
