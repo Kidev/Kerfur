@@ -26,6 +26,7 @@ endif
 
 OS_NAME := $(shell uname -s)
 IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME)),$(findstring MSYS,$(OS_NAME)),$(findstring CYGWIN,$(OS_NAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
+EXE_EXT := $(if $(filter 1,$(IS_WINDOWS)),.exe,)
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
 VERSION_TAG ?= "0.0.0"
@@ -71,7 +72,7 @@ repo:
 	cp -Rf "$(ABS_INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/"
 	mv -f "installer/packages/$(TARGET_PACKAGE)/data/$(INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/$(PROJECT_TITLE)"
 	rm -rf $(REPO_NAME)
-	$(INSTALLER_BIN_DIR)/repogen -p installer/packages -i $(TARGET_PACKAGE) $(REPO_NAME)
+	$(INSTALLER_BIN_DIR)/repogen$(EXE_EXT) -p installer/packages -i $(TARGET_PACKAGE) $(REPO_NAME)
 
 upload-repo:
 	@if [ -n "$(CDN_UPLOAD_USERNAME)" ] && [ -n "$(CDN_UPLOAD_PASSWORD)" ] && [ -n "$(CDN_UPLOAD_SOCKET)" ]; then \
@@ -95,7 +96,7 @@ upload-web:
 
 installer: setup-installer repo upload-repo
 	rm -rf $(INSTALLER_NAME)
-	$(INSTALLER_BIN_DIR)/binarycreator -p installer/packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
+	$(INSTALLER_BIN_DIR)/binarycreator$(EXE_EXT) -p installer/packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
 
 setup-installer:
 	@echo "Setting up installer configuration..."
@@ -113,8 +114,11 @@ setup-installer:
 	@echo '    <InstallerWindowIcon>icon</InstallerWindowIcon>' >> installer/config/config.xml
 	@echo '    <InstallerApplicationIcon>icon</InstallerApplicationIcon>' >> installer/config/config.xml
 	@echo '    <Banner>banner.png</Banner>' >> installer/config/config.xml
-	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)$(SCRIPT_EXT)</RunProgram>' >> installer/config/config.xml
+	@echo '    <Logo>logo.png</Logo>' >> installer/config/config.xml
+	@echo '    <Watermark>logo.png</Watermark>' >> installer/config/config.xml
+	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)/$(PROJECT_TITLE)$(SCRIPT_EXT)</RunProgram>' >> installer/config/config.xml
 	@echo '    <RunProgramDescription>Run $(PROJECT_TITLE)</RunProgramDescription>' >> installer/config/config.xml
+	@echo '    <RunProgramArguments></RunProgramArguments>' >> installer/config/config.xml
 	@echo '    <StartMenuDir>$(PROJECT_TITLE)</StartMenuDir>' >> installer/config/config.xml
 	@echo '    <MaintenanceToolName>$(PROJECT_TITLE)Updater</MaintenanceToolName>' >> installer/config/config.xml
 	@echo '    <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>' >> installer/config/config.xml
