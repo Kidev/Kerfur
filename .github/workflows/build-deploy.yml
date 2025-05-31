@@ -19,7 +19,7 @@ jobs:
             qt_arch: linux_gcc_64
             artifact_name: linux-x64
             build_name: '-x64'
-            qt_tools: ''
+            qt_tools: 'tools_ifw'
             build_command: 'make desktop'
             installer_command: 'make installer'
 
@@ -31,7 +31,7 @@ jobs:
             qt_arch: linux_gcc_arm64
             artifact_name: linux-arm64
             build_name: '-arm64'
-            qt_tools: ''
+            qt_tools: 'tools_ifw'
             build_command: 'make desktop'
             installer_command: 'make installer'
 
@@ -55,7 +55,7 @@ jobs:
             qt_arch: win64_msvc2022_64
             artifact_name: windows-x64
             build_name: '-x64'
-            qt_tools: ''
+            qt_tools: 'tools_ifw'
             build_command: 'make desktop'
             installer_command: 'make installer'
 
@@ -67,7 +67,7 @@ jobs:
             qt_arch: win64_msvc2022_arm64
             artifact_name: windows-arm64
             build_name: '-arm64'
-            qt_tools: ''
+            qt_tools: 'tools_ifw'
             build_command: 'make desktop'
             installer_command: 'make installer'
 
@@ -79,7 +79,7 @@ jobs:
             qt_arch: clang_64
             artifact_name: macos-15-arm64
             build_name: '-arm64'
-            qt_tools: ''
+            qt_tools: 'tools_ifw'
             build_command: 'make desktop'
             installer_command: 'make installer'
 
