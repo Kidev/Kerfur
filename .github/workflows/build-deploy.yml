@@ -31,9 +31,9 @@ jobs:
             qt_arch: linux_gcc_arm64
             artifact_name: linux-arm64
             build_name: '-arm64'
-            qt_tools: 'tools_ifw'
+            qt_tools: ''
             build_command: 'make desktop'
-            installer_command: 'make installer'
+            installer_command: ''
 
           - name: 'Linux ARM64 (Bookworn GLIBC)'
             os: ubuntu-22.04-arm
@@ -67,9 +67,9 @@ jobs:
             qt_arch: win64_msvc2022_arm64
             artifact_name: windows-arm64
             build_name: '-arm64'
-            qt_tools: 'tools_ifw'
+            qt_tools: ''
             build_command: 'make desktop'
-            installer_command: 'make installer'
+            installer_command: ''
 
           - name: 'macOS-15 ARM64'
             os: macos-15
@@ -79,9 +79,9 @@ jobs:
             qt_arch: clang_64
             artifact_name: macos-15-arm64
             build_name: '-arm64'
-            qt_tools: 'tools_ifw'
+            qt_tools: ''
             build_command: 'make desktop'
-            installer_command: 'make installer'
+            installer_command: ''
 
           - name: 'Web'
             os: ubuntu-24.04
