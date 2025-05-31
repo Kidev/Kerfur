@@ -115,7 +115,6 @@ setup-installer:
 	@echo '    <InstallerApplicationIcon>icon</InstallerApplicationIcon>' >> installer/config/config.xml
 	@echo '    <Banner>banner.png</Banner>' >> installer/config/config.xml
 	@echo '    <Logo>logo.png</Logo>' >> installer/config/config.xml
-	@echo '    <Watermark>logo.png</Watermark>' >> installer/config/config.xml
 	@echo '    <RunProgram>@TargetDir@/$(PROJECT_TITLE)/$(PROJECT_TITLE)$(SCRIPT_EXT)</RunProgram>' >> installer/config/config.xml
 	@echo '    <RunProgramDescription>Run $(PROJECT_TITLE)</RunProgramDescription>' >> installer/config/config.xml
 	@echo '    <RunProgramArguments></RunProgramArguments>' >> installer/config/config.xml
