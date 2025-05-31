@@ -96,9 +96,11 @@ upload-web:
 		echo "No WASM webserver credentials, will NOT update the WASM demo"; \
 	fi
 
-installer: setup-installer repo upload-repo
+create-installer:
 	rm -rf $(INSTALLER_NAME)
 	$(INSTALLER_BIN_DIR)/binarycreator$(EXE_EXT) -p installer/packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
+
+installer: setup-installer repo upload-repo create-installer
 
 setup-installer:
 	@echo "Setting up installer configuration..."
@@ -130,7 +132,7 @@ setup-installer:
 	@echo '    <WizardDefaultHeight>500</WizardDefaultHeight>' >> installer/config/config.xml
 	@echo '    <WizardMinimumWidth>800</WizardMinimumWidth>' >> installer/config/config.xml
 	@echo '    <WizardMinimumHeight>500</WizardMinimumHeight>' >> installer/config/config.xml
-	@echo '    <WizardShowPageList>true</WizardShowPageList>' >> installer/config/config.xml
+	@echo '    <WizardShowPageList>false</WizardShowPageList>' >> installer/config/config.xml
 	@echo '    <InstallActionColumnVisible>true</InstallActionColumnVisible>' >> installer/config/config.xml
 	@echo '    <RemoteRepositories>' >> installer/config/config.xml
 	@echo '        <Repository>' >> installer/config/config.xml
@@ -317,5 +319,5 @@ clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
 
-.PHONY: all repo upload-repo upload-web installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean
+.PHONY: all repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean
 .IGNORE: clean
