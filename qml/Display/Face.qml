@@ -15,6 +15,7 @@ Item {
     property bool isBlinking: false
     property bool isDoubleBlink: false
     property bool isTouched: false
+    property bool isWinking: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
     readonly property real leftOffset: ((root.settings.leftRightAngle - 90) / 90)
                                        * root.maxPupilMovement
@@ -40,6 +41,7 @@ Item {
     readonly property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool rightPupilVisible: true
     required property KSettings settings
+    property string winkType: ""
 
     function cancelDoubleBlink() {
         root.pendingDoubleBlink = false;
@@ -62,20 +64,31 @@ Item {
     }
 
     function startBlinking() {
-        if (!root.isTouched && root.allowsBlinks) {
+        if (!root.isTouched && !root.isWinking && root.allowsBlinks) {
             root.isBlinking = true;
         }
     }
 
     function startDoubleBlink() {
-        if (!root.isTouched && root.allowsBlinks) {
+        if (!root.isTouched && !root.isWinking && root.allowsBlinks) {
             root.isDoubleBlink = true;
             root.isBlinking = true;
         }
     }
 
+    function startWinking(winkSide) {
+        root.winkType = winkSide;
+        root.isWinking = true;
+        root.cancelDoubleBlink();
+    }
+
     function stopBlinking() {
         root.isBlinking = false;
+    }
+
+    function stopWinking() {
+        root.isWinking = false;
+        root.winkType = "";
     }
 
     function updatePupilPositions(leftRight, upDown) {
@@ -89,7 +102,7 @@ Item {
     states: [
         State {
             name: "normal"
-            when: !root.isTouched && !root.isBlinking
+            when: !root.isTouched && !root.isBlinking && !root.isWinking
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesOpened
@@ -109,7 +122,7 @@ Item {
         },
         State {
             name: "blink"
-            when: root.isBlinking && !root.isTouched
+            when: root.isBlinking && !root.isTouched && !root.isWinking
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesClosed
@@ -119,6 +132,7 @@ Item {
         },
         State {
             name: "wink_left"
+            when: root.isWinking && root.winkType === "left"
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesLeftWink
@@ -128,6 +142,7 @@ Item {
         },
         State {
             name: "wink_right"
+            when: root.isWinking && root.winkType === "right"
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesRightWink
@@ -147,6 +162,28 @@ Item {
                     root.allowsBlinks = false;
                     dynamicSound.source = root.pathSoundMeow;
                     dynamicSound.play();
+                }
+            }
+        },
+        Transition {
+            to: "wink_left"
+
+            ScriptAction {
+                script: {
+                    blinkTimer.stop();
+                    root.cancelDoubleBlink();
+                    root.allowsBlinks = false;
+                }
+            }
+        },
+        Transition {
+            to: "wink_right"
+
+            ScriptAction {
+                script: {
+                    blinkTimer.stop();
+                    root.cancelDoubleBlink();
+                    root.allowsBlinks = false;
                 }
             }
         },
@@ -175,28 +212,6 @@ Item {
             }
         },
         Transition {
-            to: "wink_left"
-
-            ScriptAction {
-                script: {
-                    blinkTimer.stop();
-                    root.cancelDoubleBlink();
-                    root.allowsBlinks = false;
-                }
-            }
-        },
-        Transition {
-            to: "wink_right"
-
-            ScriptAction {
-                script: {
-                    blinkTimer.stop();
-                    root.cancelDoubleBlink();
-                    root.allowsBlinks = false;
-                }
-            }
-        },
-        Transition {
             from: "blink"
             to: "normal"
 
@@ -205,7 +220,7 @@ Item {
                     root.allowsBlinks = true;
 
                     if (!root.isDoubleBlink && Math.random() < root.doubleBlinkChance &&
-                            !root.isTouched) {
+                            !root.isTouched && !root.isWinking) {
                         root.pendingDoubleBlink = true;
                         doubleBlinkTimer.start();
                     } else {
@@ -344,7 +359,8 @@ Item {
         onTriggered: {
             root.pendingDoubleBlink = false;
 
-            if (!root.isTouched && root.allowsBlinks && root.state === "normal") {
+            if (!root.isTouched && !root.isWinking && root.allowsBlinks && root.state
+                    === "normal") {
                 root.startDoubleBlink();
             } else {
                 root.resetBlinkTimer();
@@ -360,6 +376,7 @@ Item {
         onPressed: {
             root.isTouched = true;
             root.cancelDoubleBlink();
+            root.stopWinking();
         }
         onReleased: {
             root.isTouched = false;
@@ -369,12 +386,14 @@ Item {
     MouseArea {
         id: pupilTrackingArea
 
-        property bool shouldTrack: !root.isBlinking && !root.isTouched && !pupilTrackingArea.pressed
+        property bool shouldTrack: !root.isBlinking && !root.isTouched && (
+                                       !pupilTrackingArea.pressed || root.isWinking)
 
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         anchors.fill: parent
         cursorShape: root.settings.showControls ? Qt.ArrowCursor : Qt.BlankCursor
         hoverEnabled: true
-        propagateComposedEvents: true
+        propagateComposedEvents: false
 
         onMouseXChanged: {
             if (pupilTrackingArea.shouldTrack && pupilTrackingArea.containsMouse) {
@@ -388,7 +407,24 @@ Item {
                         * 180;
             }
         }
-        onPressed: mouse => mouse.accepted = false
-        onReleased: mouse => mouse.accepted = false
+        onPressed: mouse => {
+                       if (mouse.button === Qt.LeftButton) {
+                           root.isTouched = true;
+                           mouse.accepted = true;
+                       } else if (mouse.button === Qt.RightButton) {
+                           var winkSide = Math.random() < 0.5 ? "left" : "right";
+                           root.startWinking(winkSide);
+                           mouse.accepted = true;
+                       }
+                   }
+        onReleased: mouse => {
+                        if (mouse.button === Qt.LeftButton) {
+                            root.isTouched = false;
+                            mouse.accepted = true;
+                        } else if (mouse.button === Qt.RightButton) {
+                            root.stopWinking();
+                            mouse.accepted = true;
+                        }
+                    }
     }
 }
