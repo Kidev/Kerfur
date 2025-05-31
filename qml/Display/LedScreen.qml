@@ -1,16 +1,18 @@
 import QtQuick
+import Tools
 
 Item {
     id: root
 
-    property real blurMultiplier: 1
-    property int glowBlendMode: 1
-    property real glowBloom: 1.0
-    property real glowBlurAmount: 0.4
-    property color glowColor: Qt.rgba(0.757, 0, 0.697002, 1)
-    property real glowMaxBrightness: 0.6
-    property color ledScreenLedColor: Qt.rgba(1, 1, 1, 1)
-    property real ledScreenLedSize: 8
+    property real blurMultiplier: root.settings.blurMultiplier
+    property int glowBlendMode: root.settings.glowBlendMode
+    property real glowBloom: root.settings.glowBloom
+    property real glowBlurAmount: root.settings.glowBlurAmount
+    property color glowColor: root.settings.glowColor
+    property real glowMaxBrightness: root.settings.glowMaxBrightness
+    property color ledScreenLedColor: root.settings.glowColor
+    property real ledScreenLedSize: root.settings.ledScreenLedSize
+    required property KSettings settings
     property Item source: null
 
     ShaderEffect {

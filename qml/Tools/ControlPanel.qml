@@ -8,6 +8,7 @@ Rectangle {
 
     color: "#333333"
     opacity: 0.7
+    visible: root.settings.showControls
     z: 100
 
     Timer {

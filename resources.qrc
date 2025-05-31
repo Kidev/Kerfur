@@ -7,5 +7,7 @@
         <file>assets/sound/meow.wav</file>
         <file>assets/logo.png</file>
         <file>assets/favicon.ico</file>
+        <file>assets/img/eyes_left_wink.png</file>
+        <file>assets/img/eyes_right_wink.png</file>
     </qresource>
 </RCC>
