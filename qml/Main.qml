@@ -21,11 +21,11 @@ Window {
     readonly property int maxPupilMovement: 5
     readonly property real meowVolume: 1
     readonly property int minBlinkInterval: 4000
-    readonly property string pathEyesClosed: ":/assets/img/eyes_closed.png"
-    readonly property string pathEyesMeow: ":/assets/img/eyes_meow.png"
-    readonly property string pathEyesOpened: ":/assets/img/eyes_opened.png"
-    readonly property string pathEyesPupil: ":/assets/img/pupil.png"
-    readonly property string pathSoundMeow: ":/assets/sound/meow.wav"
+    readonly property string pathEyesClosed: "/assets/img/eyes_closed.png"
+    readonly property string pathEyesMeow: "/assets/img/eyes_meow.png"
+    readonly property string pathEyesOpened: "/assets/img/eyes_opened.png"
+    readonly property string pathEyesPupil: "/assets/img/pupil.png"
+    readonly property string pathSoundMeow: "/assets/sound/meow.wav"
     readonly property point rightEyeCenter: Qt.point(90, 22)
     readonly property real rightOffset: ((settings.upDownAngle - 90) / 90) * root.maxPupilMovement
     property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)

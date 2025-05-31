@@ -28,17 +28,13 @@ if (QT_KNOWN_POLICY_QTP0005)
     qt_policy(SET QTP0005 NEW)
 endif ()
 
-qt_add_executable(
-    ${PROJECT_NAME}
-    ${SOURCES_CPP}
-    ${TOTAL_RESOURCES}
-    ${SOURCES_EXTRA}
-)
+qt_add_executable(${PROJECT_NAME} ${SOURCES_CPP} ${SOURCES_EXTRA})
 
 qt_add_shaders(
     ${PROJECT_NAME} ${PROJECT_NAME}_shaders
     FILES ${SOURCES_SHADERS}
     BATCHABLE PRECOMPILE OPTIMIZED
+    PREFIX "/"
 )
 
 add_subdirectory(qml)
@@ -48,7 +44,6 @@ qt_add_qml_module(
     URI "qml"
     QML_FILES qml/Main.qml
     DEPENDENCIES TARGET Display Tools
-    RESOURCE_PREFIX "/"
     RESOURCES ${RESOURCES_FILE}
 )
 

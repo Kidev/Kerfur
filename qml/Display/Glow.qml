@@ -34,7 +34,7 @@ Item {
         readonly property alias iSourceBlur5: blurHelper.blurSrc5
 
         anchors.fill: parent
-        fragmentShader: ':/shaders/glow.frag.qsb'
-        vertexShader: ':/shaders/glow.vert.qsb'
+        fragmentShader: '/shaders/glow.frag.qsb'
+        vertexShader: '/shaders/glow.vert.qsb'
     }
 }
