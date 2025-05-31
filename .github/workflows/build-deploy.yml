@@ -121,6 +121,8 @@ jobs:
         with:
             cmakeVersion: latest
             ninjaVersion: latest
+            useLocalCache: false
+            useCloudCache: false
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -139,9 +141,15 @@ jobs:
 
       - name: Fix WebP library dependency
         if: matrix.os == 'ubuntu-22.04-arm'
+        shell: bash
         run: |
           sudo apt-get install -y libwebp-dev libwebp7
           sudo ln -sf /usr/lib/aarch64-linux-gnu/libwebp.so.7 /usr/lib/aarch64-linux-gnu/libwebp.so.6 || true
+
+      - name: Install lftp on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: choco install lftp
 
       - name: Setup MSVC
         if: runner.os == 'Windows'
