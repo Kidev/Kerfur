@@ -19,5 +19,5 @@ void main() {
     texCoord = qt_MultiTexCoord0;
     fragCoord = qt_Vertex.xy;
     vec2 vertCoord = qt_Vertex.xy;
-    gl_Position = buf.qt_Matrix * vec4(vertCoord, 0.0, 1.0);
+    gl_Position = qt_Matrix * vec4(vertCoord, 0.0, 1.0);
 }

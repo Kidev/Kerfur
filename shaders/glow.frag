@@ -36,18 +36,18 @@ void main() {
         glow += texture(iSourceBlur4, texCoord) * blurWeight2[0];
         glow += texture(iSourceBlur5, texCoord) * blurWeight2[1];
 
-        glow = min(glow * buf.glowBloom, vec4(buf.glowMaxBrightness));
-        glow = mix(glow, glow.a * buf.glowColor, buf.glowColor.a);
+        glow = min(glow * glowBloom, vec4(glowMaxBrightness));
+        glow = mix(glow, glow.a * glowColor, glowColor.a);
 
         // Blend in the Glow
-        if (buf.glowBlendMode == 0) {
+        if (glowBlendMode == 0) {
             // Additive
             fragColor += glow;
-        } else if (buf.glowBlendMode == 1) {
+        } else if (glowBlendMode == 1) {
             // Screen
             fragColor = clamp(fragColor, vec4(0.0), vec4(1.0));
             fragColor = max((fragColor + glow) - (fragColor * glow), vec4(0.0));
-        } else if (buf.glowBlendMode == 2) {
+        } else if (glowBlendMode == 2) {
             // Replace
             fragColor = glow;
         } else {
@@ -55,5 +55,5 @@ void main() {
             fragColor = mix(glow, fragColor, fragColor.a);
         }
     }
-    fragColor = fragColor * buf.qt_Opacity;
+    fragColor = fragColor * qt_Opacity;
 }
