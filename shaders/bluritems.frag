@@ -17,5 +17,5 @@ layout(binding = 1) uniform sampler2D src;
 void main() {
     vec4 sourceColor = (texture(src, texCoord0) + texture(src, texCoord1) +
                         texture(src, texCoord2) + texture(src, texCoord3)) * 0.25;
-    fragColor = sourceColor * buf.qt_Opacity;
+    fragColor = sourceColor * qt_Opacity;
 }
