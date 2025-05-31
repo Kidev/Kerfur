@@ -144,7 +144,7 @@ setup-installer:
 	@echo '    <Licenses>' >> installer/config/meta/package.xml
 	@echo '        <License name="$(PROJECT_TITLE)'"'"'s Software License Agreement" file="license.txt" />' >> installer/config/meta/package.xml
 	@echo '    </Licenses>' >> installer/config/meta/package.xml
-	@echo '    <Script>installer_script.qs</Script>' >> installer/config/meta/package.xml
+	@echo '    <Script></Script>' >> installer/config/meta/package.xml
 	@echo '    <SortingPriority>10</SortingPriority>' >> installer/config/meta/package.xml
 	@echo '    <UpdateText>A cute little robot</UpdateText>' >> installer/config/meta/package.xml
 	@echo '    <Default>true</Default>' >> installer/config/meta/package.xml
