@@ -133,7 +133,8 @@ setup-installer:
 	@echo '    <WizardMinimumWidth>800</WizardMinimumWidth>' >> installer/config/config.xml
 	@echo '    <WizardMinimumHeight>500</WizardMinimumHeight>' >> installer/config/config.xml
 	@echo '    <WizardShowPageList>false</WizardShowPageList>' >> installer/config/config.xml
-	@echo '    <InstallActionColumnVisible>true</InstallActionColumnVisible>' >> installer/config/config.xml
+	@echo '    <InstallActionColumnVisible>false</InstallActionColumnVisible>' >> installer/config/config.xml
+	@echo '    <RepositorySettingsPageVisible>false</RepositorySettingsPageVisible>' >> installer/config/config.xml
 	@echo '    <RemoteRepositories>' >> installer/config/config.xml
 	@echo '        <Repository>' >> installer/config/config.xml
 	@echo '            <DisplayName>Kidev.org CDN</DisplayName>' >> installer/config/config.xml
