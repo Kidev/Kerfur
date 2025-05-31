@@ -201,7 +201,7 @@ else
 	@echo '    export QT_QPA_PLATFORM=xcb' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
 	@echo 'fi' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
 	@echo 'exec "$${HERE}/bin/$(PROJECT_BINARY)" "$$@"' >> "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
-	chmod +x "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
+	@chmod +x "$(ABS_INSTALL_DIR)/$(PROJECT_TITLE)"
 	@echo Creating Linux launcher: $(PROJECT_TITLE)
 endif
 
@@ -242,7 +242,17 @@ emsdk:
 		source ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
-web: clean emsdk
+patch-web:
+	@echo Apply web patch
+	@git apply ./patches/web.patch
+
+unpatch-web:
+	@echo Restore prior to web patch
+	@git restore .
+
+web: clean emsdk patch-web web-build unpatch-web
+
+web-build:
 	@. ./emsdk/emsdk_env.sh && \
 	emcmake \
 	cmake -S . -B $(BUILD_DIR) \
@@ -302,5 +312,5 @@ clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
 
-.PHONY: all repo upload-repo upload-web installer setup-installer desktop emsdk web run-web clean
+.PHONY: all repo upload-repo upload-web installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean
 .IGNORE: clean

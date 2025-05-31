@@ -1,0 +1,13 @@
+diff --git a/qml/Main.qml b/qml/Main.qml
+index a4b3061..77bd794 100644
+--- a/qml/Main.qml
++++ b/qml/Main.qml
+@@ -8,7 +8,7 @@ import Display
+ Window {
+     id: root
+ 
+-    readonly property bool allowEscapeShortcut: true
++    readonly property bool allowEscapeShortcut: false
+     readonly property int blinkDuration: 150
+     readonly property real doubleBlinkChance: 0.1
+     readonly property int doubleBlinkDuration: 200
