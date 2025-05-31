@@ -8,6 +8,7 @@ import Display
 Window {
     id: root
 
+    readonly property bool allowEscapeShortcut: true
     readonly property int blinkDuration: 150
     readonly property real doubleBlinkChance: 0.1
     readonly property int doubleBlinkDuration: 200
@@ -77,7 +78,7 @@ Window {
     }
 
     Shortcut {
-        enabled: true
+        enabled: root.allowEscapeShortcut
         sequence: "Esc"
 
         onActivated: root.requestExit()
