@@ -1,2 +1,2 @@
-add_subdirectory(Display)
 add_subdirectory(Tools)
+add_subdirectory(Display)

@@ -43,7 +43,7 @@ qt_add_qml_module(
     ${PROJECT_NAME}
     URI "qml"
     QML_FILES qml/Main.qml
-    DEPENDENCIES TARGET Display Tools
+    DEPENDENCIES TARGET Tools Display
     RESOURCES ${RESOURCES_FILE}
 )
 
@@ -56,8 +56,8 @@ target_link_libraries(
            Qt6::Concurrent
            Qt6::Multimedia
            Qt6::QuickControls2
-           Display
            Tools
+           Display
 )
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")

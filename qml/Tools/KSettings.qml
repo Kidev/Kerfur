@@ -16,6 +16,7 @@ QtObject {
     property real maskSpreadAtMin: 0
     property real maskThresholdMax: 1.0
     property real maskThresholdMin: 0.25
+    property bool showControls: false
     property real upDownAngle: 90
 
     Behavior on leftRightAngle {
