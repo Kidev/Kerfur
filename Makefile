@@ -24,8 +24,10 @@ ifndef QT_ROOT_DIR
 $(error $(MISSING_QT_ROOT))
 endif
 
-OS_NAME := $(shell uname -s)
-IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME)),$(findstring MSYS,$(OS_NAME)),$(findstring CYGWIN,$(OS_NAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
+OS_NAME_UNAME := $(shell uname -s)
+WINDOWS_ENV := $(OS)
+IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME_UNAME)),$(findstring MSYS,$(OS_NAME_UNAME)),$(findstring CYGWIN,$(OS_NAME_UNAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
+OS_NAME := $(if $(filter 1,$(IS_WINDOWS)),Windows,$(OS_NAME_UNAME))
 EXE_EXT := $(if $(filter 1,$(IS_WINDOWS)),.exe,)
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
