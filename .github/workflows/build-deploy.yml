@@ -248,7 +248,7 @@ jobs:
           [Desktop Entry]
           Type=Application
           Name=Kerfur
-          Exec=AppRun
+          Exec=AppRun.wrapped
           Icon=kerfur
           Categories=Utility;
           EOF
