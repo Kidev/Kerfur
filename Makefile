@@ -52,7 +52,7 @@ QT_MODULE_PATH_HOST := $(QT_ROOT_DIR_HOST)/lib/cmake/$(QT_NAME)
 QT_TOOLCHAIN_HOST := $(QT_ROOT_DIR_HOST)/lib/cmake/$(QT_NAME)/qt.toolchain.cmake
 QT_TOOLS_DIR := $(QT_ROOT_DIR)/../../Tools
 SHELL = /bin/bash
-QT_IFW_VERSION ?= $(shell find $(QT_TOOLS_DIR)/QtInstallerFramework -mindepth 1 -maxdepth 1 -type d -printf "%f")
+QT_IFW_VERSION ?= $(shell $(if $(filter 1,$(IS_WINDOWS)),for /f "tokens=*" %i in ('dir "$(QT_TOOLS_DIR)\QtInstallerFramework" /b /ad 2^>nul') do @echo %i,find $(QT_TOOLS_DIR)/QtInstallerFramework -mindepth 1 -maxdepth 1 -type d -printf "%f" 2>/dev/null))
 INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
 REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
 TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(BUILD_QUALIFIER)
