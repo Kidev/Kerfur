@@ -24,6 +24,24 @@ ifndef QT_ROOT_DIR
 $(error $(MISSING_QT_ROOT))
 endif
 
+VCPKG_ROOT ?= $(shell pwd)/vcpkg
+VCPKG_TRIPLET ?= $(shell \
+    if [ "$$(uname -s)" = "Linux" ]; then \
+        if [ "$$(uname -m)" = "x86_64" ]; then echo "x64-linux-release"; \
+        elif [ "$$(uname -m)" = "aarch64" ]; then echo "arm64-linux-release"; \
+        else echo "$$(uname -m)-linux-release"; fi; \
+    elif [ "$$(uname -s)" = "Darwin" ]; then \
+        if [ "$$(uname -m)" = "x86_64" ]; then echo "x64-osx-release"; \
+        elif [ "$$(uname -m)" = "arm64" ]; then echo "arm64-osx-release"; \
+        else echo "$$(uname -m)-osx-release"; fi; \
+    elif echo "$$(uname -s)" | grep -q "MINGW\|MSYS\|CYGWIN"; then \
+        if [ "$$(uname -m)" = "x86_64" ]; then echo "x64-windows-static-release"; \
+        elif [ "$$(uname -m)" = "i686" ]; then echo "x86-windows-static-release"; \
+        elif [ "$$(uname -m)" = "aarch64" ]; then echo "arm64-windows-static-release"; \
+        else echo "x64-windows-static-release"; fi; \
+    else echo "x64-linux-release"; fi)
+VCPKG_TOOLCHAIN := $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
+NPROC := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 OS_NAME_UNAME := $(shell uname -s)
 WINDOWS_ENV := $(OS)
 IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME_UNAME)),$(findstring MSYS,$(OS_NAME_UNAME)),$(findstring CYGWIN,$(OS_NAME_UNAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
@@ -68,6 +86,18 @@ WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
 
 all: clean desktop
+
+setup-vcpkg:
+	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
+		echo "Cloning vcpkg..."; \
+		git clone https://github.com/Microsoft/vcpkg.git $(VCPKG_ROOT); \
+	fi
+	@if [ ! -f "$(VCPKG_ROOT)/vcpkg" ]; then \
+		echo "Bootstrapping vcpkg..."; \
+		cd $(VCPKG_ROOT) && ./bootstrap-vcpkg.sh -disableMetrics && \
+		VCPKG_MAX_CONCURRENCY=$(NPROC) \
+		./vcpkg install --triplet $(VCPKG_TRIPLET) --disable-metrics; \
+	fi
 
 repo:
 	mkdir -p "installer/packages/$(TARGET_PACKAGE)/data"
@@ -182,11 +212,13 @@ desktop-build:
 	-DQt6_DIR=$(QT_MODULE_PATH_HOST) \
 	-DBUILD_TIME="$(BUILD_TIME)" \
 	-DBUILD_NAME="$(BUILD_NAME)" \
-	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_HOST)
+	-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN) \
+	-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_HOST) \
+	-DVCPKG_TARGET_TRIPLET=$(VCPKG_TRIPLET)
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
-desktop: desktop-build shortcut
+desktop: setup-vcpkg desktop-build shortcut
 
 shortcut:
 ifeq ($(IS_WINDOWS),1)
@@ -258,7 +290,7 @@ unpatch-web:
 	@echo Restore prior to web patch
 	@git restore .
 
-web: clean emsdk patch-web web-build unpatch-web
+web: clean emsdk setup-vcpkg patch-web web-build unpatch-web
 
 web-build:
 	@. ./emsdk/emsdk_env.sh && \
@@ -273,7 +305,9 @@ web-build:
 	-DQt6_DIR=$(QT_MODULE_PATH_TARGET) \
 	-DBUILD_TIME=$(BUILD_TIME) \
 	-DBUILD_NAME=$(BUILD_NAME) \
-	-DCMAKE_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_TARGET) && \
+	-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN) \
+	-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_TARGET) \
+	-DVCPKG_TARGET_TRIPLET=$(VCPKG_TRIPLET) && \
 	cmake --build $(BUILD_DIR)
 
 	mkdir -p $(ABS_INSTALL_DIR)
@@ -320,5 +354,5 @@ clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
 
-.PHONY: all repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean
+.PHONY: all setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean
 .IGNORE: clean

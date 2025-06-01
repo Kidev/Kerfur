@@ -19,6 +19,7 @@ find_package(
                Multimedia
                QuickControls2
 )
+find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect)
 
 qt_standard_project_setup(REQUIRES 6.5)
 if (QT_KNOWN_POLICY_QTP0004)
@@ -37,13 +38,16 @@ qt_add_shaders(
     PREFIX "/"
 )
 
-add_subdirectory(qml)
+add_subdirectory(modules)
 
 qt_add_qml_module(
     ${PROJECT_NAME}
     URI "qml"
     QML_FILES qml/Main.qml
-    DEPENDENCIES TARGET Tools Display
+    DEPENDENCIES TARGET
+                 Tools
+                 Vision
+                 Display
     RESOURCES ${RESOURCES_FILE}
 )
 
@@ -57,8 +61,12 @@ target_link_libraries(
            Qt6::Multimedia
            Qt6::QuickControls2
            Tools
+           Vision
            Display
+           ${OpenCV_LIBS}
 )
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")
 
