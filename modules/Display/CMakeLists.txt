@@ -9,5 +9,5 @@ qt_add_qml_module(
               qml/Glow.qml
               qml/LedScreen.qml
               qml/Face.qml
-    DEPENDENCIES TARGET Tools
+    DEPENDENCIES TARGET Tools Vision
 )

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import Vision
 
 Rectangle {
     id: root
@@ -295,24 +296,6 @@ Rectangle {
                 }
             }
 
-            // Face Tracking Sensitivity
-            Text {
-                color: "white"
-                text: "Face Sensitivity: " + faceTrackingSensitivitySlider.value.toFixed(2)
-            }
-
-            KSlider {
-                id: faceTrackingSensitivitySlider
-
-                decimals: 2
-                from: 0.1
-                settingName: "faceTrackingSensitivity"
-                settingsObject: root.settings
-                to: 3.0
-                value: 1.0
-                width: parent.width - 20
-            }
-
             // Glow Color
             Text {
                 color: "white"
@@ -425,6 +408,69 @@ Rectangle {
                         }
                     }
                 }
+            }
+
+            // Face Tracking Section
+            Text {
+                color: "white"
+                font.bold: true
+                text: "Face Tracking"
+            }
+
+            // Face Tracking Enable
+            Row {
+                spacing: 5
+
+                Rectangle {
+                    border.color: root.settings.faceTrackingEnabled ? "green" : "gray"
+                    color: root.settings.faceTrackingEnabled ? "lightgreen" : "darkgray"
+                    height: 30
+                    width: 60
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: "black"
+                        font.bold: true
+                        text: root.settings.faceTrackingEnabled ? "ON" : "OFF"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+
+                        onClicked: root.settings.faceTrackingEnabled =
+                                   !root.settings.faceTrackingEnabled
+                    }
+                }
+            }
+
+            // Camera Feed Display
+            Text {
+                color: "white"
+                text: "Camera Feed"
+            }
+
+            CameraFeedDisplay {
+                faceTracker: face.faceTracker
+                height: (parent.width - 20) * 0.75  // 4:3 aspect ratio
+                width: parent.width - 20
+            }
+
+            // Face Tracking Sensitivity
+            Text {
+                color: "white"
+                text: "Face Sensitivity: " + faceTrackingSensitivitySlider.value.toFixed(2)
+            }
+
+            KSlider {
+                id: faceTrackingSensitivitySlider
+
+                decimals: 2
+                from: 0.1
+                settingName: "faceTrackingSensitivity"
+                settingsObject: root.settings
+                to: 3.0
+                value: 1.0
+                width: parent.width - 20
             }
         }
     }

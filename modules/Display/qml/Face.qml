@@ -19,6 +19,7 @@ Item {
     property string currentEyesImage: root.pathEyesOpened
     readonly property real doubleBlinkChance: 0.1
     readonly property int doubleBlinkDuration: 100
+    readonly property alias faceTracker: faceTracker
     property bool isBlinking: false
     property bool isDoubleBlink: false
     property bool isTouched: false
@@ -257,16 +258,23 @@ Item {
         enabled: !root.settings.showControls && !root.isTouched && root.settings.faceTrackingEnabled
 
         onErrorStringChanged: {
-            if (faceTracker.errorString !== "") {
-                console.warn("FaceTracker error:", faceTracker.errorString);
+            if (errorString !== "") {
+                console.warn("FaceTracker error:", errorString);
             }
         }
         onFaceCenterChanged: {
-            if (faceDetected && !root.isBlinking && !root.isTouched && !root.isWinking) {
-                // Convert normalized coordinates (0-1) to angles (0-180)
-                const leftRightAngle = faceTracker.faceCenter.x * 180;
-                const upDownAngle = faceTracker.faceCenter.y * 180;
-                root.updatePupilPositions(leftRightAngle, upDownAngle);
+            if (faceTracker.faceDetected && !root.isBlinking && !root.isTouched &&
+                    !root.isWinking) {
+
+                // Apply sensitivity multiplier
+                const sensitivity = root.settings.faceTrackingSensitivity;
+                const leftRightAngle = faceCenter.x * 180 * sensitivity;
+                const upDownAngle = faceCenter.y * 180 * sensitivity;
+
+                // Clamp to valid range
+                root.updatePupilPositions(Math.max(0, Math.min(180, leftRightAngle)), Math.max(0,
+                                                                                               Math.min(180,
+                                                                                                        upDownAngle)));
             }
         }
     }

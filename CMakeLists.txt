@@ -45,8 +45,8 @@ qt_add_qml_module(
     URI "qml"
     QML_FILES qml/Main.qml
     DEPENDENCIES TARGET
-                 Tools
                  Vision
+                 Tools
                  Display
     RESOURCES ${RESOURCES_FILE}
 )
@@ -61,13 +61,12 @@ target_link_libraries(
            Qt6::Multimedia
            Qt6::QuickControls2
            ${OpenCV_LIBS}
-           Tools
            Vision
+           Tools
            Display
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
-target_include_directories(Vision PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")
 
