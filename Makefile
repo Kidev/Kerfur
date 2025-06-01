@@ -41,7 +41,6 @@ VCPKG_TRIPLET ?= $(shell \
         else echo "x64-windows-static-release"; fi; \
     else echo "x64-linux-release"; fi)
 VCPKG_TOOLCHAIN := $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
-NPROC := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 OS_NAME_UNAME := $(shell uname -s)
 WINDOWS_ENV := $(OS)
 IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME_UNAME)),$(findstring MSYS,$(OS_NAME_UNAME)),$(findstring CYGWIN,$(OS_NAME_UNAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
@@ -95,7 +94,6 @@ setup-vcpkg:
 	@if [ ! -f "$(VCPKG_ROOT)/vcpkg" ]; then \
 		echo "Bootstrapping vcpkg..."; \
 		cd $(VCPKG_ROOT) && ./bootstrap-vcpkg.sh -disableMetrics && \
-		VCPKG_MAX_CONCURRENCY=$(NPROC) \
 		./vcpkg install --triplet $(VCPKG_TRIPLET) --disable-metrics; \
 	fi
 
