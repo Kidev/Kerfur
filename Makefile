@@ -352,5 +352,8 @@ clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
 
-.PHONY: all setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean
-.IGNORE: clean
+clean-vcpkg:
+	rm -rf $(VCPKG_ROOT) $(VCPKG_ROOT)_installed
+
+.PHONY: all setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean clean-vcpkg
+.IGNORE: clean clean-vcpkg

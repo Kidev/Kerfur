@@ -22,7 +22,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "FaceTracker.hpp"
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
@@ -36,8 +35,6 @@ int main(int argc, char *argv[])
     app.setOrganizationName("Kidev");
 
     QLoggingCategory::setFilterRules("*.ffmpeg.*=false\n*.multimedia.*=false");
-
-    qmlRegisterType<FaceTracker>("Vision", 1, 0, "FaceTracker");
 
     QQmlApplicationEngine engine;
 
