@@ -256,18 +256,17 @@ Item {
 
         enabled: !root.settings.showControls && !root.isTouched && root.settings.faceTrackingEnabled
 
+        onErrorStringChanged: {
+            if (faceTracker.errorString !== "") {
+                console.warn("FaceTracker error:", faceTracker.errorString);
+            }
+        }
         onFaceCenterChanged: {
             if (faceDetected && !root.isBlinking && !root.isTouched && !root.isWinking) {
                 // Convert normalized coordinates (0-1) to angles (0-180)
-                const qreal leftRightAngle = faceCenter.x * 180;
-                const qreal upDownAngle = faceCenter.y * 180;
+                const leftRightAngle = faceTracker.faceCenter.x * 180;
+                const upDownAngle = faceTracker.faceCenter.y * 180;
                 root.updatePupilPositions(leftRightAngle, upDownAngle);
-            }
-        }
-
-        onErrorStringChanged: {
-            if (errorString !== "") {
-                console.warn("FaceTracker error:", errorString);
             }
         }
     }
@@ -415,7 +414,7 @@ Item {
         id: pupilTrackingArea
 
         property bool shouldTrack: !root.isBlinking && !root.isTouched && (
-            !pupilTrackingArea.pressed || root.isWinking)
+                                       !pupilTrackingArea.pressed || root.isWinking)
         property bool useFaceTracking: faceTracker.enabled && faceTracker.faceDetected
 
         acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -425,34 +424,38 @@ Item {
         propagateComposedEvents: false
 
         onMouseXChanged: {
-            if (!useFaceTracking && pupilTrackingArea.shouldTrack && pupilTrackingArea.containsMouse) {
-                root.settings.leftRightAngle = (pupilTrackingArea.mouseX / pupilTrackingArea.width) * 180;
+            if (!useFaceTracking && pupilTrackingArea.shouldTrack
+                    && pupilTrackingArea.containsMouse) {
+                root.settings.leftRightAngle = (pupilTrackingArea.mouseX / pupilTrackingArea.width)
+                        * 180;
             }
         }
         onMouseYChanged: {
-            if (!useFaceTracking && pupilTrackingArea.shouldTrack && pupilTrackingArea.containsMouse) {
-                root.settings.upDownAngle = (pupilTrackingArea.mouseY / pupilTrackingArea.height) * 180;
+            if (!useFaceTracking && pupilTrackingArea.shouldTrack
+                    && pupilTrackingArea.containsMouse) {
+                root.settings.upDownAngle = (pupilTrackingArea.mouseY / pupilTrackingArea.height)
+                        * 180;
             }
         }
         onPressed: mouse => {
-            if (mouse.button === Qt.LeftButton) {
-                root.isTouched = true;
-                mouse.accepted = true;
-            } else if (mouse.button === Qt.RightButton) {
-                var winkSide = Math.random() < 0.5 ? Face.WinkType.Left :
-                Face.WinkType.Right;
-                root.startWinking(winkSide);
-                mouse.accepted = true;
-            }
-        }
+                       if (mouse.button === Qt.LeftButton) {
+                           root.isTouched = true;
+                           mouse.accepted = true;
+                       } else if (mouse.button === Qt.RightButton) {
+                           var winkSide = Math.random() < 0.5 ? Face.WinkType.Left :
+                                                                Face.WinkType.Right;
+                           root.startWinking(winkSide);
+                           mouse.accepted = true;
+                       }
+                   }
         onReleased: mouse => {
-            if (mouse.button === Qt.LeftButton) {
-                root.isTouched = false;
-                mouse.accepted = true;
-            } else if (mouse.button === Qt.RightButton) {
-                root.stopWinking();
-                mouse.accepted = true;
-            }
-        }
+                        if (mouse.button === Qt.LeftButton) {
+                            root.isTouched = false;
+                            mouse.accepted = true;
+                        } else if (mouse.button === Qt.RightButton) {
+                            root.stopWinking();
+                            mouse.accepted = true;
+                        }
+                    }
     }
 }

@@ -1,8 +1,8 @@
 #ifndef KERFUR_VISION_FACETRACKER_HPP
 #define KERFUR_VISION_FACETRACKER_HPP
 
-#include <opencv2/objdetect.hpp>
-#include <opencv2/opencv.hpp>
+#include <opencv4/opencv2/objdetect.hpp>
+#include <opencv4/opencv2/opencv.hpp>
 #include <QCamera>
 #include <QMediaCaptureSession>
 #include <QObject>
