@@ -1,17 +1,12 @@
 #ifndef KERFUR_VISION_FACETRACKER_HPP
 #define KERFUR_VISION_FACETRACKER_HPP
 
-#include <opencv4/opencv2/objdetect.hpp>
-#include <opencv4/opencv2/opencv.hpp>
-#include <QCamera>
-#include <QMediaCaptureSession>
+#include "opencv2/objdetect.hpp"
+#include "opencv2/opencv.hpp"
 #include <QObject>
 #include <QPointF>
 #include <QQmlEngine>
-#include <QSize>
-#include <QTimer>
-#include <QVideoFrame>
-#include <QVideoSink>
+#include <QtQml/qqmlregistration.h>
 
 class FaceTracker : public QObject
 {
@@ -39,12 +34,7 @@ signals:
     void faceCenterChanged();
     void errorStringChanged();
 
-private slots:
-    void processVideoFrame(const QVideoFrame &frame);
-
 private:
-    void initializeCamera();
-    void uninitializeCamera();
     void setFaceDetected(bool detected);
     void setFaceCenter(const QPointF &center);
     void setErrorString(const QString &error);
@@ -53,13 +43,6 @@ private:
     bool m_faceDetected {false};
     QPointF m_faceCenter {};
     QString m_errorString {};
-
-    QCamera m_camera;
-    QMediaCaptureSession m_captureSession;
-    QVideoSink m_videoSink;
-    cv::CascadeClassifier m_faceCascade;
-
-    static constexpr int PROCESSING_INTERVAL_MS {100}; // Process every 100ms
 };
 
 #endif /* KERFUR_VISION_FACETRACKER_HPP */

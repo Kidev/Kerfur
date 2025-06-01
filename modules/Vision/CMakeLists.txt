@@ -6,5 +6,5 @@ qt_add_qml_module(
     ${VISION_MODULE}
     URI "Vision"
     SOURCES src/FaceTracker.cpp src/FaceTracker.hpp
-    DEPENDENCIES TARGET Tools
 )
+target_include_directories(${VISION_MODULE} PRIVATE src ${OpenCV_INCLUDE_DIRS})
