@@ -206,10 +206,31 @@ jobs:
             echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v4
+        id: vcpkg-cache
+        with:
+          path: |
+            vcpkg
+            vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}-
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}-
+            vcpkg-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Build
         shell: bash
         run: |
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
+
+      - name: Save vcpkg cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            vcpkg
+            vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}-
 
       - name: Craft installer
         if: matrix.installer_command != ''

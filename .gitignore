@@ -10,3 +10,6 @@ bin/
 build/
 install/
 .env
+vcpkg*
+!vcpkg.json
+!vcpkg-configuration.json

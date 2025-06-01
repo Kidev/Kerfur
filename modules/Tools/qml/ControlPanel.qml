@@ -264,6 +264,55 @@ Rectangle {
                 width: parent.width - 20
             }
 
+            // Face Tracking Enable
+            Text {
+                color: "white"
+                text: "Face Tracking"
+            }
+
+            Row {
+                spacing: 5
+
+                Rectangle {
+                    border.color: root.settings.faceTrackingEnabled ? "green" : "gray"
+                    color: root.settings.faceTrackingEnabled ? "lightgreen" : "darkgray"
+                    height: 30
+                    width: 60
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: "black"
+                        font.bold: true
+                        text: root.settings.faceTrackingEnabled ? "ON" : "OFF"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+
+                        onClicked: root.settings.faceTrackingEnabled =
+                                   !root.settings.faceTrackingEnabled
+                    }
+                }
+            }
+
+            // Face Tracking Sensitivity
+            Text {
+                color: "white"
+                text: "Face Sensitivity: " + faceTrackingSensitivitySlider.value.toFixed(2)
+            }
+
+            KSlider {
+                id: faceTrackingSensitivitySlider
+
+                decimals: 2
+                from: 0.1
+                settingName: "faceTrackingSensitivity"
+                settingsObject: root.settings
+                to: 3.0
+                value: 1.0
+                width: parent.width - 20
+            }
+
             // Glow Color
             Text {
                 color: "white"
