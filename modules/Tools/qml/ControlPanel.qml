@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import QtQuick.Controls
 import Vision
 
 Rectangle {
@@ -60,6 +61,157 @@ Rectangle {
             spacing: 10
             topPadding: 50
             width: parent.width
+
+            // Camera Section
+            Text {
+                color: "white"
+                font.bold: true
+                text: "Camera Settings"
+            }
+
+            // Face Tracking Enable
+            Row {
+                spacing: 5
+
+                Rectangle {
+                    border.color: root.settings.faceTrackingEnabled ? "green" : "gray"
+                    color: root.settings.faceTrackingEnabled ? "lightgreen" : "darkgray"
+                    height: 30
+                    width: 60
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: "black"
+                        font.bold: true
+                        text: root.settings.faceTrackingEnabled ? "ON" : "OFF"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+
+                        onClicked: root.settings.faceTrackingEnabled =
+                                   !root.settings.faceTrackingEnabled
+                    }
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: "white"
+                    text: "Face Tracking"
+                }
+            }
+
+            // Camera Resolution
+            Text {
+                color: "white"
+                text: "Resolution: " + (root.faceTracker ? root.faceTracker.currentResolution :
+                                                           "Unknown")
+            }
+
+            ComboBox {
+                id: resolutionCombo
+
+                currentIndex: {
+                    if (root.faceTracker && root.faceTracker.availableResolutions) {
+                        return root.faceTracker.availableResolutions.indexOf(
+                                    root.faceTracker.currentResolution);
+                    }
+                    return 0;
+                }
+                model: root.faceTracker ? root.faceTracker.availableResolutions : []
+                width: parent.width - 20
+
+                background: Rectangle {
+                    border.color: "#777777"
+                    border.width: 1
+                    color: "#555555"
+                    radius: 4
+                }
+                contentItem: Text {
+                    color: "white"
+                    leftPadding: 8
+                    text: resolutionCombo.displayText
+                    verticalAlignment: Text.AlignVCenter
+                }
+                delegate: ItemDelegate {
+                    highlighted: resolutionCombo.highlightedIndex === index
+                    width: resolutionCombo.width
+
+                    background: Rectangle {
+                        color: highlighted ? "#666666" : "transparent"
+                    }
+                    contentItem: Text {
+                        color: "white"
+                        text: modelData
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+                popup: Popup {
+                    implicitHeight: contentItem.implicitHeight
+                    padding: 1
+                    width: resolutionCombo.width
+                    y: resolutionCombo.height - 1
+
+                    background: Rectangle {
+                        border.color: "#777777"
+                        color: "#555555"
+                        radius: 4
+                    }
+                    contentItem: ListView {
+                        clip: true
+                        currentIndex: resolutionCombo.highlightedIndex
+                        implicitHeight: contentHeight
+                        model: resolutionCombo.popup.visible ? resolutionCombo.delegateModel : null
+
+                        ScrollIndicator.vertical: ScrollIndicator {
+                        }
+                    }
+                }
+
+                onCurrentTextChanged: {
+                    if (root.faceTracker && currentText !== root.faceTracker.currentResolution) {
+                        root.faceTracker.setResolution(currentText);
+                    }
+                }
+            }
+
+            // Camera Feed Display
+            Text {
+                color: "white"
+                text: "Camera Feed (Click to Enlarge)"
+            }
+
+            CameraFeedDisplay {
+                faceTracker: root.faceTracker
+                height: (parent.width - 20) * 0.75  // 4:3 aspect ratio
+                width: parent.width - 20
+            }
+
+            // Face Tracking Sensitivity
+            Text {
+                color: "white"
+                text: "Face Sensitivity: " + faceTrackingSensitivitySlider.value.toFixed(2)
+            }
+
+            KSlider {
+                id: faceTrackingSensitivitySlider
+
+                decimals: 2
+                from: 0.1
+                settingName: "faceTrackingSensitivity"
+                settingsObject: root.settings
+                to: 3.0
+                value: 1.0
+                width: parent.width - 20
+            }
+
+            // Visual Effects Section
+            Text {
+                color: "white"
+                font.bold: true
+                text: "Visual Effects"
+                topPadding: 15
+            }
 
             // LED Size slider
             Text {
@@ -378,68 +530,6 @@ Rectangle {
                         }
                     }
                 }
-            }
-
-            // Face Tracking Section
-            Text {
-                color: "white"
-                font.bold: true
-                text: "Face Tracking"
-            }
-
-            // Face Tracking Enable
-            Row {
-                spacing: 5
-
-                Rectangle {
-                    border.color: root.settings.faceTrackingEnabled ? "green" : "gray"
-                    color: root.settings.faceTrackingEnabled ? "lightgreen" : "darkgray"
-                    height: 30
-                    width: 60
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: "black"
-                        font.bold: true
-                        text: root.settings.faceTrackingEnabled ? "ON" : "OFF"
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-
-                        onClicked: root.settings.faceTrackingEnabled =
-                                   !root.settings.faceTrackingEnabled
-                    }
-                }
-            }
-
-            Text {
-                color: "white"
-                text: "Camera Feed"
-            }
-
-            CameraFeedDisplay {
-                faceTracker: root.faceTracker  // Use the passed-in faceTracker property
-                height: (parent.width - 20) * 0.75  // 4:3 aspect ratio
-                width: parent.width - 20
-            }
-
-            // Face Tracking Sensitivity
-            Text {
-                color: "white"
-                text: "Face Sensitivity: " + faceTrackingSensitivitySlider.value.toFixed(2)
-            }
-
-            KSlider {
-                id: faceTrackingSensitivitySlider
-
-                decimals: 2
-                from: 0.1
-                settingName: "faceTrackingSensitivity"
-                settingsObject: root.settings
-                to: 3.0
-                value: 1.0
-                width: parent.width - 20
             }
         }
     }
