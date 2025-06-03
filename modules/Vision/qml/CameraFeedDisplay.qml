@@ -14,7 +14,6 @@ Rectangle {
     Image {
         id: cameraImage
 
-        property int debugCounter: 0
         readonly property real displayAspectRatio: width > 0 ? width / height : 1
 
         // Calculate scaling factors for overlay positioning
@@ -51,25 +50,10 @@ Rectangle {
         cache: false
         fillMode: Image.PreserveAspectFit
         smooth: true
-
-        // Direct connection to the base64 property
         source: root.faceTracker && root.faceTracker.enabled ? root.faceTracker.cameraFrameBase64 :
                                                                ""
 
-        onStatusChanged: {
-            if (status === Image.Error) {
-                console.error("CameraFeedDisplay: Failed to load image");
-            } else if (status === Image.Ready) {
-                // Image loaded successfully
-                if (debugCounter < 3) {
-                    //console.log("CameraFeedDisplay: Image loaded successfully, size:",
-                    //          paintedWidth + "x" + paintedHeight);
-                    debugCounter++;
-                }
-            }
-        }
-
-        // Face detection overlay
+        // Face detection overlay - ONLY the green rectangle
         Rectangle {
             id: faceOverlay
 
@@ -81,8 +65,6 @@ Rectangle {
                      === Image.Ready && cameraImage.sourceSize.width > 0
                      && cameraImage.paintedWidth > 0
             width: visible ? root.faceTracker.facePixelSize.width * cameraImage.scaleX : 0
-
-            // Position and size based on face detection data
             x: visible ? cameraImage.offsetX + root.faceTracker.facePixelCenter.x
                          * cameraImage.scaleX - width / 2 : 0
             y: visible ? cameraImage.offsetY + root.faceTracker.facePixelCenter.y
@@ -105,7 +87,7 @@ Rectangle {
                 }
             }
 
-            // Smooth animations for face tracking
+            // Smooth animations
             Behavior on x {
                 enabled: visible
 
@@ -123,218 +105,219 @@ Rectangle {
                 }
             }
 
-            // Center dot
+            // Center dot only
             Rectangle {
                 anchors.centerIn: parent
                 color: "red"
-                height: 4
-                radius: 2
+                height: 3
+                radius: 1.5
                 visible: parent.visible
-                width: 4
-            }
-
-            // Face label
-            Text {
-                anchors.bottom: parent.top
-                anchors.bottomMargin: 5
-                anchors.horizontalCenter: parent.horizontalCenter
-                color: "lime"
-                font.bold: true
-                font.pixelSize: 9
-                text: "FACE"
-                visible: parent.visible
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    anchors.margins: -2
-                    color: "#80000000"
-                    height: parent.height + 4
-                    radius: 2
-                    width: parent.width + 4
-                    z: -1
-                }
+                width: 3
             }
         }
 
-        // Center crosshair for reference
+        // Click area for popup
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+
+            onClicked: {
+                if (root.faceTracker && root.faceTracker.enabled && cameraImage.status
+                        === Image.Ready) {
+                    popup.open();
+                }
+            }
+        }
+    }
+
+    // Status info below the camera feed
+    Text {
+        function getStatusColor() {
+            if (!root.faceTracker || !root.faceTracker.enabled)
+                return "gray";
+            if (root.faceTracker.errorString !== "")
+                return "red";
+            if (cameraImage.status !== Image.Ready)
+                return "orange";
+            return root.faceTracker.faceDetected ? "lime" : "cyan";
+        }
+
+        function getStatusText() {
+            if (!root.faceTracker)
+                return "No Tracker";
+            if (!root.faceTracker.enabled)
+                return "Disabled";
+            if (root.faceTracker.errorString !== "")
+                return "Error: " + root.faceTracker.errorString;
+            if (cameraImage.status === Image.Loading)
+                return "Loading...";
+            if (cameraImage.status === Image.Error)
+                return "Image Error";
+            if (cameraImage.status !== Image.Ready)
+                return "No Signal";
+            return root.faceTracker.faceDetected ? "Face Detected" : "Searching...";
+        }
+
+        anchors.left: parent.left
+        anchors.top: parent.bottom
+        anchors.topMargin: 4
+        color: getStatusColor()
+        font.pixelSize: 9
+        text: getStatusText()
+    }
+
+    // Camera feed popup
+    Popup {
+        id: popup
+
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        height: Overlay.overlay ? Overlay.overlay.height * 0.75 : 300
+        modal: true
+        width: Overlay.overlay ? Overlay.overlay.width * 0.75 : 400
+
+        // Overlay background dimming
+        Overlay.modal: Rectangle {
+            color: "#80000000"
+        }
+        background: Rectangle {
+            border.color: "#666"
+            border.width: 2
+            color: "#1a1a1a"
+            radius: 8
+        }
+
         Item {
-            anchors.centerIn: parent
-            visible: root.faceTracker && root.faceTracker.enabled && cameraImage.status
-                     === Image.Ready
+            anchors.fill: parent
+            anchors.margins: 10
 
-            Rectangle {
-                anchors.centerIn: parent
-                color: "white"
-                height: 1
-                opacity: 0.6
-                width: 16
-            }
+            // Large camera image
+            Image {
+                id: popupImage
 
-            Rectangle {
-                anchors.centerIn: parent
-                color: "white"
-                height: 16
-                opacity: 0.6
-                width: 1
-            }
-        }
-    }
+                readonly property real popupOffsetX: (width - paintedWidth) / 2
+                readonly property real popupOffsetY: (height - paintedHeight) / 2
 
-    // Status overlay
-    Rectangle {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.margins: 4
-        color: "#C0000000"
-        height: statusText.height + 4
-        radius: 3
-        visible: statusText.text !== ""
-        width: statusText.width + 8
+                // Calculate scaling for popup
+                readonly property real popupScaleX: sourceSize.width > 0 ? paintedWidth
+                                                                           / sourceSize.width : 1
+                readonly property real popupScaleY: sourceSize.height > 0 ? paintedHeight
+                                                                            / sourceSize.height : 1
 
-        Text {
-            id: statusText
+                anchors.fill: parent
+                asynchronous: true
+                cache: false
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                source: root.faceTracker && root.faceTracker.enabled
+                        ? root.faceTracker.cameraFrameBase64 : ""
 
-            function getStatusColor() {
-                if (!root.faceTracker)
-                    return "gray";
-                if (!root.faceTracker.enabled)
-                    return "orange";
-                if (root.faceTracker.errorString !== "")
-                    return "red";
-                if (cameraImage.status === Image.Loading)
-                    return "yellow";
-                if (cameraImage.status === Image.Error)
-                    return "red";
-                if (cameraImage.status !== Image.Ready)
-                    return "orange";
-                return root.faceTracker.faceDetected ? "lime" : "cyan";
-            }
+                // Face detection overlay for popup
+                Rectangle {
+                    border.color: "lime"
+                    border.width: 3
+                    color: "transparent"
+                    height: visible ? root.faceTracker.facePixelSize.height
+                                      * popupImage.popupScaleY : 0
+                    visible: root.faceTracker && root.faceTracker.faceDetected && popupImage.status
+                             === Image.Ready && popupImage.sourceSize.width > 0
+                    width: visible ? root.faceTracker.facePixelSize.width * popupImage.popupScaleX :
+                                     0
+                    x: visible ? popupImage.popupOffsetX + root.faceTracker.facePixelCenter.x
+                                 * popupImage.popupScaleX - width / 2 : 0
+                    y: visible ? popupImage.popupOffsetY + root.faceTracker.facePixelCenter.y
+                                 * popupImage.popupScaleY - height / 2 : 0
 
-            function getStatusText() {
-                if (!root.faceTracker)
-                    return "No Tracker";
-                if (!root.faceTracker.enabled)
-                    return "Disabled";
-                if (root.faceTracker.errorString !== "")
-                    return "Error";
-                if (cameraImage.status === Image.Loading)
-                    return "Loading...";
-                if (cameraImage.status === Image.Error)
-                    return "Image Error";
-                if (cameraImage.status !== Image.Ready)
-                    return "No Signal";
-                return root.faceTracker.faceDetected ? "Face Detected" : "Searching...";
-            }
+                    // Center dot
+                    Rectangle {
+                        anchors.centerIn: parent
+                        color: "red"
+                        height: 6
+                        radius: 3
+                        visible: parent.visible
+                        width: 6
+                    }
 
-            anchors.centerIn: parent
-            color: getStatusColor()
-            font.bold: true
-            font.pixelSize: 9
-            text: getStatusText()
-        }
-    }
+                    // Face label for popup
+                    Text {
+                        anchors.bottom: parent.top
+                        anchors.bottomMargin: 8
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        color: "lime"
+                        font.bold: true
+                        font.pixelSize: 12
+                        text: "DETECTED FACE"
+                        visible: parent.visible
 
-    // Debug info overlay
-    Rectangle {
-        anchors.left: parent.left
-        anchors.margins: 4
-        anchors.top: parent.top
-        color: "#80000000"
-        height: debugText.height + 4
-        radius: 3
-        visible: root.faceTracker && root.faceTracker.enabled && debugText.text !== ""
-        width: debugText.width + 8
-
-        Text {
-            id: debugText
-
-            anchors.centerIn: parent
-            color: "cyan"
-            font.pixelSize: 8
-            text: {
-                if (!root.faceTracker)
-                    return "";
-                var info = "Status: " + cameraImage.status;
-                if (cameraImage.sourceSize.width > 0) {
-                    info += "\nSize: " + cameraImage.sourceSize.width + "×"
-                            + cameraImage.sourceSize.height;
-                    info += "\nPainted: " + Math.round(cameraImage.paintedWidth) + "×" + Math.round(
-                                cameraImage.paintedHeight);
+                        Rectangle {
+                            anchors.centerIn: parent
+                            anchors.margins: -4
+                            color: "#C0000000"
+                            height: parent.height + 8
+                            radius: 4
+                            width: parent.width + 8
+                            z: -1
+                        }
+                    }
                 }
-                if (root.faceTracker.faceDetected) {
-                    var center = root.faceTracker.faceCenter;
-                    info += "\nFace: " + (center.x * 100).toFixed(0) + "%, " + (center.y
-                                                                                * 100).toFixed(0)
-                            + "%";
+            }
+
+            // Info panel in popup
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                color: "#C0000000"
+                height: infoText.height + 16
+                radius: 6
+
+                Text {
+                    id: infoText
+
+                    anchors.centerIn: parent
+                    color: "white"
+                    font.pixelSize: 11
+                    text: {
+                        var info = "";
+                        if (root.faceTracker) {
+                            info += "Resolution: " + root.faceTracker.currentResolution + " • ";
+                            info += "Status: " + (root.faceTracker.faceDetected ? "Face Detected" :
+                                                                                  "Searching")
+                                    + " • ";
+                            if (popupImage.sourceSize.width > 0) {
+                                info += "Display: " + popupImage.sourceSize.width + "×"
+                                        + popupImage.sourceSize.height;
+                            }
+                        }
+                        return info;
+                    }
                 }
-                return info;
+            }
+
+            // Close button
+            Button {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                font.bold: true
+                font.pixelSize: 16
+                height: 30
+                text: "×"
+                width: 30
+
+                background: Rectangle {
+                    color: parent.hovered ? "#ff4444" : "#666666"
+                    radius: 15
+                }
+                contentItem: Text {
+                    color: "white"
+                    font: parent.font
+                    horizontalAlignment: Text.AlignHCenter
+                    text: parent.text
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: popup.close()
             }
         }
-    }
-
-    // Error display
-    Rectangle {
-        anchors.centerIn: parent
-        color: "#C0800000"
-        height: errorText.implicitHeight + 20
-        radius: 5
-        visible: root.faceTracker && root.faceTracker.errorString !== ""
-        width: Math.min(parent.width - 20, errorText.implicitWidth + 20)
-
-        Text {
-            id: errorText
-
-            anchors.centerIn: parent
-            color: "white"
-            font.bold: true
-            font.pixelSize: 11
-            horizontalAlignment: Text.AlignHCenter
-            text: root.faceTracker ? root.faceTracker.errorString : ""
-            width: Math.min(root.width - 40, implicitWidth)
-            wrapMode: Text.WordWrap
-        }
-    }
-
-    // No camera message
-    Rectangle {
-        function shouldShowNoFeed() {
-            return !root.faceTracker || !root.faceTracker.enabled || (root.faceTracker.enabled && root.faceTracker.errorString
-                                                                      === "" && cameraImage.status
-                                                                      !== Image.Ready
-                                                                      && cameraImage.status
-                                                                      !== Image.Loading);
-        }
-
-        anchors.centerIn: parent
-        color: "#80404040"
-        height: noFeedText.height + 16
-        radius: 8
-        visible: shouldShowNoFeed()
-        width: noFeedText.width + 16
-
-        Text {
-            id: noFeedText
-
-            anchors.centerIn: parent
-            color: "lightgray"
-            font.bold: true
-            font.pixelSize: 12
-            text: !root.faceTracker ? "No Tracker" : !root.faceTracker.enabled ? "Camera Disabled" :
-                                                                                 "No Camera Feed"
-        }
-    }
-
-    // Force refresh connection
-    Connections {
-        function onCameraFrameChanged() {
-            // The source binding should automatically update
-            // but we can add debug logging here
-            if (cameraImage.debugCounter < 5)
-                //console.log("CameraFeedDisplay: Frame changed, source length:",
-                //root.faceTracker.cameraFrameBase64.length);
-            {}
-        }
-
-        target: root.faceTracker
     }
 }

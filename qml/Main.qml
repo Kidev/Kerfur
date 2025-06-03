@@ -6,7 +6,7 @@ import Tools
 Window {
     id: root
 
-    readonly property bool allowEscapeShortcut: false
+    readonly property bool allowEscapeShortcut: true
 
     function requestExit() {
         Qt.quit();

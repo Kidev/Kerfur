@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <opencv2/objdetect.hpp>
 #include <opencv2/opencv.hpp>
 #include <QCamera>
@@ -10,11 +11,10 @@
 #include <QPointF>
 #include <QQmlEngine>
 #include <QSize>
+#include <QTemporaryFile>
 #include <QTimer>
 #include <QVideoFrame>
 #include <QVideoSink>
-#include <QTemporaryFile>
-#include <memory>
 
 class FaceTracker : public QObject
 {
@@ -29,6 +29,9 @@ class FaceTracker : public QObject
     Q_PROPERTY(QPointF facePixelCenter READ facePixelCenter NOTIFY facePixelCenterChanged)
     Q_PROPERTY(QSize facePixelSize READ facePixelSize NOTIFY facePixelSizeChanged)
     Q_PROPERTY(QString cameraFrameBase64 READ cameraFrameBase64 NOTIFY cameraFrameChanged)
+    Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY
+                   availableResolutionsChanged)
+    Q_PROPERTY(QString currentResolution READ currentResolution NOTIFY currentResolutionChanged)
 
 public:
     explicit FaceTracker(QObject *parent = nullptr);
@@ -43,6 +46,11 @@ public:
     QPointF facePixelCenter() const { return m_facePixelCenter; }
     QSize facePixelSize() const { return m_facePixelSize; }
     QString cameraFrameBase64() const;
+    QStringList availableResolutions() const;
+    QString currentResolution() const;
+
+public slots:
+    void setResolution(const QString &resolution);
 
 signals:
     void enabledChanged();
@@ -52,6 +60,8 @@ signals:
     void cameraFrameChanged();
     void facePixelCenterChanged();
     void facePixelSizeChanged();
+    void availableResolutionsChanged();
+    void currentResolutionChanged();
 
 private slots:
     void processVideoFrame(const QVideoFrame &frame);
@@ -63,7 +73,8 @@ private:
     void enumerateCameras();
     void initializeOpenCV();
     void detectFaces(const QImage &detectImage, const QImage &displayImage);
-    
+    QImage convertYUYVToRGB(const QVideoFrame &frame);
+
     void setFaceDetected(bool detected);
     void setFaceCenter(const QPointF &center);
     void setErrorString(const QString &error);
@@ -85,6 +96,7 @@ private:
     QMediaCaptureSession m_captureSession;
     QVideoSink m_videoSink;
     QCameraDevice m_preferredCamera;
+    QSize m_requestedResolution;
 
     // OpenCV components
     cv::CascadeClassifier m_faceCascade;

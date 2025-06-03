@@ -123,36 +123,27 @@ void FaceTracker::initializeCamera()
         return;
     }
 
-    qDebug() << "FaceTracker: Initializing camera:" << m_preferredCamera.description();
-
     // Stop any existing camera
     uninitializeCamera();
 
     // Configure camera
     m_camera.setCameraDevice(m_preferredCamera);
 
-    // Try to set a more reasonable resolution for better performance
-    const auto formats = m_preferredCamera.videoFormats();
-    QCameraFormat bestFormat;
+    // Try to set the requested resolution format
+    if (m_requestedResolution.isValid()) {
+        const auto formats = m_preferredCamera.videoFormats();
+        QCameraFormat bestFormat;
 
-    // Look for 1280x720 or 640x480 formats for better performance
-    for (const auto &format : formats) {
-        QSize res = format.resolution();
-        if ((res.width() == 1280 && res.height() == 720) ||
-            (res.width() == 960 && res.height() == 540) ||
-            (res.width() == 640 && res.height() == 480)) {
-            bestFormat = format;
-            qDebug() << "FaceTracker: Found suitable format:" << res << format.pixelFormat();
-            break;
+        for (const auto &format : formats) {
+            if (format.resolution() == m_requestedResolution) {
+                bestFormat = format;
+                break;
+            }
         }
-    }
 
-    // If we found a smaller format, use it
-    if (!bestFormat.resolution().isEmpty()) {
-        m_camera.setCameraFormat(bestFormat);
-        qDebug() << "FaceTracker: Set camera format to:" << bestFormat.resolution();
-    } else {
-        qDebug() << "FaceTracker: Using default camera format";
+        if (!bestFormat.resolution().isEmpty()) {
+            m_camera.setCameraFormat(bestFormat);
+        }
     }
 
     // Setup error handling
@@ -160,29 +151,23 @@ void FaceTracker::initializeCamera()
             &QCamera::errorOccurred,
             this,
             [this](QCamera::Error error, const QString &errorString) {
-                qWarning() << "FaceTracker: Camera error" << error << ":" << errorString;
                 setErrorString(QString("Camera error: %1").arg(errorString));
 
-                // Retry camera initialization after a delay
                 if (m_enabled && !m_cameraRetryTimer.isActive()) {
-                    qDebug() << "FaceTracker: Scheduling camera retry...";
                     m_cameraRetryTimer.start();
                 }
             });
 
     // Monitor camera state changes
     connect(&m_camera, &QCamera::activeChanged, this, [this](bool active) {
-        qDebug() << "FaceTracker: Camera active changed to:" << active;
         if (active) {
-            qDebug() << "FaceTracker: Camera started successfully!";
             setErrorString("");
-            m_cameraRetryTimer.stop(); // Cancel any pending retries
+            m_cameraRetryTimer.stop();
         }
     });
 
-    // Setup video frame processing with better error handling
+    // Setup video frame processing
     connect(&m_videoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
-        // Only process if enabled and no critical errors
         if (m_enabled && m_errorString.isEmpty()) {
             processVideoFrame(frame);
         }
@@ -193,14 +178,12 @@ void FaceTracker::initializeCamera()
     m_captureSession.setVideoSink(&m_videoSink);
 
     // Start camera
-    qDebug() << "FaceTracker: Starting camera...";
     m_camera.start();
 
     // Set timeout for camera initialization
     QTimer::singleShot(5000, this, [this]() {
         if (m_enabled && !m_camera.isActive()) {
             setErrorString("Camera failed to start within 5 seconds");
-            qWarning() << "FaceTracker: Camera initialization timeout";
         }
     });
 }
@@ -244,7 +227,6 @@ void FaceTracker::uninitializeCamera()
 QString FaceTracker::cameraFrameBase64() const
 {
     if (m_cameraFrame.isNull()) {
-        qDebug() << "FaceTracker: cameraFrameBase64() called but frame is null";
         return QString();
     }
 
@@ -252,23 +234,76 @@ QString FaceTracker::cameraFrameBase64() const
     QBuffer buffer(&ba);
     buffer.open(QIODevice::WriteOnly);
 
-    // Save as JPEG with reasonable quality for better performance
     bool success = m_cameraFrame.save(&buffer, "JPEG", 75);
-
     if (!success) {
-        qWarning() << "FaceTracker: Failed to save image to buffer";
         return QString();
     }
 
-    QString result = QString("data:image/jpeg;base64,") + ba.toBase64();
+    return QString("data:image/jpeg;base64,") + ba.toBase64();
+}
 
-    static int debugCount = 0;
-    if (debugCount < 3) {
-        qDebug() << "FaceTracker: Generated base64 string length:" << result.length();
-        debugCount++;
+QStringList FaceTracker::availableResolutions() const
+{
+    QStringList resolutions;
+    if (m_preferredCamera.isNull()) {
+        return resolutions;
     }
 
-    return result;
+    const auto formats = m_preferredCamera.videoFormats();
+    QSet<QString> uniqueResolutions;
+
+    for (const auto &format : formats) {
+        QSize res = format.resolution();
+        QString resStr = QString("%1x%2").arg(res.width()).arg(res.height());
+        uniqueResolutions.insert(resStr);
+    }
+
+    resolutions = uniqueResolutions.values();
+    std::sort(resolutions.begin(), resolutions.end(), [](const QString &a, const QString &b) {
+        QStringList aParts = a.split('x');
+        QStringList bParts = b.split('x');
+        int aWidth = aParts[0].toInt();
+        int bWidth = bParts[0].toInt();
+        return aWidth > bWidth; // Sort descending by width
+    });
+
+    return resolutions;
+}
+
+QString FaceTracker::currentResolution() const
+{
+    if (!m_camera.isActive()) {
+        return "Unknown";
+    }
+
+    QCameraFormat format = m_camera.cameraFormat();
+    QSize res = format.resolution();
+    return QString("%1x%2").arg(res.width()).arg(res.height());
+}
+
+void FaceTracker::setResolution(const QString &resolution)
+{
+    QStringList parts = resolution.split('x');
+    if (parts.size() != 2) {
+        return;
+    }
+
+    bool ok1, ok2;
+    int width = parts[0].toInt(&ok1);
+    int height = parts[1].toInt(&ok2);
+
+    if (!ok1 || !ok2) {
+        return;
+    }
+
+    m_requestedResolution = QSize(width, height);
+
+    // Restart camera with new resolution if currently active
+    if (m_enabled) {
+        initializeCamera();
+    }
+
+    emit currentResolutionChanged();
 }
 
 void FaceTracker::processVideoFrame(const QVideoFrame &frame)
@@ -276,54 +311,28 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     if (!m_enabled || m_faceCascade.empty())
         return;
 
-    // Throttle processing to avoid overwhelming the system
+    // Throttle processing
     if (m_frameThrottleTimer.isActive())
         return;
     m_frameThrottleTimer.start();
-
-    static int frameCount = 0;
-    frameCount++;
-
-    // Log first few frames and periodically
-    if (frameCount <= 3 || frameCount % 120 == 0) {
-        qDebug() << "FaceTracker: Processing frame" << frameCount << "Size:" << frame.size()
-                 << "Format:" << frame.pixelFormat();
-    }
 
     // Use Qt6's built-in conversion method
     QImage image = frame.toImage();
 
     if (image.isNull()) {
-        if (frameCount <= 10) {
-            qWarning() << "FaceTracker: Failed to convert frame to QImage using toImage(), format:"
-                       << frame.surfaceFormat().pixelFormat();
-        }
         return;
     }
 
-    if (frameCount <= 3) {
-        qDebug() << "FaceTracker: Successfully converted frame using toImage()"
-                 << "Size:" << image.size() << "Format:" << image.format();
-    }
-
-    // Mirror image horizontally for more natural front-camera experience
+    // Mirror image horizontally for more natural experience
     image = image.mirrored(true, false);
 
     // Scale images for different purposes
-    // 1. Small image for display in UI (240p for better UI performance)
     const QImage displayImage =
         image.scaled(320, 240, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-    // 2. Medium image for face detection (480p for good detection vs performance balance)
     const QImage detectImage = image.scaled(640, 480, Qt::KeepAspectRatio, Qt::FastTransformation);
 
-    // Set the display frame (this goes to the UI)
+    // Set the display frame
     setCameraFrame(displayImage);
-
-    if (frameCount <= 3) {
-        qDebug() << "FaceTracker: Display image size:" << displayImage.size()
-                 << "Detect image size:" << detectImage.size();
-    }
 
     // Perform face detection
     detectFaces(detectImage, displayImage);
