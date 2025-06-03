@@ -17,6 +17,7 @@ find_package(
                Concurrent
                ShaderTools
                Multimedia
+               MultimediaWidgets
                QuickControls2
 )
 find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect)
@@ -59,6 +60,7 @@ target_link_libraries(
            Qt6::Qml
            Qt6::Concurrent
            Qt6::Multimedia
+           Qt6::MultimediaWidgets
            Qt6::QuickControls2
            ${OpenCV_LIBS}
            Vision

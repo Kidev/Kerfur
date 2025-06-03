@@ -5,6 +5,7 @@ import Vision
 Rectangle {
     id: root
 
+    required property FaceTracker faceTracker
     required property KSettings settings
 
     color: "#333333"
@@ -265,37 +266,6 @@ Rectangle {
                 width: parent.width - 20
             }
 
-            // Face Tracking Enable
-            Text {
-                color: "white"
-                text: "Face Tracking"
-            }
-
-            Row {
-                spacing: 5
-
-                Rectangle {
-                    border.color: root.settings.faceTrackingEnabled ? "green" : "gray"
-                    color: root.settings.faceTrackingEnabled ? "lightgreen" : "darkgray"
-                    height: 30
-                    width: 60
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: "black"
-                        font.bold: true
-                        text: root.settings.faceTrackingEnabled ? "ON" : "OFF"
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-
-                        onClicked: root.settings.faceTrackingEnabled =
-                                   !root.settings.faceTrackingEnabled
-                    }
-                }
-            }
-
             // Glow Color
             Text {
                 color: "white"
@@ -443,14 +413,13 @@ Rectangle {
                 }
             }
 
-            // Camera Feed Display
             Text {
                 color: "white"
                 text: "Camera Feed"
             }
 
             CameraFeedDisplay {
-                faceTracker: face.faceTracker
+                faceTracker: root.faceTracker  // Use the passed-in faceTracker property
                 height: (parent.width - 20) * 0.75  // 4:3 aspect ratio
                 width: parent.width - 20
             }
