@@ -28,3 +28,15 @@ if (EMSCRIPTEN)
         FULL_ES3=1
     )
 endif ()
+
+if (UNIX AND NOT APPLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE QT_MULTIMEDIA_LIB)
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE QT_FEATURE_linux_v4l=1)
+
+    set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE
+                   INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib:${QT_INSTALL_DIR}/lib"
+    )
+endif ()

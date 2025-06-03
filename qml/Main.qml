@@ -6,7 +6,7 @@ import Tools
 Window {
     id: root
 
-    readonly property bool allowEscapeShortcut: true
+    readonly property bool allowEscapeShortcut: false
 
     function requestExit() {
         Qt.quit();
@@ -48,6 +48,7 @@ Window {
 
         anchors.right: parent.right
         anchors.top: parent.top
+        faceTracker: face.faceTracker
         height: parent.height
         settings: settings
         width: 150

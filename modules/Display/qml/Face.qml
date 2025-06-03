@@ -20,6 +20,10 @@ Item {
     readonly property real doubleBlinkChance: 0.1
     readonly property int doubleBlinkDuration: 100
     readonly property alias faceTracker: faceTracker
+
+    // Face tracking properties
+    readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.faceDetected
+    readonly property real faceTrackingInfluence: root.settings.faceTrackingSensitivity
     property bool isBlinking: false
     property bool isDoubleBlink: false
     property bool isTouched: false
@@ -100,8 +104,15 @@ Item {
     }
 
     function updatePupilPositions(leftRight, upDown) {
-        root.settings.leftRightAngle = Math.max(0, Math.min(180, leftRight));
-        root.settings.upDownAngle = Math.max(0, Math.min(180, upDown));
+        // Smooth the transitions when face tracking is active
+        if (root.faceTrackingActive) {
+            root.settings.leftRightAngle = Math.max(0, Math.min(180, leftRight));
+            root.settings.upDownAngle = Math.max(0, Math.min(180, upDown));
+        } else {
+            // Immediate update for manual control
+            root.settings.leftRightAngle = Math.max(0, Math.min(180, leftRight));
+            root.settings.upDownAngle = Math.max(0, Math.min(180, upDown));
+        }
     }
 
     state: "normal"
@@ -255,26 +266,97 @@ Item {
     FaceTracker {
         id: faceTracker
 
-        enabled: !root.settings.showControls && !root.isTouched && root.settings.faceTrackingEnabled
+        enabled: root.settings.faceTrackingEnabled
 
+        onEnabledChanged: {
+            console.log("FaceTracker enabled:", enabled);
+        }
         onErrorStringChanged: {
             if (errorString !== "") {
                 console.warn("FaceTracker error:", errorString);
+            } else {
+                console.log("FaceTracker: Error cleared");
             }
         }
         onFaceCenterChanged: {
-            if (faceTracker.faceDetected && !root.isBlinking && !root.isTouched &&
-                    !root.isWinking) {
+            if (faceTracker.faceDetected && !root.isBlinking && !root.isTouched && !root.isWinking
+                    && faceTracker.enabled) {
 
-                // Apply sensitivity multiplier
-                const sensitivity = root.settings.faceTrackingSensitivity;
-                const leftRightAngle = faceCenter.x * 180 * sensitivity;
-                const upDownAngle = faceCenter.y * 180 * sensitivity;
+                // Apply sensitivity with smoothing
+                const sensitivity = root.faceTrackingInfluence;
+
+                // Convert face position (0.0-1.0) to angle (0-180)
+                // Apply some smoothing to reduce jitter
+                const targetLeftRight = faceCenter.x * 180 * sensitivity;
+                const targetUpDown = faceCenter.y * 180 * sensitivity;
 
                 // Clamp to valid range
-                root.updatePupilPositions(Math.max(0, Math.min(180, leftRightAngle)), Math.max(0,
-                                                                                               Math.min(180,
-                                                                                                        upDownAngle)));
+                const clampedLeftRight = Math.max(0, Math.min(180, targetLeftRight));
+                const clampedUpDown = Math.max(0, Math.min(180, targetUpDown));
+
+                // Apply smoothing for more natural movement
+                const currentLeftRight = root.settings.leftRightAngle;
+                const currentUpDown = root.settings.upDownAngle;
+
+                const smoothingFactor = 0.3; // Adjust for more/less smoothing
+                const smoothedLeftRight = currentLeftRight + (clampedLeftRight - currentLeftRight)
+                      * smoothingFactor;
+                const smoothedUpDown = currentUpDown + (clampedUpDown - currentUpDown)
+                      * smoothingFactor;
+
+                root.updatePupilPositions(smoothedLeftRight, smoothedUpDown);
+            }
+        }
+        onFaceDetectedChanged: {
+            console.log("Face detected:", faceDetected);
+            if (!faceDetected && root.faceTrackingActive) {
+                // Gradually return to center when face is lost
+                centerReturnTimer.start();
+            } else {
+                centerReturnTimer.stop();
+            }
+        }
+    }
+
+    // Timer to gradually return pupils to center when face tracking is lost
+    Timer {
+        id: centerReturnTimer
+
+        readonly property int maxSteps: 20
+        property int steps: 0
+
+        interval: 100
+        repeat: true
+        running: false
+
+        onRunningChanged: {
+            if (running) {
+                steps = 0;
+            }
+        }
+        onTriggered: {
+            if (!root.faceTrackingActive && steps < maxSteps) {
+                const centerAngle = 90;
+                const currentLeftRight = root.settings.leftRightAngle;
+                const currentUpDown = root.settings.upDownAngle;
+
+                const returnSpeed = 0.1;
+                const newLeftRight = currentLeftRight + (centerAngle - currentLeftRight)
+                      * returnSpeed;
+                const newUpDown = currentUpDown + (centerAngle - currentUpDown) * returnSpeed;
+
+                root.updatePupilPositions(newLeftRight, newUpDown);
+                steps++;
+
+                // Stop when close enough to center
+                if (Math.abs(newLeftRight - centerAngle) < 1 && Math.abs(newUpDown - centerAngle)
+                        < 1) {
+                    stop();
+                    steps = 0;
+                }
+            } else {
+                stop();
+                steps = 0;
             }
         }
     }
@@ -315,6 +397,24 @@ Item {
             x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + root.leftPupilOffset.x)
             y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y
                                                        + root.leftPupilOffset.y)
+
+            // Smooth transitions for face tracking
+            Behavior on x {
+                enabled: root.faceTrackingActive
+
+                NumberAnimation {
+                    duration: 200
+                    easing.type: Easing.OutQuad
+                }
+            }
+            Behavior on y {
+                enabled: root.faceTrackingActive
+
+                NumberAnimation {
+                    duration: 200
+                    easing.type: Easing.OutQuad
+                }
+            }
         }
 
         Image {
@@ -328,6 +428,24 @@ Item {
                                                       + root.rightPupilOffset.x)
             y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y
                                                        + root.rightPupilOffset.y)
+
+            // Smooth transitions for face tracking
+            Behavior on x {
+                enabled: root.faceTrackingActive
+
+                NumberAnimation {
+                    duration: 200
+                    easing.type: Easing.OutQuad
+                }
+            }
+            Behavior on y {
+                enabled: root.faceTrackingActive
+
+                NumberAnimation {
+                    duration: 200
+                    easing.type: Easing.OutQuad
+                }
+            }
         }
     }
 
@@ -465,5 +583,33 @@ Item {
                             mouse.accepted = true;
                         }
                     }
+    }
+
+    // Face tracking status indicator
+    Rectangle {
+        anchors.margins: 10
+        anchors.right: parent.right
+        anchors.top: parent.top
+        color: root.faceTrackingActive ? "lime" : (faceTracker.enabled ? "orange" : "gray")
+        height: 20
+        opacity: 0.7
+        radius: 10
+        visible: faceTracker.enabled
+        width: 20
+
+        SequentialAnimation on opacity {
+            loops: Animation.Infinite
+            running: faceTracker.enabled && !root.faceTrackingActive
+
+            NumberAnimation {
+                duration: 500
+                to: 0.3
+            }
+
+            NumberAnimation {
+                duration: 500
+                to: 0.7
+            }
+        }
     }
 }
