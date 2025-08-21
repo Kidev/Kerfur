@@ -1,48 +1,61 @@
-import QtQuick
-import QtQuick.Controls
+// modules/Tools/qml/KSlider.qml
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import Qt.labs.synchronizer
 
 Slider {
     id: root
 
-    property real decimals: 1
-    property bool initialValueSet: false
-    property string settingName
-    property var settingsObject
-    property bool updatingFromSettings: false
+    // === Public API ===
+    // Name of the property in settingsObject to synchronize with (e.g. "ledScreenLedSize").
+    property string settingName: ""
+    // Object holding the property (e.g. KSettings instance).
+    property var settingsObject: null
 
-    // Don't use a binding for the value property to avoid loops
+    // Optional tuning, leave as-is if your uses already set from/to/step/etc. outside.
+    // Do NOT set a default "value:" here. Initial value comes from the model via Synchronizer.
 
-    // Set the initial value after creation
-    Component.onCompleted: {
-        root.updatingFromSettings = true;
-        root.value = root.settingsObject[root.settingName];
-        root.initialValueSet = true;
-        root.updatingFromSettings = false;
-    }
+    // Make instance names visible in logs
+    // (many instances already set objectName from outside; keep this as-is if you prefer)
+    // objectName: settingName
 
-    // Update the settings when the value changes
-    onValueChanged: {
-        if (root.initialValueSet && !root.updatingFromSettings) {
-            root.settingsObject[root.settingName] = value;
-        }
-    }
+    // Two-way sync between slider.value and settingsObject[settingName]
+    // Initial sync source is the model (sourceObject/sourceProperty), per Synchronizer rules.
+    Synchronizer on value {
+        id: sync
+        sourceObject: root.settingsObject
+        sourceProperty: root.settingName
 
-    // Monitor the settings object property with a timer
-    // This is a simple polling approach that avoids binding loops
-    Timer {
-        interval: 100
-        repeat: true
-        running: root.visible
+        // NOTE:
+        // "valueIgnored" happens when target setter doesn't emit a change signal.
+        // In QML, that's normal for no-op assignments (same value), so we silence those.
+        onValueIgnored: (obj, prop) => {
+            try {
+                const srcObj = root.settingsObject
+                const propName = root.settingName
+                // If either side is missing, nothing to do.
+                if (!srcObj || !propName) return;
 
-        onTriggered: {
-            if (!root.pressed && root.initialValueSet) {
-                var settingValue = root.settingsObject[root.settingName];
-                if (Math.abs(settingValue - root.value) > 0.001) {
-                    root.updatingFromSettings = true;
-                    root.value = settingValue;
-                    root.updatingFromSettings = false;
+                const srcVal = srcObj[propName]
+                const dstVal = (obj === root && prop === "value") ? root.value
+                : (obj && prop in obj ? obj[prop] : undefined)
+
+                // Only log if it *really* looks like a problematic ignore (value differs)
+                // No-op assigns (equal values) are expected and silenced.
+                if (dstVal !== srcVal) {
+                    console.log("qml:", "[", obj.objectName || propName, "]",
+                                "Value ignored for", prop, "on", obj)
                 }
+            } catch (e) {
+                // Fallback: never crash on logging
             }
+        }
+
+        onValueBounced: (obj, prop) => {
+            // "Bounced" means it tried to echo back; not an error.
+            // Keep silent by default; uncomment if you need to debug real loops.
+            // console.log("qml:", "[", obj.objectName || root.settingName, "]",
+            //             "Value bounced for", prop, "on", obj)
         }
     }
 }

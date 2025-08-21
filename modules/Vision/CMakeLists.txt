@@ -6,10 +6,22 @@ qt_add_qml_module(
     ${VISION_MODULE}
     URI "Vision"
     QML_FILES qml/CameraFeedDisplay.qml
-    SOURCES src/FaceTracker.cpp src/FaceTracker.hpp
-    RESOURCES opencv/haarcascade_frontalface_alt.xml
-    RESOURCE_PREFIX "/"
+    SOURCES src/FaceTracker.cpp
+            src/FaceTracker.hpp
+            src/AIFaceDetector.cpp
+            src/AIFaceDetector.hpp
 )
 
-target_link_libraries(${VISION_MODULE} PRIVATE ${OpenCV_LIBS} Qt6::Multimedia)
-target_include_directories(${VISION_MODULE} PRIVATE src ${OpenCV_INCLUDE_DIRS})
+find_package(OpenCV 4.8 REQUIRED COMPONENTS core imgproc objdetect dnn)
+
+target_link_libraries(${VISION_MODULE}
+    PRIVATE
+    ${OpenCV_LIBS}
+    Qt6::Multimedia
+)
+
+target_include_directories(${VISION_MODULE}
+    PRIVATE
+    src
+    ${OpenCV_INCLUDE_DIRS}
+)
