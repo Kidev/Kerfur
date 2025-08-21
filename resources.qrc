@@ -9,5 +9,6 @@
         <file>assets/favicon.ico</file>
         <file>assets/img/eyes_left_wink.png</file>
         <file>assets/img/eyes_right_wink.png</file>
+        <file>models/yunet_320x320.onnx</file>
     </qresource>
 </RCC>

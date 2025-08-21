@@ -20,7 +20,6 @@ find_package(
                MultimediaWidgets
                QuickControls2
 )
-find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect)
 
 qt_standard_project_setup(REQUIRES 6.5)
 if (QT_KNOWN_POLICY_QTP0004)

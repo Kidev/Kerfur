@@ -187,22 +187,64 @@ Rectangle {
                 width: parent.width - 20
             }
 
-            // Face Tracking Sensitivity
+            // Eye Movement Range
             Text {
                 color: "white"
-                text: "Face Sensitivity: " + faceTrackingSensitivitySlider.value.toFixed(2)
+                text: "Eye Movement Range: " + eyeMovementRangeSlider.value.toFixed(1)
             }
 
             KSlider {
-                id: faceTrackingSensitivitySlider
+                id: eyeMovementRangeSlider
 
-                decimals: 2
+                //decimals: 1
                 from: 0.1
-                settingName: "faceTrackingSensitivity"
+                settingName: "eyeMovementRange"
                 settingsObject: root.settings
                 to: 3.0
-                value: 1.0
+                //value: 1.0
                 width: parent.width - 20
+            }
+
+            // Detection Confidence
+            Text {
+                color: "white"
+                text: "Detection Confidence: " + detectionConfidenceSlider.value.toFixed(2)
+            }
+
+            Slider {
+                id: detectionConfidenceSlider
+
+                from: 0.3
+                to: 0.9
+                value: root.faceTracker ? root.faceTracker.detectionConfidence : 0.7
+                width: parent.width - 20
+
+                onValueChanged: {
+                    if (root.faceTracker) {
+                        root.faceTracker.detectionConfidence = value;
+                    }
+                }
+            }
+
+            // Tracking Smoothing
+            Text {
+                color: "white"
+                text: "Tracking Smoothing: " + trackingSmoothingSlider.value.toFixed(2)
+            }
+
+            Slider {
+                id: trackingSmoothingSlider
+
+                from: 0.0
+                to: 1.0
+                value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.3
+                width: parent.width - 20
+
+                onValueChanged: {
+                    if (root.faceTracker) {
+                        root.faceTracker.trackingSmoothing = value;
+                    }
+                }
             }
 
             // Visual Effects Section
@@ -238,7 +280,7 @@ Rectangle {
             KSlider {
                 id: blurMultiplierSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0
                 settingName: "blurMultiplier"
                 settingsObject: root.settings
@@ -255,7 +297,7 @@ Rectangle {
             KSlider {
                 id: upDownAngleSlider
 
-                decimals: 0
+                //decimals: 0
                 from: 0
                 settingName: "upDownAngle"
                 settingsObject: root.settings
@@ -272,7 +314,7 @@ Rectangle {
             KSlider {
                 id: leftRightAngleSlider
 
-                decimals: 0
+                //decimals: 0
                 from: 0
                 settingName: "leftRightAngle"
                 settingsObject: root.settings
@@ -289,7 +331,7 @@ Rectangle {
             KSlider {
                 id: spreadMinSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0.0
                 settingName: "maskSpreadAtMin"
                 settingsObject: root.settings
@@ -306,7 +348,7 @@ Rectangle {
             KSlider {
                 id: spreadMaxSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0.0
                 settingName: "maskSpreadAtMax"
                 settingsObject: root.settings
@@ -317,13 +359,13 @@ Rectangle {
             // Threshold min
             Text {
                 color: "white"
-                text: "threshold min: " + thresholdMinSlider.value.toFixed(2)
+                text: "Threshold min: " + thresholdMinSlider.value.toFixed(2)
             }
 
             KSlider {
                 id: thresholdMinSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0.0
                 settingName: "maskThresholdMin"
                 settingsObject: root.settings
@@ -340,7 +382,7 @@ Rectangle {
             KSlider {
                 id: thresholdMaxSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0.0
                 settingName: "maskThresholdMax"
                 settingsObject: root.settings
@@ -358,7 +400,7 @@ Rectangle {
             KSlider {
                 id: glowBlendModeSlider
 
-                decimals: 0
+                //decimals: 0
                 from: 0
                 settingName: "glowBlendMode"
                 settingsObject: root.settings
@@ -376,7 +418,7 @@ Rectangle {
             KSlider {
                 id: glowBloomSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0
                 settingName: "glowBloom"
                 settingsObject: root.settings
@@ -393,7 +435,7 @@ Rectangle {
             KSlider {
                 id: glowBlurAmountSlider
 
-                decimals: 3
+                //decimals: 3
                 from: 0
                 settingName: "glowBlurAmount"
                 settingsObject: root.settings
@@ -410,7 +452,7 @@ Rectangle {
             KSlider {
                 id: glowMaxBrightnessSlider
 
-                decimals: 2
+                //decimals: 2
                 from: 0
                 settingName: "glowMaxBrightness"
                 settingsObject: root.settings

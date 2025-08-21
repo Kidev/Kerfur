@@ -49,9 +49,10 @@ EXE_EXT := $(if $(filter 1,$(IS_WINDOWS)),.exe,)
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
 VERSION_TAG ?= "0.0.0"
-ASSETS_DIR ?= assets
-BUILD_DIR ?= build
-INSTALL_DIR ?= install
+ASSETS_DIR := assets
+BUILD_DIR := build
+INSTALL_DIR := install
+MODELS_DIR := models
 WASM_ARCH ?= wasm_multithread
 BUILD_NAME ?=
 BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
@@ -84,7 +85,19 @@ WASM_UPLOAD_SOCKET ?=
 WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
 
-all: clean desktop
+ifeq ($(DEBUG),1)
+BUILD_MODE := Debug
+else
+BUILD_MODE := Release
+endif
+
+all:
+	@echo "Building with Release configuration"
+	@$(MAKE) DEBUG=0 clean desktop
+
+debug:
+	@echo "Building with Debug configuration"
+	@$(MAKE) DEBUG=1 clean desktop
 
 setup-vcpkg:
 	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
@@ -95,6 +108,15 @@ setup-vcpkg:
 		echo "Bootstrapping vcpkg..."; \
 		cd $(VCPKG_ROOT) && ./bootstrap-vcpkg.sh -disableMetrics && \
 		./vcpkg install --triplet $(VCPKG_TRIPLET) --disable-metrics; \
+	fi
+
+download-models:
+	@if [ ! -f "${MODELS_DIR}/yunet_320x320.onnx" ]; then \
+		mkdir -p ${MODELS_DIR}; \
+		echo "Downloading YuNet face detection model..."; \
+		wget -O "${MODELS_DIR}/yunet_320x320.onnx" "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"; \
+	else \
+		echo "YuNet face detection model found"; \
 	fi
 
 repo:
@@ -216,7 +238,7 @@ desktop-build:
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
-desktop: setup-vcpkg desktop-build shortcut
+desktop: setup-vcpkg download-models desktop-build shortcut
 
 shortcut:
 ifeq ($(IS_WINDOWS),1)
@@ -254,6 +276,7 @@ emsdk:
 		6.7*) EMSDK_VERSION="3.1.50" ;; \
 		6.8*) EMSDK_VERSION="3.1.56" ;; \
 		6.9*) EMSDK_VERSION="3.1.70" ;; \
+		6.10*) EMSDK_VERSION="3.1.70" ;; \
 		*) \
 			echo "Error: Unsupported Qt version: $(QT_VERSION)"; \
 			exit 1; \
@@ -288,7 +311,7 @@ unpatch-web:
 	@echo Restore prior to web patch
 	@git restore .
 
-web: clean emsdk setup-vcpkg patch-web web-build unpatch-web
+web: clean emsdk setup-vcpkg download-models patch-web web-build unpatch-web
 
 web-build:
 	@. ./emsdk/emsdk_env.sh && \
@@ -355,5 +378,13 @@ clean:
 clean-vcpkg:
 	rm -rf $(VCPKG_ROOT) $(VCPKG_ROOT)_installed
 
-.PHONY: all setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean clean-vcpkg
-.IGNORE: clean clean-vcpkg
+clean-models:
+	rm -rf ${MODELS_DIR}
+
+clean-env:
+	rm -rf .env
+
+clean-all: clean clean-vcpkg clean-models
+
+.PHONY: all debug setup-vcpkg download-models repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean clean-vcpkg clean-models clean-env clean-all
+.IGNORE: clean clean-vcpkg clean-models clean-env clean-all

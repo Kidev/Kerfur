@@ -3,11 +3,13 @@ import QtQuick
 QtObject {
     id: root
 
+    objectName: "KSettings"
+
     property bool autoPaddingEnabled: true
     property real blurMultiplier: 1
+    property real eyeMovementRange: 1.0
     property bool faceTrackingDebug: false
     property bool faceTrackingEnabled: false
-    property real faceTrackingSensitivity: 1.0
     property int glowBlendMode: 1
     property real glowBloom: 1.0
     property real glowBlurAmount: 0.4

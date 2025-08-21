@@ -22,6 +22,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifdef DEBUG_BUILD
+#define DEBUG_LOG "true"
+#else
+#define DEBUG_LOG "false"
+#endif
+
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
@@ -34,7 +40,7 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
     app.setOrganizationName("Kidev");
 
-    QLoggingCategory::setFilterRules("*.ffmpeg.*=false\n*.multimedia.*=false");
+    QLoggingCategory::setFilterRules("*.ffmpeg.*=false\n*.multimedia.*=false\n*.warning=true\n*.debug=" % QStringLiteral(DEBUG_LOG) % "\nqt.*.debug=false");
 
     QQmlApplicationEngine engine;
 
