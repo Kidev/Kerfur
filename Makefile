@@ -1,7 +1,7 @@
 ifneq ("$(wildcard .env)","")
-$(info A '.env' file was found and included)
-include .env
-export
+  $(info A '.env' file was found and included)
+  include .env
+  export
 endif
 define MISSING_QT_ROOT
 Error: QT_ROOT_DIR is not defined!
@@ -21,7 +21,7 @@ You must fix this
 endef
 
 ifndef QT_ROOT_DIR
-$(error $(MISSING_QT_ROOT))
+  $(error $(MISSING_QT_ROOT))
 endif
 
 VCPKG_ROOT ?= $(shell pwd)/vcpkg
@@ -48,6 +48,7 @@ OS_NAME := $(if $(filter 1,$(IS_WINDOWS)),Windows,$(OS_NAME_UNAME))
 EXE_EXT := $(if $(filter 1,$(IS_WINDOWS)),.exe,)
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
+PROJECT_ORG := kidev
 VERSION_TAG ?= "0.0.0"
 ASSETS_DIR := assets
 BUILD_DIR := build
@@ -58,7 +59,7 @@ BUILD_NAME ?=
 BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
 BUILD_QUALIFIER := $(OS_NAME)$(BUILD_NAME)
 BUILD_MODE ?= Release
-BUILD_MODE_WEB ?= MinSizeRel
+BUILD_MODE_WEB_RELEASE ?= MinSizeRel
 BROTLI_EXTENSIONS ?= js css html wasm png ico wav mp3
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
 QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../$(WASM_ARCH))
@@ -86,18 +87,30 @@ WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
 
 ifeq ($(DEBUG),1)
-BUILD_MODE := Debug
+  BUILD_MODE := Debug
 else
-BUILD_MODE := Release
+  ifeq ($(WEB),1)
+    BUILD_MODE := $(BUILD_MODE_WEB_RELEASE)
+  else
+    BUILD_MODE := Release
+  endif
 endif
 
 all:
-	@echo "Building with Release configuration"
-	@$(MAKE) DEBUG=0 clean desktop
+	@echo "Building with Release configuration for desktop"
+	@$(MAKE) DEBUG=0 WEB=0 clean desktop ensure-config
 
 debug:
-	@echo "Building with Debug configuration"
-	@$(MAKE) DEBUG=1 clean desktop
+	@echo "Building with Debug configuration for desktop"
+	@$(MAKE) DEBUG=1 WEB=0 clean desktop ensure-config
+
+web:
+	@echo "Building with MinSizeRel configuration for web"
+	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg download-models web-build ensure-config
+
+web-debug:
+	@echo "Building with Debug configuration for web"
+	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg download-models web-build ensure-config
 
 setup-vcpkg:
 	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
@@ -224,6 +237,8 @@ setup-installer:
 desktop-build:
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
+	-DPROJECT_TITLE=$(PROJECT_TITLE) \
+	-DPROJECT_ORG=$(PROJECT_ORG) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=OFF \
@@ -303,22 +318,14 @@ emsdk:
 		source ./emsdk/emsdk_env.sh || { echo "Error: Failed to source environment"; exit 1; }; \
 	fi
 
-patch-web:
-	@echo Apply web patch
-	@git apply ./patches/web.patch
-
-unpatch-web:
-	@echo Restore prior to web patch
-	@git restore .
-
-web: clean emsdk setup-vcpkg download-models patch-web web-build unpatch-web
-
 web-build:
 	@. ./emsdk/emsdk_env.sh && \
 	emcmake \
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
-	-DCMAKE_BUILD_TYPE=$(BUILD_MODE_WEB) \
+	-DPROJECT_TITLE=$(PROJECT_TITLE) \
+	-DPROJECT_ORG=$(PROJECT_ORG) \
+	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=ON \
 	-DCMAKE_PREFIX_PATH=$(QT_ROOT_DIR_TARGET) \
@@ -371,6 +378,27 @@ run-web:
 	source ./emsdk/emsdk_env.sh && \
 	emrun $(ABS_INSTALL_DIR)/index.html --kill_start --kill_exit
 
+ensure-config:
+	@set -e; \
+	os="$$(uname -s 2>/dev/null)"; \
+	case "$$os" in \
+	  Darwin*) conf_dir="$$HOME/Library/Preferences/$(PROJECT_ORG)";; \
+	  MINGW*|MSYS*|CYGWIN*) \
+	    appdata="$${APPDATA:-}"; \
+	    if [ -z "$$appdata" ]; then conf_dir="$$HOME/AppData/Roaming/$(PROJECT_ORG)"; \
+	    else appdata="$${appdata//\\//}"; conf_dir="$$appdata/$(PROJECT_ORG)"; fi;; \
+	  *) conf_dir="$$HOME/.config/$(PROJECT_ORG)";; \
+	esac; \
+	conf_file="$$conf_dir/$(PROJECT_NAME).conf"; \
+	if [ -f "$$conf_file" ]; then \
+	  echo "Found existing $(PROJECT_NAME) config file: $$conf_file"; \
+	else \
+	  mkdir -p "$$conf_dir"; \
+	  val=$$([ "$(WEB)" = "1" ] && echo false || echo true); \
+	  echo "No $(PROJECT_NAME) config file found: creating $$conf_file with allowEscapeShortcut=$$var"; \
+	  { printf "[general]\n"; printf "allowEscapeShortcut=%s\n" "$$val"; } > "$$conf_file"; \
+	fi
+
 clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
 	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
@@ -386,5 +414,5 @@ clean-env:
 
 clean-all: clean clean-vcpkg clean-models
 
-.PHONY: all debug setup-vcpkg download-models repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk patch-web unpatch-web web web-build run-web clean clean-vcpkg clean-models clean-env clean-all
+.PHONY: all debug web web-debug setup-vcpkg download-models repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config clean clean-vcpkg clean-models clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-models clean-env clean-all

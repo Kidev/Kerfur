@@ -1,12 +1,10 @@
+import Display
 import QtQuick
 import QtQuick.Window
-import Display
 import Tools
 
 Window {
     id: root
-
-    readonly property bool allowEscapeShortcut: true
 
     function requestExit() {
         Qt.quit();
@@ -22,7 +20,7 @@ Window {
     }
 
     Shortcut {
-        enabled: root.allowEscapeShortcut
+        enabled: settings.allowEscapeShortcut
         sequence: "Esc"
 
         onActivated: root.requestExit()

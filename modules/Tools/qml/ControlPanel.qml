@@ -1,6 +1,6 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Window
 import Vision
 
 Rectangle {
@@ -89,8 +89,7 @@ Rectangle {
                     MouseArea {
                         anchors.fill: parent
 
-                        onClicked: root.settings.faceTrackingEnabled =
-                                   !root.settings.faceTrackingEnabled
+                        onClicked: root.settings.faceTrackingEnabled = !root.settings.faceTrackingEnabled
                     }
                 }
 
@@ -104,8 +103,7 @@ Rectangle {
             // Camera Resolution
             Text {
                 color: "white"
-                text: "Resolution: " + (root.faceTracker ? root.faceTracker.currentResolution :
-                                                           "Unknown")
+                text: "Resolution: " + (root.faceTracker ? root.faceTracker.currentResolution : "Unknown")
             }
 
             ComboBox {
@@ -113,8 +111,7 @@ Rectangle {
 
                 currentIndex: {
                     if (root.faceTracker && root.faceTracker.availableResolutions) {
-                        return root.faceTracker.availableResolutions.indexOf(
-                                    root.faceTracker.currentResolution);
+                        return root.faceTracker.availableResolutions.indexOf(root.faceTracker.currentResolution);
                     }
                     return 0;
                 }
@@ -196,12 +193,10 @@ Rectangle {
             KSlider {
                 id: eyeMovementRangeSlider
 
-                //decimals: 1
                 from: 0.1
                 settingName: "eyeMovementRange"
                 settingsObject: root.settings
                 to: 3.0
-                //value: 1.0
                 width: parent.width - 20
             }
 
@@ -280,7 +275,6 @@ Rectangle {
             KSlider {
                 id: blurMultiplierSlider
 
-                //decimals: 2
                 from: 0
                 settingName: "blurMultiplier"
                 settingsObject: root.settings
@@ -297,7 +291,6 @@ Rectangle {
             KSlider {
                 id: upDownAngleSlider
 
-                //decimals: 0
                 from: 0
                 settingName: "upDownAngle"
                 settingsObject: root.settings
@@ -314,7 +307,6 @@ Rectangle {
             KSlider {
                 id: leftRightAngleSlider
 
-                //decimals: 0
                 from: 0
                 settingName: "leftRightAngle"
                 settingsObject: root.settings
@@ -331,7 +323,6 @@ Rectangle {
             KSlider {
                 id: spreadMinSlider
 
-                //decimals: 2
                 from: 0.0
                 settingName: "maskSpreadAtMin"
                 settingsObject: root.settings
@@ -348,7 +339,6 @@ Rectangle {
             KSlider {
                 id: spreadMaxSlider
 
-                //decimals: 2
                 from: 0.0
                 settingName: "maskSpreadAtMax"
                 settingsObject: root.settings
@@ -365,7 +355,6 @@ Rectangle {
             KSlider {
                 id: thresholdMinSlider
 
-                //decimals: 2
                 from: 0.0
                 settingName: "maskThresholdMin"
                 settingsObject: root.settings
@@ -382,7 +371,6 @@ Rectangle {
             KSlider {
                 id: thresholdMaxSlider
 
-                //decimals: 2
                 from: 0.0
                 settingName: "maskThresholdMax"
                 settingsObject: root.settings
@@ -393,14 +381,12 @@ Rectangle {
             // Glow Blend Mode
             Text {
                 color: "white"
-                text: "Blend Mode: " + ["Additive", "Screen", "Replace",
-                    "Outer"][glowBlendModeSlider.value]
+                text: "Blend Mode: " + ["Additive", "Screen", "Replace", "Outer"][glowBlendModeSlider.value]
             }
 
             KSlider {
                 id: glowBlendModeSlider
 
-                //decimals: 0
                 from: 0
                 settingName: "glowBlendMode"
                 settingsObject: root.settings
@@ -418,7 +404,6 @@ Rectangle {
             KSlider {
                 id: glowBloomSlider
 
-                //decimals: 2
                 from: 0
                 settingName: "glowBloom"
                 settingsObject: root.settings
@@ -435,7 +420,6 @@ Rectangle {
             KSlider {
                 id: glowBlurAmountSlider
 
-                //decimals: 3
                 from: 0
                 settingName: "glowBlurAmount"
                 settingsObject: root.settings
@@ -452,7 +436,6 @@ Rectangle {
             KSlider {
                 id: glowMaxBrightnessSlider
 
-                //decimals: 2
                 from: 0
                 settingName: "glowMaxBrightness"
                 settingsObject: root.settings

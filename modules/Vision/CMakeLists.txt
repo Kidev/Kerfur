@@ -12,16 +12,14 @@ qt_add_qml_module(
             src/AIFaceDetector.hpp
 )
 
-find_package(OpenCV 4.8 REQUIRED COMPONENTS core imgproc objdetect dnn)
-
-target_link_libraries(${VISION_MODULE}
-    PRIVATE
-    ${OpenCV_LIBS}
-    Qt6::Multimedia
+find_package(
+    OpenCV 4.8 REQUIRED
+    COMPONENTS core
+               imgproc
+               objdetect
+               dnn
 )
 
-target_include_directories(${VISION_MODULE}
-    PRIVATE
-    src
-    ${OpenCV_INCLUDE_DIRS}
-)
+target_link_libraries(${VISION_MODULE} PRIVATE ${OpenCV_LIBS} Qt6::Multimedia)
+
+target_include_directories(${VISION_MODULE} PRIVATE src ${OpenCV_INCLUDE_DIRS})

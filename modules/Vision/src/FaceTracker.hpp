@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AIFaceDetector.hpp"
 #include <memory>
 #include <QCamera>
 #include <QCameraDevice>
@@ -12,7 +13,6 @@
 #include <QTimer>
 #include <QVideoFrame>
 #include <QVideoSink>
-#include "AIFaceDetector.hpp"
 
 class FaceTracker : public QObject
 {
@@ -27,10 +27,13 @@ class FaceTracker : public QObject
     Q_PROPERTY(QPointF facePixelCenter READ facePixelCenter NOTIFY facePixelCenterChanged)
     Q_PROPERTY(QSize facePixelSize READ facePixelSize NOTIFY facePixelSizeChanged)
     Q_PROPERTY(QString cameraFrameBase64 READ cameraFrameBase64 NOTIFY cameraFrameChanged)
-    Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY availableResolutionsChanged)
+    Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY
+                   availableResolutionsChanged)
     Q_PROPERTY(QString currentResolution READ currentResolution NOTIFY currentResolutionChanged)
-    Q_PROPERTY(qreal detectionConfidence READ detectionConfidence WRITE setDetectionConfidence NOTIFY detectionConfidenceChanged)
-    Q_PROPERTY(qreal trackingSmoothing READ trackingSmoothing WRITE setTrackingSmoothing NOTIFY trackingSmoothingChanged)
+    Q_PROPERTY(qreal detectionConfidence READ detectionConfidence WRITE setDetectionConfidence
+                   NOTIFY detectionConfidenceChanged)
+    Q_PROPERTY(qreal trackingSmoothing READ trackingSmoothing WRITE setTrackingSmoothing NOTIFY
+                   trackingSmoothingChanged)
 
 public:
     explicit FaceTracker(QObject *parent = nullptr);
@@ -77,8 +80,8 @@ private:
     void initializeCamera();
     void uninitializeCamera();
     void enumerateCameras();
-    void processFaceDetectionResults(const std::vector<AIFaceDetector::FaceInfo>& faces,
-                                     const QImage& displayImage);
+    void processFaceDetectionResults(const std::vector<AIFaceDetector::FaceInfo> &faces,
+                                     const QImage &displayImage);
 
     void setFaceDetected(bool detected);
     void setFaceCenter(const QPointF &center);
@@ -88,9 +91,9 @@ private:
     void setFacePixelSize(const QSize &size);
 
     // Face tracking state
-    bool m_enabled{false};
-    bool m_faceDetected{false};
-    QPointF m_faceCenter{0.5, 0.5};
+    bool m_enabled {false};
+    bool m_faceDetected {false};
+    QPointF m_faceCenter {0.5, 0.5};
     QString m_errorString;
     QImage m_cameraFrame;
     QPointF m_facePixelCenter;
@@ -101,24 +104,24 @@ private:
     QMediaCaptureSession m_captureSession;
     QVideoSink m_videoSink;
     QCameraDevice m_preferredCamera;
-    QSize m_requestedResolution{1920, 1080}; // Fixed at 1920x1080
+    QSize m_requestedResolution {1920, 1080}; // Fixed at 1920x1080
 
     // AI Face detection
     std::unique_ptr<AIFaceDetector> m_faceDetector;
 
     // Detection parameters
-    qreal m_detectionConfidence{0.7};
-    qreal m_trackingSmoothing{0.3};
+    qreal m_detectionConfidence {0.7};
+    qreal m_trackingSmoothing {0.3};
 
     // Timing and performance
     QTimer m_frameThrottleTimer;
     QTimer m_cameraRetryTimer;
 
     // Processing parameters
-    static constexpr int PROCESSING_INTERVAL_MS{33}; // ~30 FPS
+    static constexpr int PROCESSING_INTERVAL_MS {33}; // ~30 FPS
     QPointF m_lastKnownFaceCenter;
     QPointF m_lastKnownFacePixelCenter;
     QSize m_lastKnownFacePixelSize;
-    bool m_hasLastKnownPosition{false};
-    bool m_isInitializing{false};
+    bool m_hasLastKnownPosition {false};
+    bool m_isInitializing {false};
 };

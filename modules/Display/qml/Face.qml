@@ -1,8 +1,8 @@
-import QtQuick
-import QtQuick.Window
-import QtMultimedia
-import QtQuick.Effects
 import Qt.labs.synchronizer
+import QtMultimedia
+import QtQuick
+import QtQuick.Effects
+import QtQuick.Window
 import Tools
 import Vision
 
@@ -30,8 +30,8 @@ Item {
     property bool isTouched: false
     property bool isWinking: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
-    readonly property real leftOffset: ((root.targetLeftRightAngle - 90) / 90) * root.maxPupilMovement
-
+    readonly property real leftOffset: ((root.targetLeftRightAngle - 90) / 90)
+                                       * root.maxPupilMovement
     readonly property point leftPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool leftPupilVisible: true
     property bool maintainEyePosition: faceTracker.enabled && !faceTracker.faceDetected
@@ -49,15 +49,14 @@ Item {
     property bool pendingDoubleBlink: false
     readonly property point rightEyeCenter: Qt.point(90, 22)
     readonly property real rightOffset: ((root.targetUpDownAngle - 90) / 90) * root.maxPupilMovement
-
     readonly property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool rightPupilVisible: true
     required property KSettings settings
-    property int winkType: Face.WinkType.None
 
     // Properties for synchronization
     property real targetLeftRightAngle: 90
     property real targetUpDownAngle: 90
+    property int winkType: Face.WinkType.None
 
     function cancelDoubleBlink() {
         root.pendingDoubleBlink = false;
@@ -72,7 +71,9 @@ Item {
 
     function resetBlinkTimer() {
         if (root.allowsBlinks && !root.pendingDoubleBlink) {
-            blinkTimer.interval = Math.floor(Math.random() * (root.maxBlinkInterval - root.minBlinkInterval)) + root.minBlinkInterval;
+            blinkTimer.interval = Math.floor(Math.random() * (root.maxBlinkInterval
+                                                              - root.minBlinkInterval))
+                    + root.minBlinkInterval;
             blinkTimer.restart();
         }
     }
@@ -160,7 +161,6 @@ Item {
             }
         }
     ]
-
     transitions: [
         Transition {
             to: "meow"
@@ -230,14 +230,14 @@ Item {
                     root.allowsBlinks = true;
 
                     if (!root.isDoubleBlink && Math.random() < root.doubleBlinkChance &&
-                        !root.isTouched && !root.isWinking) {
+                            !root.isTouched && !root.isWinking) {
                         root.pendingDoubleBlink = true;
-                    doubleBlinkTimer.start();
-                        } else {
-                            root.resetBlinkTimer();
-                        }
+                        doubleBlinkTimer.start();
+                    } else {
+                        root.resetBlinkTimer();
+                    }
 
-                        root.isDoubleBlink = false;
+                    root.isDoubleBlink = false;
                 }
             }
         }
@@ -255,13 +255,12 @@ Item {
 
         sourceObject: root
         sourceProperty: "targetLeftRightAngle"
-
         targetObject: root.settings
         targetProperty: "leftRightAngle"
 
         onValueBounced: (object, property) => {
-            console.log("LeftRight value bounced for", property);
-        }
+                            console.log("LeftRight value bounced for", property);
+                        }
     }
 
     Synchronizer {
@@ -269,17 +268,17 @@ Item {
 
         sourceObject: root
         sourceProperty: "targetUpDownAngle"
-
         targetObject: root.settings
         targetProperty: "upDownAngle"
 
         onValueBounced: (object, property) => {
-            console.log("UpDown value bounced for", property);
-        }
+                            console.log("UpDown value bounced for", property);
+                        }
     }
 
     SoundEffect {
         id: dynamicSound
+
         volume: root.meowVolume
     }
 
@@ -294,16 +293,14 @@ Item {
                 centerReturnTimer.start();
             }
         }
-
         onErrorStringChanged: {
             if (errorString !== "") {
                 console.warn("FaceTracker error:", errorString);
             }
         }
-
         onFaceCenterChanged: {
             if (faceTracker.faceDetected && !root.isBlinking && !root.isTouched && !root.isWinking
-                && faceTracker.enabled) {
+                    && faceTracker.enabled) {
 
                 // Calculate relative movement from center (0.5, 0.5)
                 const faceRelativeX = faceCenter.x - 0.5; // Range: -0.5 to 0.5
@@ -311,29 +308,30 @@ Item {
 
                 // Apply eye movement range multiplier
                 const eyeMovementX = faceRelativeX * root.eyeMovementRange;
-            const eyeMovementY = faceRelativeY * root.eyeMovementRange;
+                const eyeMovementY = faceRelativeY * root.eyeMovementRange;
 
-            // Convert to angle range (90 degrees is center, 0-180 is full range)
-            const centerAngle = 90;
-            const maxAngleRange = 90; // 90 degrees in each direction from center
+                // Convert to angle range (90 degrees is center, 0-180 is full range)
+                const centerAngle = 90;
+                const maxAngleRange = 90; // 90 degrees in each direction from center
 
-            const newLeftRight = centerAngle + (eyeMovementX * maxAngleRange);
-            const newUpDown = centerAngle + (eyeMovementY * maxAngleRange);
+                const newLeftRight = centerAngle + (eyeMovementX * maxAngleRange);
+                const newUpDown = centerAngle + (eyeMovementY * maxAngleRange);
 
-            // Clamp to valid range (0-180)
-            const clampedLeftRight = Math.max(0, Math.min(180, newLeftRight));
-            const clampedUpDown = Math.max(0, Math.min(180, newUpDown));
+                // Clamp to valid range (0-180)
+                const clampedLeftRight = Math.max(0, Math.min(180, newLeftRight));
+                const clampedUpDown = Math.max(0, Math.min(180, newUpDown));
 
-            // Apply additional smoothing for more natural movement
-            const smoothingFactor = 0.15; // Additional smoothing on top of tracker smoothing
+                // Apply additional smoothing for more natural movement
+                const smoothingFactor = 0.15; // Additional smoothing on top of tracker smoothing
 
-            root.targetLeftRightAngle = root.targetLeftRightAngle +
-            (clampedLeftRight - root.targetLeftRightAngle) * smoothingFactor;
-            root.targetUpDownAngle = root.targetUpDownAngle +
-            (clampedUpDown - root.targetUpDownAngle) * smoothingFactor;
-                }
+                root.targetLeftRightAngle = root.targetLeftRightAngle + (clampedLeftRight
+                                                                         - root.targetLeftRightAngle)
+                        * smoothingFactor;
+                root.targetUpDownAngle = root.targetUpDownAngle + (clampedUpDown
+                                                                   - root.targetUpDownAngle)
+                        * smoothingFactor;
+            }
         }
-
         onFaceDetectedChanged: {
             if (!faceDetected && root.faceTrackingActive) {
                 // Face lost but tracking still active - do NOT return to center
@@ -364,7 +362,6 @@ Item {
                 steps = 0;
             }
         }
-
         onTriggered: {
             // Only return to center if face tracking is disabled
             if (!faceTracker.enabled && steps < maxSteps) {
@@ -373,17 +370,19 @@ Item {
                 const currentUpDown = root.targetUpDownAngle;
 
                 const returnSpeed = 0.1;
-                root.targetLeftRightAngle = currentLeftRight + (centerAngle - currentLeftRight) * returnSpeed;
-                root.targetUpDownAngle = currentUpDown + (centerAngle - currentUpDown) * returnSpeed;
+                root.targetLeftRightAngle = currentLeftRight + (centerAngle - currentLeftRight)
+                        * returnSpeed;
+                root.targetUpDownAngle = currentUpDown + (centerAngle - currentUpDown)
+                        * returnSpeed;
 
                 steps++;
 
                 // Stop when close enough to center
-                if (Math.abs(root.targetLeftRightAngle - centerAngle) < 1 &&
-                    Math.abs(root.targetUpDownAngle - centerAngle) < 1) {
+                if (Math.abs(root.targetLeftRightAngle - centerAngle) < 1 && Math.abs(
+                            root.targetUpDownAngle - centerAngle) < 1) {
                     stop();
-                steps = 0;
-                    }
+                    steps = 0;
+                }
             } else {
                 // Face tracking is still enabled, just stop the timer and maintain position
                 stop();
@@ -399,8 +398,10 @@ Item {
         property real relativeScaleWidth: displayImage.width / (displayImage.sourceSize.width)
 
         anchors.centerIn: parent
-        height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
-        width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
+        height: Math.min(root.height, root.width * (displayImage.sourceSize.height
+                                                    / displayImage.sourceSize.width))
+        width: Math.min(root.width, root.height * (displayImage.sourceSize.width
+                                                   / displayImage.sourceSize.height))
 
         Image {
             id: displayImage
@@ -424,7 +425,8 @@ Item {
             visible: root.leftPupilVisible
             width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
             x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + root.leftPupilOffset.x)
-            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + root.leftPupilOffset.y)
+            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y
+                                                       + root.leftPupilOffset.y)
 
             // Smooth transitions for face tracking
             Behavior on x {
@@ -435,7 +437,6 @@ Item {
                     easing.type: Easing.OutQuad
                 }
             }
-
             Behavior on y {
                 enabled: root.faceTrackingActive
 
@@ -453,8 +454,10 @@ Item {
             source: root.pathEyesPupil
             visible: root.rightPupilVisible
             width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
-            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + root.rightPupilOffset.x)
-            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + root.rightPupilOffset.y)
+            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x
+                                                      + root.rightPupilOffset.x)
+            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y
+                                                       + root.rightPupilOffset.y)
 
             // Smooth transitions for face tracking
             Behavior on x {
@@ -465,7 +468,6 @@ Item {
                     easing.type: Easing.OutQuad
                 }
             }
-
             Behavior on y {
                 enabled: root.faceTrackingActive
 
@@ -494,7 +496,6 @@ Item {
             hideSource: true
             sourceItem: displayContainer
         }
-
         source: ShaderEffectSource {
             hideSource: true
             sourceItem: displayImage
@@ -541,7 +542,8 @@ Item {
         onTriggered: {
             root.pendingDoubleBlink = false;
 
-            if (!root.isTouched && !root.isWinking && root.allowsBlinks && root.state === "normal") {
+            if (!root.isTouched && !root.isWinking && root.allowsBlinks && root.state
+                    === "normal") {
                 root.startDoubleBlink();
             } else {
                 root.resetBlinkTimer();
@@ -559,7 +561,6 @@ Item {
             root.cancelDoubleBlink();
             root.stopWinking();
         }
-
         onReleased: {
             root.isTouched = false;
         }
@@ -569,7 +570,8 @@ Item {
         id: pupilTrackingArea
 
         property bool maintainPosition: faceTracker.enabled && !faceTracker.faceDetected
-        property bool shouldTrack: !root.isBlinking && !root.isTouched && (!pupilTrackingArea.pressed || root.isWinking)
+        property bool shouldTrack: !root.isBlinking && !root.isTouched && (
+                                       !pupilTrackingArea.pressed || root.isWinking)
         property bool useFaceTracking: faceTracker.enabled && faceTracker.faceDetected
 
         acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -580,38 +582,38 @@ Item {
 
         onMouseXChanged: {
             if (!useFaceTracking && !maintainPosition && pupilTrackingArea.shouldTrack
-                && pupilTrackingArea.containsMouse) {
-                root.targetLeftRightAngle = (pupilTrackingArea.mouseX / pupilTrackingArea.width) * 180;
-                }
+                    && pupilTrackingArea.containsMouse) {
+                root.targetLeftRightAngle = (pupilTrackingArea.mouseX / pupilTrackingArea.width)
+                        * 180;
+            }
         }
-
         onMouseYChanged: {
             if (!useFaceTracking && !maintainPosition && pupilTrackingArea.shouldTrack
-                && pupilTrackingArea.containsMouse) {
-                root.targetUpDownAngle = (pupilTrackingArea.mouseY / pupilTrackingArea.height) * 180;
-                }
+                    && pupilTrackingArea.containsMouse) {
+                root.targetUpDownAngle = (pupilTrackingArea.mouseY / pupilTrackingArea.height)
+                        * 180;
+            }
         }
-
         onPressed: mouse => {
-            if (mouse.button === Qt.LeftButton) {
-                root.isTouched = true;
-                mouse.accepted = true;
-            } else if (mouse.button === Qt.RightButton) {
-                var winkSide = Math.random() < 0.5 ? Face.WinkType.Left : Face.WinkType.Right;
-                root.startWinking(winkSide);
-                mouse.accepted = true;
-            }
-        }
-
+                       if (mouse.button === Qt.LeftButton) {
+                           root.isTouched = true;
+                           mouse.accepted = true;
+                       } else if (mouse.button === Qt.RightButton) {
+                           var winkSide = Math.random() < 0.5 ? Face.WinkType.Left :
+                                                                Face.WinkType.Right;
+                           root.startWinking(winkSide);
+                           mouse.accepted = true;
+                       }
+                   }
         onReleased: mouse => {
-            if (mouse.button === Qt.LeftButton) {
-                root.isTouched = false;
-                mouse.accepted = true;
-            } else if (mouse.button === Qt.RightButton) {
-                root.stopWinking();
-                mouse.accepted = true;
-            }
-        }
+                        if (mouse.button === Qt.LeftButton) {
+                            root.isTouched = false;
+                            mouse.accepted = true;
+                        } else if (mouse.button === Qt.RightButton) {
+                            root.stopWinking();
+                            mouse.accepted = true;
+                        }
+                    }
     }
 
     // Face tracking status indicator

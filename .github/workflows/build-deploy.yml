@@ -20,7 +20,7 @@ jobs:
             artifact_name: linux-x64
             build_name: '-x64'
             qt_tools: 'tools_ifw'
-            build_command: 'make desktop'
+            build_command: 'make'
             installer_command: 'make installer'
 
           - name: 'Linux ARM64'
@@ -32,7 +32,7 @@ jobs:
             artifact_name: linux-arm64
             build_name: '-arm64'
             qt_tools: ''
-            build_command: 'make desktop'
+            build_command: 'make'
             installer_command: ''
 
           - name: 'Linux ARM64 (Bookworn GLIBC)'
@@ -44,7 +44,7 @@ jobs:
             artifact_name: bookworm-arm64-rpi
             build_name: '-arm64-rpi'
             qt_tools: 'tools_ifw'
-            build_command: 'make desktop'
+            build_command: 'make'
             installer_command: 'make installer'
 
           - name: 'Windows x64'
@@ -56,7 +56,7 @@ jobs:
             artifact_name: windows-x64
             build_name: '-x64'
             qt_tools: 'tools_ifw'
-            build_command: 'make desktop'
+            build_command: 'make'
             installer_command: 'make installer'
 
           - name: 'Windows ARM64'
@@ -68,7 +68,7 @@ jobs:
             artifact_name: windows-arm64
             build_name: '-arm64'
             qt_tools: ''
-            build_command: 'make desktop'
+            build_command: 'make'
             installer_command: ''
 
           - name: 'macOS-15 ARM64'
@@ -80,7 +80,7 @@ jobs:
             artifact_name: macos-15-arm64
             build_name: '-arm64'
             qt_tools: ''
-            build_command: 'make desktop'
+            build_command: 'make'
             installer_command: ''
 
           - name: 'Web'
