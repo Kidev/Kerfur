@@ -29,7 +29,12 @@ if (QT_KNOWN_POLICY_QTP0005)
     qt_policy(SET QTP0005 NEW)
 endif ()
 
-qt_add_executable(${PROJECT_NAME} ${SOURCES_CPP} ${SOURCES_EXTRA})
+qt_add_executable(
+    ${PROJECT_NAME}
+    ${SOURCES_CPP}
+    ${SOURCES_EXTRA}
+    ${MISC_EXTRA_FILES}
+)
 
 qt_add_shaders(
     ${PROJECT_NAME} ${PROJECT_NAME}_shaders

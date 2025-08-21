@@ -36,11 +36,13 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app {argc, argv};
-    app.setApplicationName("Kerfur");
+    app.setApplicationName(QStringLiteral(PROJECT_TITLE));
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
-    app.setOrganizationName("Kidev");
+    app.setOrganizationName(QStringLiteral(PROJECT_ORG));
 
-    QLoggingCategory::setFilterRules("*.ffmpeg.*=false\n*.multimedia.*=false\n*.warning=true\n*.debug=" % QStringLiteral(DEBUG_LOG) % "\nqt.*.debug=false");
+    QLoggingCategory::setFilterRules(
+        "*.ffmpeg.*=false\n*.multimedia.*=false\n*.warning=true\n*.debug=" %
+        QStringLiteral(DEBUG_LOG) % "\nqt.*.debug=false");
 
     QQmlApplicationEngine engine;
 

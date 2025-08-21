@@ -10,6 +10,14 @@ file(
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     shaders/*
 )
+set(
+    MISC_EXTRA_FILES
+    "Makefile"
+    "README.md"
+    "vcpkg.json"
+    "vcpkg-configuration.json"
+)
+set_source_files_properties(${MISC_EXTRA_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 set(RESOURCES_FILE "resources.qrc")
 
@@ -40,6 +48,8 @@ resolve_env_or_var(BUILD_NAME "" PROJECT_BUILD_NAME)
 add_definitions(-DVERSION_TAG="${PROJECT_VERSION}")
 add_definitions(-DBUILD_TIME="${PROJECT_BUILD_TIME}")
 add_definitions(-DBUILD_NAME="${PROJECT_BUILD_NAME}")
+add_definitions(-DPROJECT_TITLE="${PROJECT_TITLE}")
+add_definitions(-DPROJECT_ORG="${PROJECT_ORG}")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG_BUILD)
@@ -51,6 +61,7 @@ if (CCACHE_FOUND)
     message(STATUS "Using ccache")
 endif ()
 
+message(STATUS "${PROJECT_TITLE} by ${PROJECT_ORG}")
 message(STATUS "QT_INSTALL_DIR=${QT_INSTALL_DIR}")
 message(STATUS "QML_SOURCES_PATHS=${QML_SOURCES_PATHS}")
 message(STATUS "QT_PLUGIN_PATH=$ENV{QT_PLUGIN_PATH}")

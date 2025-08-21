@@ -123,6 +123,7 @@ Rectangle {
         // Click area for popup
         MouseArea {
             id: popupMouseArea
+
             acceptedButtons: Qt.LeftButton
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor

@@ -1,10 +1,10 @@
+import QtCore
 import QtQuick
 
 QtObject {
     id: root
 
-    objectName: "KSettings"
-
+    property bool allowEscapeShortcut: true
     property bool autoPaddingEnabled: true
     property real blurMultiplier: 1
     property real eyeMovementRange: 1.0
@@ -24,6 +24,8 @@ QtObject {
     property bool showControls: false
     property real upDownAngle: 90
 
+    objectName: "KSettings"
+
     Behavior on leftRightAngle {
         enabled: false
 
@@ -39,5 +41,34 @@ QtObject {
             duration: 300
             easing.type: Easing.OutQuad
         }
+    }
+
+    property Settings generalCategory: Settings {
+        property alias allowEscapeShortcut: root.allowEscapeShortcut
+
+        category: "general"
+    }
+
+    property Settings shaderCategory: Settings {
+        property alias autoPaddingEnabled: root.autoPaddingEnabled
+        property alias blurMultiplier: root.blurMultiplier
+        property alias eyeMovementRange: root.eyeMovementRange
+        property alias faceTrackingDebug: root.faceTrackingDebug
+        property alias faceTrackingEnabled: root.faceTrackingEnabled
+        property alias glowBlendMode: root.glowBlendMode
+        property alias glowBloom: root.glowBloom
+        property alias glowBlurAmount: root.glowBlurAmount
+        property alias glowColor: root.glowColor
+        property alias glowMaxBrightness: root.glowMaxBrightness
+        property alias ledScreenLedSize: root.ledScreenLedSize
+        property alias leftRightAngle: root.leftRightAngle
+        property alias maskSpreadAtMax: root.maskSpreadAtMax
+        property alias maskSpreadAtMin: root.maskSpreadAtMin
+        property alias maskThresholdMax: root.maskThresholdMax
+        property alias maskThresholdMin: root.maskThresholdMin
+        property alias showControls: root.showControls
+        property alias upDownAngle: root.upDownAngle
+
+        category: "shader"
     }
 }
