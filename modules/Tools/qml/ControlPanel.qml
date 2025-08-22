@@ -2,16 +2,16 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
 import Vision
+import qml 1.0
 
 Rectangle {
     id: root
 
     required property FaceTracker faceTracker
-    required property KSettings settings
 
     color: "#333333"
     opacity: 0.7
-    visible: root.settings.showControls
+    visible: KSettings.showControls
     z: 100
 
     Timer {
@@ -25,7 +25,7 @@ Rectangle {
 
         onTriggered: {
             hue = (hue + 0.005) % 1.0;
-            root.settings.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
+            KSettings.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
         }
     }
 
@@ -74,8 +74,8 @@ Rectangle {
                 spacing: 5
 
                 Rectangle {
-                    border.color: root.settings.faceTrackingEnabled ? "green" : "gray"
-                    color: root.settings.faceTrackingEnabled ? "lightgreen" : "darkgray"
+                    border.color: KSettings.faceTrackingEnabled ? "green" : "gray"
+                    color: KSettings.faceTrackingEnabled ? "lightgreen" : "darkgray"
                     height: 30
                     width: 60
 
@@ -83,13 +83,13 @@ Rectangle {
                         anchors.centerIn: parent
                         color: "black"
                         font.bold: true
-                        text: root.settings.faceTrackingEnabled ? "ON" : "OFF"
+                        text: KSettings.faceTrackingEnabled ? "ON" : "OFF"
                     }
 
                     MouseArea {
                         anchors.fill: parent
 
-                        onClicked: root.settings.faceTrackingEnabled = !root.settings.faceTrackingEnabled
+                        onClicked: KSettings.faceTrackingEnabled = !KSettings.faceTrackingEnabled
                     }
                 }
 
@@ -195,7 +195,6 @@ Rectangle {
 
                 from: 0.1
                 settingName: "eyeMovementRange"
-                settingsObject: root.settings
                 to: 3.0
                 width: parent.width - 20
             }
@@ -261,7 +260,6 @@ Rectangle {
 
                 from: 1
                 settingName: "ledScreenLedSize"
-                settingsObject: root.settings
                 to: 50
                 width: parent.width - 20
             }
@@ -277,7 +275,6 @@ Rectangle {
 
                 from: 0
                 settingName: "blurMultiplier"
-                settingsObject: root.settings
                 to: 5
                 width: parent.width - 20
             }
@@ -293,7 +290,6 @@ Rectangle {
 
                 from: 0
                 settingName: "upDownAngle"
-                settingsObject: root.settings
                 to: 180
                 width: parent.width - 20
             }
@@ -309,7 +305,6 @@ Rectangle {
 
                 from: 0
                 settingName: "leftRightAngle"
-                settingsObject: root.settings
                 to: 180
                 width: parent.width - 20
             }
@@ -325,7 +320,6 @@ Rectangle {
 
                 from: 0.0
                 settingName: "maskSpreadAtMin"
-                settingsObject: root.settings
                 to: 1.0
                 width: parent.width - 20
             }
@@ -341,7 +335,6 @@ Rectangle {
 
                 from: 0.0
                 settingName: "maskSpreadAtMax"
-                settingsObject: root.settings
                 to: 1.0
                 width: parent.width - 20
             }
@@ -357,7 +350,6 @@ Rectangle {
 
                 from: 0.0
                 settingName: "maskThresholdMin"
-                settingsObject: root.settings
                 to: 1.0
                 width: parent.width - 20
             }
@@ -373,7 +365,6 @@ Rectangle {
 
                 from: 0.0
                 settingName: "maskThresholdMax"
-                settingsObject: root.settings
                 to: 1.0
                 width: parent.width - 20
             }
@@ -389,7 +380,6 @@ Rectangle {
 
                 from: 0
                 settingName: "glowBlendMode"
-                settingsObject: root.settings
                 stepSize: 1
                 to: 3
                 width: parent.width - 20
@@ -406,7 +396,6 @@ Rectangle {
 
                 from: 0
                 settingName: "glowBloom"
-                settingsObject: root.settings
                 to: 2
                 width: parent.width - 20
             }
@@ -422,7 +411,6 @@ Rectangle {
 
                 from: 0
                 settingName: "glowBlurAmount"
-                settingsObject: root.settings
                 to: 1
                 width: parent.width - 20
             }
@@ -438,7 +426,6 @@ Rectangle {
 
                 from: 0
                 settingName: "glowMaxBrightness"
-                settingsObject: root.settings
                 to: 2
                 width: parent.width - 20
             }
@@ -463,7 +450,7 @@ Rectangle {
 
                         onClicked: {
                             colorAnimationTimer.running = false;
-                            root.settings.glowColor = Qt.rgba(0, 1, 1, 1);
+                            KSettings.glowColor = Qt.rgba(0, 1, 1, 1);
                         }
                     }
                 }
@@ -479,7 +466,7 @@ Rectangle {
 
                         onClicked: {
                             colorAnimationTimer.running = false;
-                            root.settings.glowColor = Qt.rgba(0, 1, 0, 1);
+                            KSettings.glowColor = Qt.rgba(0, 1, 0, 1);
                         }
                     }
                 }
@@ -495,7 +482,7 @@ Rectangle {
 
                         onClicked: {
                             colorAnimationTimer.running = false;
-                            root.settings.glowColor = Qt.rgba(1, 0, 1, 1);
+                            KSettings.glowColor = Qt.rgba(1, 0, 1, 1);
                         }
                     }
                 }

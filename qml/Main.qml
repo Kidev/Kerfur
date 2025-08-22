@@ -14,13 +14,8 @@ Window {
     visibility: Window.FullScreen
     visible: true
 
-    KSettings {
-        id: settings
-
-    }
-
     Shortcut {
-        enabled: settings.allowEscapeShortcut
+        enabled: KSettings.allowEscapeShortcut
         sequence: "Esc"
 
         onActivated: root.requestExit()
@@ -30,14 +25,13 @@ Window {
         enabled: true
         sequence: "Tab"
 
-        onActivated: settings.showControls = !settings.showControls
+        onActivated: KSettings.showControls = !KSettings.showControls
     }
 
     Face {
         id: face
 
         anchors.fill: parent
-        settings: settings
         visible: true
     }
 
@@ -48,7 +42,6 @@ Window {
         anchors.top: parent.top
         faceTracker: face.faceTracker
         height: parent.height
-        settings: settings
         width: 150
     }
 }

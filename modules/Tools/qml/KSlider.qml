@@ -1,12 +1,13 @@
 import Qt.labs.synchronizer
 import QtQuick
 import QtQuick.Controls
+import qml
 
 Slider {
     id: root
 
     property string settingName: ""
-    property var settingsObject: null
+    property var settingsObject: KSettings
 
     Synchronizer on value {
         id: sync

@@ -1,18 +1,18 @@
 import QtQuick
 import Tools
+import qml 1.0
 
 Item {
     id: root
 
-    property real blurMultiplier: root.settings.blurMultiplier
-    property int glowBlendMode: root.settings.glowBlendMode
-    property real glowBloom: root.settings.glowBloom
-    property real glowBlurAmount: root.settings.glowBlurAmount
-    property color glowColor: root.settings.glowColor
-    property real glowMaxBrightness: root.settings.glowMaxBrightness
-    property color ledScreenLedColor: root.settings.glowColor
-    property real ledScreenLedSize: root.settings.ledScreenLedSize
-    required property KSettings settings
+    property real blurMultiplier: KSettings.blurMultiplier
+    property int glowBlendMode: KSettings.glowBlendMode
+    property real glowBloom: KSettings.glowBloom
+    property real glowBlurAmount: KSettings.glowBlurAmount
+    property color glowColor: KSettings.glowColor
+    property real glowMaxBrightness: KSettings.glowMaxBrightness
+    property color ledScreenLedColor: KSettings.glowColor
+    property real ledScreenLedSize: KSettings.ledScreenLedSize
     property Item source: null
 
     ShaderEffect {
@@ -37,8 +37,7 @@ Item {
 
             hideSource: true
             sourceItem: root.source
-            textureSize: Qt.size(root.source.width / root.ledScreenLedSize, root.source.height
-                                 / root.ledScreenLedSize)
+            textureSize: Qt.size(root.source.width / root.ledScreenLedSize, root.source.height / root.ledScreenLedSize)
         }
     }
 

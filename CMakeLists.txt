@@ -48,7 +48,8 @@ add_subdirectory(modules)
 qt_add_qml_module(
     ${PROJECT_NAME}
     URI "qml"
-    QML_FILES qml/Main.qml
+    VERSION 1.0
+    QML_FILES ${SOURCES_QML} ${SOURCES_QML_SINGLETON}
     DEPENDENCIES TARGET
                  Vision
                  Tools
