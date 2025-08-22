@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import qml 1.0
 
 Rectangle {
     id: root
@@ -19,32 +20,11 @@ Rectangle {
         readonly property real displayAspectRatio: width > 0 ? width / height : 1
 
         // Calculate scaling factors for overlay positioning
-        readonly property real imageAspectRatio: sourceSize.width > 0 ? sourceSize.width
-                                                                        / sourceSize.height : 1
-        readonly property real offsetX: imageAspectRatio > displayAspectRatio ? (width
-                                                                                 - paintedWidth)
-                                                                                / 2 : (width
-                                                                                       - sourceSize.width
-                                                                                       * scaleY
-                                                                                       * imageAspectRatio)
-                                                                                / 2
-        readonly property real offsetY: imageAspectRatio > displayAspectRatio ? (height
-                                                                                 - sourceSize.height
-                                                                                 * scaleX
-                                                                                 / imageAspectRatio)
-                                                                                / 2 : (height
-                                                                                       - paintedHeight)
-                                                                                / 2
-        readonly property real scaleX: imageAspectRatio > displayAspectRatio ? paintedWidth
-                                                                               / sourceSize.width :
-                                                                               paintedHeight
-                                                                               / sourceSize.height
-                                                                               * imageAspectRatio
-        readonly property real scaleY: imageAspectRatio > displayAspectRatio ? paintedWidth
-                                                                               / sourceSize.width
-                                                                               / imageAspectRatio :
-                                                                               paintedHeight
-                                                                               / sourceSize.height
+        readonly property real imageAspectRatio: sourceSize.width > 0 ? sourceSize.width / sourceSize.height : 1
+        readonly property real offsetX: imageAspectRatio > displayAspectRatio ? (width - paintedWidth) / 2 : (width - sourceSize.width * scaleY * imageAspectRatio) / 2
+        readonly property real offsetY: imageAspectRatio > displayAspectRatio ? (height - sourceSize.height * scaleX / imageAspectRatio) / 2 : (height - paintedHeight) / 2
+        readonly property real scaleX: imageAspectRatio > displayAspectRatio ? paintedWidth / sourceSize.width : paintedHeight / sourceSize.height * imageAspectRatio
+        readonly property real scaleY: imageAspectRatio > displayAspectRatio ? paintedWidth / sourceSize.width / imageAspectRatio : paintedHeight / sourceSize.height
 
         anchors.fill: parent
         anchors.margins: 2
@@ -52,8 +32,7 @@ Rectangle {
         cache: false
         fillMode: Image.PreserveAspectFit
         smooth: true
-        source: root.faceTracker && root.faceTracker.enabled ? root.faceTracker.cameraFrameBase64 :
-                                                               ""
+        source: root.faceTracker && root.faceTracker.enabled ? root.faceTracker.cameraFrameBase64 : ""
 
         // Face detection overlay - ONLY the green rectangle
         Rectangle {
@@ -62,17 +41,11 @@ Rectangle {
             border.color: "lime"
             border.width: 2
             color: "transparent"
-            height: faceOverlay.visible ? root.faceTracker.facePixelSize.height
-                                          * cameraImage.scaleY : 0
-            visible: root.faceTracker && root.faceTracker.faceDetected && cameraImage.status
-                     === Image.Ready && cameraImage.sourceSize.width > 0
-                     && cameraImage.paintedWidth > 0
-            width: faceOverlay.visible ? root.faceTracker.facePixelSize.width * cameraImage.scaleX :
-                                         0
-            x: faceOverlay.visible ? cameraImage.offsetX + root.faceTracker.facePixelCenter.x
-                                     * cameraImage.scaleX - width / 2 : 0
-            y: faceOverlay.visible ? cameraImage.offsetY + root.faceTracker.facePixelCenter.y
-                                     * cameraImage.scaleY - height / 2 : 0
+            height: faceOverlay.visible ? root.faceTracker.facePixelSize.height * cameraImage.scaleY : 0
+            visible: root.faceTracker && root.faceTracker.faceDetected && cameraImage.status === Image.Ready && cameraImage.sourceSize.width > 0 && cameraImage.paintedWidth > 0
+            width: faceOverlay.visible ? root.faceTracker.facePixelSize.width * cameraImage.scaleX : 0
+            x: faceOverlay.visible ? cameraImage.offsetX + root.faceTracker.facePixelCenter.x * cameraImage.scaleX - width / 2 : 0
+            y: faceOverlay.visible ? cameraImage.offsetY + root.faceTracker.facePixelCenter.y * cameraImage.scaleY - height / 2 : 0
 
             Behavior on height {
                 enabled: faceOverlay.visible
@@ -127,8 +100,7 @@ Rectangle {
             acceptedButtons: Qt.LeftButton
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            enabled: root.faceTracker && root.faceTracker.enabled && cameraImage.status
-                     === Image.Ready
+            enabled: root.faceTracker && root.faceTracker.enabled && cameraImage.status === Image.Ready
             propagateComposedEvents: false
 
             onClicked: mouse => {
@@ -242,20 +214,15 @@ Rectangle {
                     readonly property real popupOffsetY: (height - paintedHeight) / 2
 
                     // Calculate scaling for popup
-                    readonly property real popupScaleX: sourceSize.width > 0 ? paintedWidth
-                                                                               / sourceSize.width :
-                                                                               1
-                    readonly property real popupScaleY: sourceSize.height > 0 ? paintedHeight
-                                                                                / sourceSize.height :
-                                                                                1
+                    readonly property real popupScaleX: sourceSize.width > 0 ? paintedWidth / sourceSize.width : 1
+                    readonly property real popupScaleY: sourceSize.height > 0 ? paintedHeight / sourceSize.height : 1
 
                     anchors.fill: parent
                     asynchronous: true
                     cache: false
                     fillMode: Image.PreserveAspectFit
                     smooth: true
-                    source: root.faceTracker && root.faceTracker.enabled
-                            ? root.faceTracker.cameraFrameBase64 : ""
+                    source: root.faceTracker && root.faceTracker.enabled ? root.faceTracker.cameraFrameBase64 : ""
 
                     // Face detection overlay for popup
                     Rectangle {
@@ -264,19 +231,11 @@ Rectangle {
                         border.color: "lime"
                         border.width: 3
                         color: "transparent"
-                        height: popupFaceOverlay.visible ? root.faceTracker.facePixelSize.height
-                                                           * popupImage.popupScaleY : 0
-                        visible: root.faceTracker && root.faceTracker.faceDetected
-                                 && popupImage.status === Image.Ready
-                                 && popupImage.sourceSize.width > 0
-                        width: popupFaceOverlay.visible ? root.faceTracker.facePixelSize.width
-                                                          * popupImage.popupScaleX : 0
-                        x: popupFaceOverlay.visible ? popupImage.popupOffsetX
-                                                      + root.faceTracker.facePixelCenter.x
-                                                      * popupImage.popupScaleX - width / 2 : 0
-                        y: popupFaceOverlay.visible ? popupImage.popupOffsetY
-                                                      + root.faceTracker.facePixelCenter.y
-                                                      * popupImage.popupScaleY - height / 2 : 0
+                        height: popupFaceOverlay.visible ? root.faceTracker.facePixelSize.height * popupImage.popupScaleY : 0
+                        visible: root.faceTracker && root.faceTracker.faceDetected && popupImage.status === Image.Ready && popupImage.sourceSize.width > 0
+                        width: popupFaceOverlay.visible ? root.faceTracker.facePixelSize.width * popupImage.popupScaleX : 0
+                        x: popupFaceOverlay.visible ? popupImage.popupOffsetX + root.faceTracker.facePixelCenter.x * popupImage.popupScaleX - width / 2 : 0
+                        y: popupFaceOverlay.visible ? popupImage.popupOffsetY + root.faceTracker.facePixelCenter.y * popupImage.popupScaleY - height / 2 : 0
 
                         // Center dot
                         Rectangle {
@@ -391,8 +350,7 @@ Rectangle {
 
                                 currentIndex: {
                                     if (root.faceTracker && root.faceTracker.availableResolutions) {
-                                        return root.faceTracker.availableResolutions.indexOf(
-                                            root.faceTracker.currentResolution);
+                                        return root.faceTracker.availableResolutions.indexOf(root.faceTracker.currentResolution);
                                     }
                                     return 0;
                                 }
@@ -420,8 +378,7 @@ Rectangle {
                                     required property string modelData
 
                                     height: 25
-                                    highlighted: popupResolutionCombo.highlightedIndex
-                                                 === delegateItem.index
+                                    highlighted: popupResolutionCombo.highlightedIndex === delegateItem.index
                                     width: popupResolutionCombo.width
 
                                     background: Rectangle {
@@ -449,14 +406,12 @@ Rectangle {
                                         clip: true
                                         currentIndex: popupResolutionCombo.highlightedIndex
                                         implicitHeight: contentHeight
-                                        model: popupResolutionCombo.popup.visible
-                                               ? popupResolutionCombo.delegateModel : null
+                                        model: popupResolutionCombo.popup.visible ? popupResolutionCombo.delegateModel : null
                                     }
                                 }
 
                                 onCurrentTextChanged: {
-                                    if (root.faceTracker && currentText
-                                        !== root.faceTracker.currentResolution) {
+                                    if (root.faceTracker && currentText !== root.faceTracker.currentResolution) {
                                         root.faceTracker.setResolution(currentText);
                                     }
                                 }
@@ -466,9 +421,7 @@ Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: "lightgray"
                                 font.pixelSize: 9
-                                text: "Current: " + (root.faceTracker
-                                                     ? root.faceTracker.currentResolution :
-                                                       "Unknown")
+                                text: "Current: " + (root.faceTracker ? root.faceTracker.currentResolution : "Unknown")
                             }
                         }
 
@@ -561,11 +514,7 @@ Rectangle {
 
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
-                                color: root.faceTracker && root.faceTracker.faceDetected ? "lime" : (
-                                                                                               root.faceTracker
-                                                                                               && root.faceTracker.enabled
-                                                                                               ? "orange" :
-                                                                                                 "gray")
+                                color: root.faceTracker && root.faceTracker.faceDetected ? "lime" : (root.faceTracker && root.faceTracker.enabled ? "orange" : "gray")
                                 height: 12
                                 radius: 6
                                 width: 12
@@ -577,11 +526,10 @@ Rectangle {
                                 font.pixelSize: 10
                                 text: {
                                     if (!root.faceTracker || !root.faceTracker.enabled)
-                                    return "Disabled";
+                                        return "Disabled";
                                     if (root.faceTracker.errorString !== "")
-                                    return "Error";
-                                    return root.faceTracker.faceDetected ? "Face Detected" :
-                                                                           "Searching for Face";
+                                        return "Error";
+                                    return root.faceTracker.faceDetected ? "Face Detected" : "Searching for Face";
                                 }
                             }
                         }
@@ -593,8 +541,7 @@ Rectangle {
                             text: {
                                 var info = "";
                                 if (root.faceTracker && popupImage.sourceSize.width > 0) {
-                                    info += "Display: " + popupImage.sourceSize.width + "×"
-                                    + popupImage.sourceSize.height + " • ";
+                                    info += "Display: " + popupImage.sourceSize.width + "×" + popupImage.sourceSize.height + " • ";
                                     info += "Detection: Haar cascade with preprocessing";
                                 }
                                 return info;

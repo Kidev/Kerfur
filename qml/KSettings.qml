@@ -1,3 +1,5 @@
+pragma Singleton
+
 import QtCore
 import QtQuick
 
@@ -10,6 +12,13 @@ QtObject {
     property real eyeMovementRange: 1.0
     property bool faceTrackingDebug: false
     property bool faceTrackingEnabled: false
+    property Settings general: Settings {
+        id: settingsGeneral
+
+        property alias allowEscapeShortcut: root.allowEscapeShortcut
+
+        category: "General"
+    }
     property int glowBlendMode: 1
     property real glowBloom: 1.0
     property real glowBlurAmount: 0.4
@@ -21,35 +30,9 @@ QtObject {
     property real maskSpreadAtMin: 0
     property real maskThresholdMax: 1.0
     property real maskThresholdMin: 0.25
-    property bool showControls: false
-    property real upDownAngle: 90
+    property Settings shader: Settings {
+        id: settingsShader
 
-    objectName: "KSettings"
-
-    Behavior on leftRightAngle {
-        enabled: false
-
-        NumberAnimation {
-            duration: 300
-            easing.type: Easing.OutQuad
-        }
-    }
-    Behavior on upDownAngle {
-        enabled: false
-
-        NumberAnimation {
-            duration: 300
-            easing.type: Easing.OutQuad
-        }
-    }
-
-    property Settings generalCategory: Settings {
-        property alias allowEscapeShortcut: root.allowEscapeShortcut
-
-        category: "general"
-    }
-
-    property Settings shaderCategory: Settings {
         property alias autoPaddingEnabled: root.autoPaddingEnabled
         property alias blurMultiplier: root.blurMultiplier
         property alias eyeMovementRange: root.eyeMovementRange
@@ -69,6 +52,25 @@ QtObject {
         property alias showControls: root.showControls
         property alias upDownAngle: root.upDownAngle
 
-        category: "shader"
+        category: "Shader"
+    }
+    property bool showControls: false
+    property real upDownAngle: 90
+
+    Behavior on leftRightAngle {
+        enabled: false
+
+        NumberAnimation {
+            duration: 300
+            easing.type: Easing.OutQuad
+        }
+    }
+    Behavior on upDownAngle {
+        enabled: false
+
+        NumberAnimation {
+            duration: 300
+            easing.type: Easing.OutQuad
+        }
     }
 }

@@ -10,6 +10,13 @@ file(
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     shaders/*
 )
+file(
+    GLOB_RECURSE SOURCES_QML
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    qml/*.qml
+)
+
+set(SOURCES_QML_SINGLETON "qml/KSettings.qml")
 set(
     MISC_EXTRA_FILES
     "Makefile"
@@ -17,9 +24,11 @@ set(
     "vcpkg.json"
     "vcpkg-configuration.json"
 )
-set_source_files_properties(${MISC_EXTRA_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-
 set(RESOURCES_FILE "resources.qrc")
+
+set_source_files_properties(${MISC_EXTRA_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(${SOURCES_QML_SINGLETON} PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(${SOURCES_QML_SINGLETON} PROPERTIES QT_RESOURCE_ALIAS KSettings.qml)
 
 resolve_env_or_var(QT_ROOT_DIR "" QT_INSTALL_DIR)
 
@@ -50,6 +59,7 @@ add_definitions(-DBUILD_TIME="${PROJECT_BUILD_TIME}")
 add_definitions(-DBUILD_NAME="${PROJECT_BUILD_NAME}")
 add_definitions(-DPROJECT_TITLE="${PROJECT_TITLE}")
 add_definitions(-DPROJECT_ORG="${PROJECT_ORG}")
+add_definitions(-DPROJECT_DOMAIN="${PROJECT_DOMAIN}")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG_BUILD)

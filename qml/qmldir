@@ -1,0 +1,2 @@
+module qml
+singleton KSettings 1.0 KSettings.qml

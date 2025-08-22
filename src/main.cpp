@@ -35,14 +35,16 @@
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app {argc, argv};
-    app.setApplicationName(QStringLiteral(PROJECT_TITLE));
-    app.setApplicationVersion(QStringLiteral(VERSION_TAG));
-    app.setOrganizationName(QStringLiteral(PROJECT_ORG));
+    QCoreApplication::setOrganizationName(QStringLiteral(PROJECT_ORG));
+    QCoreApplication::setOrganizationDomain(QStringLiteral(PROJECT_DOMAIN));
+    QCoreApplication::setApplicationName(QStringLiteral(PROJECT_TITLE));
 
     QLoggingCategory::setFilterRules(
         "*.ffmpeg.*=false\n*.multimedia.*=false\n*.warning=true\n*.debug=" %
         QStringLiteral(DEBUG_LOG) % "\nqt.*.debug=false");
+
+    QGuiApplication app {argc, argv};
+    app.setApplicationVersion(QStringLiteral(VERSION_TAG));
 
     QQmlApplicationEngine engine;
 

@@ -49,6 +49,8 @@ EXE_EXT := $(if $(filter 1,$(IS_WINDOWS)),.exe,)
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
 PROJECT_ORG := kidev
+PROJECT_TLD := org
+PROJECT_DOMAIN := $(PROJECT_ORG).$(PROJECT_TLD)
 VERSION_TAG ?= "0.0.0"
 ASSETS_DIR := assets
 BUILD_DIR := build
@@ -75,8 +77,8 @@ QT_TOOLS_DIR := $(QT_ROOT_DIR)/../../Tools
 SHELL = /bin/bash
 QT_IFW_VERSION ?= $(shell ls "$(QT_TOOLS_DIR)/QtInstallerFramework" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+' | sort -V | tail -1)
 INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
-REPO_NAME ?= org_kidev_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
-TARGET_PACKAGE ?= org.kidev.$(PROJECT_BINARY).$(BUILD_QUALIFIER)
+REPO_NAME ?= $(PROJECT_TLD)_$(PROJECT_ORG)_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
+TARGET_PACKAGE ?= $(PROJECT_TLD).$(PROJECT_ORG).$(PROJECT_BINARY).$(BUILD_QUALIFIER)
 INSTALLER_NAME ?= $(PROJECT_TITLE)Installer-$(BUILD_QUALIFIER)
 SCRIPT_EXT := $(if $(filter 1,$(IS_WINDOWS)),.bat,)
 CDN_UPLOAD_SOCKET ?=
@@ -176,8 +178,8 @@ setup-installer:
 	@echo '    <Name>$(PROJECT_TITLE) Installer for $(BUILD_QUALIFIER)</Name>' >> installer/config/config.xml
 	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/config.xml
 	@echo '    <Title>$(PROJECT_TITLE) Installer</Title>' >> installer/config/config.xml
-	@echo '    <Publisher>Kidev.org</Publisher>' >> installer/config/config.xml
-	@echo '    <ProductUrl>https://www.kidev.org</ProductUrl>' >> installer/config/config.xml
+	@echo '    <Publisher>$(PROJECT_ORG)</Publisher>' >> installer/config/config.xml
+	@echo '    <ProductUrl>https://www.$(PROJECT_DOMAIN)</ProductUrl>' >> installer/config/config.xml
 	@echo '    <InstallerWindowIcon>icon</InstallerWindowIcon>' >> installer/config/config.xml
 	@echo '    <InstallerApplicationIcon>icon</InstallerApplicationIcon>' >> installer/config/config.xml
 	@echo '    <Banner>banner.png</Banner>' >> installer/config/config.xml
@@ -200,8 +202,8 @@ setup-installer:
 	@echo '    <RepositorySettingsPageVisible>false</RepositorySettingsPageVisible>' >> installer/config/config.xml
 	@echo '    <RemoteRepositories>' >> installer/config/config.xml
 	@echo '        <Repository>' >> installer/config/config.xml
-	@echo '            <DisplayName>Kidev.org CDN</DisplayName>' >> installer/config/config.xml
-	@echo '            <Url>https://cdn.kidev.org/$(BUILD_QUALIFIER)</Url>' >> installer/config/config.xml
+	@echo '            <DisplayName>$(PROJECT_DOMAIN) CDN</DisplayName>' >> installer/config/config.xml
+	@echo '            <Url>https://cdn.$(PROJECT_DOMAIN)/$(BUILD_QUALIFIER)</Url>' >> installer/config/config.xml
 	@echo '            <Enabled>1</Enabled>' >> installer/config/config.xml
 	@echo '        </Repository>' >> installer/config/config.xml
 	@echo '    </RemoteRepositories>' >> installer/config/config.xml
@@ -210,7 +212,7 @@ setup-installer:
 	@echo '<?xml version="1.0"?>' > installer/config/meta/package.xml
 	@echo '<Package>' >> installer/config/meta/package.xml
 	@echo '    <DisplayName>$(PROJECT_TITLE)</DisplayName>' >> installer/config/meta/package.xml
-	@echo '    <Description>$(PROJECT_TITLE) by Kidev.org</Description>' >> installer/config/meta/package.xml
+	@echo '    <Description>$(PROJECT_TITLE) by $(PROJECT_DOMAIN)</Description>' >> installer/config/meta/package.xml
 	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/meta/package.xml
 	@echo '    <ReleaseDate>$(BUILD_TIME)</ReleaseDate>' >> installer/config/meta/package.xml
 	@echo '    <Name>$(TARGET_PACKAGE)</Name>' >> installer/config/meta/package.xml
@@ -239,6 +241,7 @@ desktop-build:
 	-DVERSION_TAG=$(VERSION_TAG) \
 	-DPROJECT_TITLE=$(PROJECT_TITLE) \
 	-DPROJECT_ORG=$(PROJECT_ORG) \
+	-DPROJECT_DOMAIN=$(PROJECT_DOMAIN) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=OFF \
@@ -325,6 +328,7 @@ web-build:
 	-DVERSION_TAG=$(VERSION_TAG) \
 	-DPROJECT_TITLE=$(PROJECT_TITLE) \
 	-DPROJECT_ORG=$(PROJECT_ORG) \
+	-DPROJECT_DOMAIN=$(PROJECT_DOMAIN) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=ON \
@@ -389,14 +393,14 @@ ensure-config:
 	    else appdata="$${appdata//\\//}"; conf_dir="$$appdata/$(PROJECT_ORG)"; fi;; \
 	  *) conf_dir="$$HOME/.config/$(PROJECT_ORG)";; \
 	esac; \
-	conf_file="$$conf_dir/$(PROJECT_NAME).conf"; \
+	conf_file="$$conf_dir/$(PROJECT_TITLE).conf"; \
 	if [ -f "$$conf_file" ]; then \
-	  echo "Found existing $(PROJECT_NAME) config file: $$conf_file"; \
+	  echo "Found existing $(PROJECT_TITLE) config file: $$conf_file"; \
 	else \
 	  mkdir -p "$$conf_dir"; \
 	  val=$$([ "$(WEB)" = "1" ] && echo false || echo true); \
-	  echo "No $(PROJECT_NAME) config file found: creating $$conf_file with allowEscapeShortcut=$$var"; \
-	  { printf "[general]\n"; printf "allowEscapeShortcut=%s\n" "$$val"; } > "$$conf_file"; \
+	  echo "No $(PROJECT_TITLE) config file found: creating $$conf_file"; \
+	  echo -e "[General]\nallowEscapeShortcut=$$val\n\n[Shader]" > "$$conf_file"; \
 	fi
 
 clean:
