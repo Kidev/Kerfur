@@ -398,10 +398,14 @@ ensure-config:
 	  echo "Found existing $(PROJECT_TITLE) config file: $$conf_file"; \
 	else \
 	  mkdir -p "$$conf_dir"; \
-	  val=$$([ "$(WEB)" = "1" ] && echo false || echo true); \
-	  echo "No $(PROJECT_TITLE) config file found: creating $$conf_file"; \
-	  echo -e "[General]\nallowEscapeShortcut=$$val\n\n[Shader]" > "$$conf_file"; \
-	fi
+	  if [ $(WEB) == 1 ]; then \
+	    echo "No $(PROJECT_TITLE) config file: creating web default config at $$conf_file"; \
+	    cp "cfg/web.conf" "$$conf_file"; \
+	  else \
+	    echo "No $(PROJECT_TITLE) config file: creating desktop default config at $$conf_file"; \
+	    cp "cfg/desktop.conf" "$$conf_file"; \
+	  fi \
+	fi;
 
 clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
