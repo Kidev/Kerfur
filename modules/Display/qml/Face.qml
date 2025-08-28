@@ -5,6 +5,7 @@ import QtQuick.Effects
 import QtQuick.Window
 import Tools
 import Vision
+import Hearing
 import qml 1.0
 
 Item {
@@ -276,6 +277,24 @@ Item {
         id: dynamicSound
 
         volume: root.meowVolume
+    }
+
+    SpeechRecognizer {
+        id: speechRecognizer
+
+        enabled: KSettings.speechRecognitionEnabled // Add this setting to KSettings.qml
+
+        onKerfurHeard: {
+            // Trigger meow when "kerfur" is heard
+            if (!root.isTouched && !root.isWinking && !root.isBlinking) {
+                root.isTouched = true;
+                root.playMeowSound();
+            }
+        }
+
+        onSentenceRecognized: (text, confidence) => {
+            console.log("Heard:", text, "with confidence:", confidence);
+        }
     }
 
     FaceTracker {

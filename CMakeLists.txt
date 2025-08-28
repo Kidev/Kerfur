@@ -54,6 +54,7 @@ qt_add_qml_module(
                  Vision
                  Tools
                  Display
+                 Hearing
     RESOURCES ${RESOURCES_FILE}
 )
 
@@ -71,6 +72,7 @@ target_link_libraries(
            Vision
            Tools
            Display
+           Hearing
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})

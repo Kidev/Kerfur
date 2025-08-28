@@ -1,5 +1,7 @@
 {
   "dependencies": [
-    "opencv"
+    "opencv",
+    "whisper-cpp",
+    "ggml"
   ]
 }

@@ -19,6 +19,14 @@ QtObject {
 
         category: "General"
     }
+    property Settings speech: Settings {
+        id: settingsSpeech
+
+        property alias speechRecognitionEnabled: root.speechRecognitionEnabled
+        property alias speechRecognitionDebug: root.speechRecognitionDebug
+
+        category: "Speech"
+    }
     property int glowBlendMode: 1
     property real glowBloom: 1.0
     property real glowBlurAmount: 0.4
@@ -56,6 +64,8 @@ QtObject {
     }
     property bool showControls: false
     property real upDownAngle: 90
+    property bool speechRecognitionEnabled: false
+    property bool speechRecognitionDebug: false
 
     Behavior on leftRightAngle {
         enabled: false
