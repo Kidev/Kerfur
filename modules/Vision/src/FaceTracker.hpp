@@ -118,7 +118,7 @@ private:
     QTimer m_cameraRetryTimer;
 
     // Processing parameters
-    static constexpr int PROCESSING_INTERVAL_MS {33}; // ~30 FPS
+    static constexpr int PROCESSING_INTERVAL_MS {100}; // ~10 FPS instead of 30 FPS
     QPointF m_lastKnownFaceCenter;
     QPointF m_lastKnownFacePixelCenter;
     QSize m_lastKnownFacePixelSize;

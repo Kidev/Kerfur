@@ -13,15 +13,15 @@
 #include <QVideoFrameFormat>
 
 FaceTracker::FaceTracker(QObject *parent)
-    : QObject {parent}
-    , m_camera {this}
-    , m_captureSession {this}
-    , m_videoSink {this}
-    , m_frameThrottleTimer {this}
-    , m_cameraRetryTimer {this}
-    , m_requestedResolution {1920, 1080}
-    , m_detectionConfidence {0.7}
-    , m_trackingSmoothing {0.3}
+: QObject {parent}
+, m_camera {this}
+, m_captureSession {this}
+, m_videoSink {this}
+, m_frameThrottleTimer {this}
+, m_cameraRetryTimer {this}
+, m_requestedResolution {1920, 1080}
+, m_detectionConfidence {0.6}      // Lower default confidence to detect more faces
+, m_trackingSmoothing {0.7}        // Higher smoothing to reduce jitter
 {
     // Initialize AI face detector
     m_faceDetector = std::make_unique<AIFaceDetector>();
@@ -29,7 +29,7 @@ FaceTracker::FaceTracker(QObject *parent)
         setErrorString("Failed to initialize AI face detector: " + m_faceDetector->getLastError());
     }
 
-    // Setup frame throttling
+    // Setup frame throttling - reduce frequency to reduce jitter
     m_frameThrottleTimer.setSingleShot(true);
     m_frameThrottleTimer.setInterval(PROCESSING_INTERVAL_MS);
 
