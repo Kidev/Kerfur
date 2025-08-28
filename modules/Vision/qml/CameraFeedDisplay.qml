@@ -51,7 +51,7 @@ Rectangle {
                 enabled: faceOverlay.visible
 
                 NumberAnimation {
-                    duration: 200
+                    duration: 300
                     easing.type: Easing.OutQuad
                 }
             }
@@ -59,7 +59,7 @@ Rectangle {
                 enabled: faceOverlay.visible
 
                 NumberAnimation {
-                    duration: 200
+                    duration: 300
                     easing.type: Easing.OutQuad
                 }
             }
@@ -69,7 +69,7 @@ Rectangle {
                 enabled: faceOverlay.visible
 
                 NumberAnimation {
-                    duration: 150
+                    duration: 250
                     easing.type: Easing.OutQuad
                 }
             }
@@ -77,7 +77,7 @@ Rectangle {
                 enabled: faceOverlay.visible
 
                 NumberAnimation {
-                    duration: 150
+                    duration: 250
                     easing.type: Easing.OutQuad
                 }
             }
@@ -86,55 +86,51 @@ Rectangle {
             Rectangle {
                 anchors.centerIn: parent
                 color: "red"
-                height: 3
-                radius: 1.5
+                height: 4
+                radius: 2
                 visible: faceOverlay.visible
-                width: 3
+                width: 4
             }
         }
 
-        // Click area for popup
+        // Click area for popup - make it more reliable
         MouseArea {
             id: popupMouseArea
 
             acceptedButtons: Qt.LeftButton
             anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
             enabled: root.faceTracker && root.faceTracker.enabled && cameraImage.status === Image.Ready
-            propagateComposedEvents: false
 
-            onClicked: mouse => {
-                if (enabled) {
-                    mouse.accepted = true;
-                    popup.open();
-                }
+            onClicked: (mouse) => {
+                mouse.accepted = true;
+                popup.open();
             }
-        }
 
-        Rectangle {
-            id: hoverRect
+            // Visual feedback on hover
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 2
+                border.color: "white"
+                border.width: 1
+                color: "transparent"
+                opacity: 0
+                visible: popupMouseArea.enabled
 
-            anchors.fill: parent
-            anchors.margins: 2
-            border.color: "white"
-            border.width: 1
-            color: "transparent"
-            opacity: 0
-            visible: parent.enabled
+                states: State {
+                    name: "hovered"
+                    when: popupMouseArea.containsMouse && popupMouseArea.enabled
 
-            states: State {
-                name: "hovered"
-                when: popupMouseArea.containsMouse
-
-                PropertyChanges {
-                    opacity: 0.3
-                    target: hoverRect
+                    PropertyChanges {
+                        opacity: 0.3
+                        target: parent
+                    }
                 }
-            }
-            transitions: Transition {
-                NumberAnimation {
-                    duration: 200
-                    property: "opacity"
+                transitions: Transition {
+                    NumberAnimation {
+                        duration: 200
+                        property: "opacity"
+                    }
                 }
             }
         }
@@ -176,15 +172,15 @@ Rectangle {
         text: getStatusText()
     }
 
-    // Camera feed popup
+    // Camera feed popup - simplified without resolution controls
     Popup {
         id: popup
 
         anchors.centerIn: Overlay.overlay
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        height: Overlay.overlay ? Overlay.overlay.height * 0.75 : 300
+        height: Overlay.overlay ? Overlay.overlay.height * 0.8 : 400
         modal: true
-        width: Overlay.overlay ? Overlay.overlay.width * 0.75 : 400
+        width: Overlay.overlay ? Overlay.overlay.width * 0.8 : 600
 
         // Overlay background dimming
         Overlay.modal: Rectangle {
@@ -199,25 +195,70 @@ Rectangle {
 
         Column {
             anchors.fill: parent
-            anchors.margins: 10
-            spacing: 10
+            anchors.margins: 15
+            spacing: 15
+
+            // Header
+            Item {
+                width: parent.width
+                height: 30
+
+                Text {
+                    color: "white"
+                    font.bold: true
+                    font.pixelSize: 16
+                    text: "Camera Feed"
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Close button
+                Button {
+                    id: closeButton
+
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    font.bold: true
+                    font.pixelSize: 16
+                    height: 30
+                    text: "✕"
+                    width: 30
+
+                    background: Rectangle {
+                        color: closeButton.hovered ? "#ff4444" : "#666666"
+                        opacity: 0.8
+                        radius: 15
+                    }
+                    contentItem: Text {
+                        color: "white"
+                        font: closeButton.font
+                        horizontalAlignment: Text.AlignHCenter
+                        text: closeButton.text
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    onClicked: popup.close()
+                }
+            }
 
             // Large camera image
-            Item {
-                height: parent.height - controlsPanel.height - parent.spacing
+            Rectangle {
                 width: parent.width
+                height: parent.height - controlsPanel.height - parent.spacing - 50
+                color: "#000"
+                border.color: "#444"
+                border.width: 1
 
                 Image {
                     id: popupImage
 
                     readonly property real popupOffsetX: (width - paintedWidth) / 2
                     readonly property real popupOffsetY: (height - paintedHeight) / 2
-
-                    // Calculate scaling for popup
                     readonly property real popupScaleX: sourceSize.width > 0 ? paintedWidth / sourceSize.width : 1
                     readonly property real popupScaleY: sourceSize.height > 0 ? paintedHeight / sourceSize.height : 1
 
                     anchors.fill: parent
+                    anchors.margins: 1
                     asynchronous: true
                     cache: false
                     fillMode: Image.PreserveAspectFit
@@ -241,313 +282,156 @@ Rectangle {
                         Rectangle {
                             anchors.centerIn: parent
                             color: "red"
-                            height: 6
-                            radius: 3
+                            height: 8
+                            radius: 4
                             visible: popupFaceOverlay.visible
-                            width: 6
+                            width: 8
                         }
 
                         // Face label for popup
-                        Text {
+                        Rectangle {
                             anchors.bottom: parent.top
-                            anchors.bottomMargin: 8
+                            anchors.bottomMargin: 10
                             anchors.horizontalCenter: parent.horizontalCenter
-                            color: "lime"
-                            font.bold: true
-                            font.pixelSize: 12
-                            text: "DETECTED FACE"
+                            color: "#C0000000"
+                            height: faceLabel.height + 8
+                            radius: 4
                             visible: popupFaceOverlay.visible
+                            width: faceLabel.width + 16
 
-                            Rectangle {
+                            Text {
+                                id: faceLabel
                                 anchors.centerIn: parent
-                                anchors.margins: -4
-                                color: "#C0000000"
-                                height: parent.height + 8
-                                radius: 4
-                                width: parent.width + 8
-                                z: -1
+                                color: "lime"
+                                font.bold: true
+                                font.pixelSize: 12
+                                text: "FACE DETECTED"
                             }
                         }
                     }
                 }
-
-                // Close button overlay
-                Button {
-                    id: closeButton
-
-                    anchors.margins: 10
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    font.bold: true
-                    font.pixelSize: 16
-                    height: 30
-                    text: "×"
-                    width: 30
-                    z: 10
-
-                    background: Rectangle {
-                        color: closeButton.hovered ? "#ff4444" : "#666666"
-                        opacity: 0.8
-                        radius: 15
-                    }
-                    contentItem: Text {
-                        color: "white"
-                        font: closeButton.font
-                        horizontalAlignment: Text.AlignHCenter
-                        text: closeButton.text
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    onClicked: popup.close()
-                }
             }
 
-            // Camera controls panel below the image
+            // Camera controls panel - simplified
             Rectangle {
                 id: controlsPanel
 
                 color: "#C0000000"
-                height: 200
+                height: 120
                 radius: 6
                 width: parent.width
 
-                Flickable {
+                Column {
                     anchors.fill: parent
                     anchors.margins: 15
-                    clip: true
-                    contentHeight: controlsContent.height
+                    spacing: 12
 
-                    Column {
-                        id: controlsContent
-
-                        spacing: 8
+                    // Detection Confidence
+                    Row {
+                        spacing: 15
                         width: parent.width
 
-                        // Info header
                         Text {
+                            anchors.verticalCenter: parent.verticalCenter
                             color: "white"
-                            font.bold: true
-                            font.pixelSize: 12
-                            text: "Camera Settings"
-                            width: parent.width
+                            font.pixelSize: 11
+                            text: "Detection Confidence:"
+                            width: 120
                         }
 
-                        // Resolution control
-                        Row {
-                            spacing: 10
-                            width: parent.width
+                        Slider {
+                            id: confidenceSlider
 
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "white"
-                                font.pixelSize: 10
-                                text: "Resolution:"
-                                width: 70
-                            }
+                            from: 0.3
+                            height: 25
+                            to: 0.9
+                            value: root.faceTracker ? root.faceTracker.detectionConfidence : 0.7
+                            width: 150
 
-                            ComboBox {
-                                id: popupResolutionCombo
-
-                                currentIndex: {
-                                    if (root.faceTracker && root.faceTracker.availableResolutions) {
-                                        return root.faceTracker.availableResolutions.indexOf(root.faceTracker.currentResolution);
-                                    }
-                                    return 0;
-                                }
-                                height: 25
-                                model: root.faceTracker ? root.faceTracker.availableResolutions : []
-                                width: 120
-
-                                background: Rectangle {
-                                    border.color: "#777777"
-                                    border.width: 1
-                                    color: "#555555"
-                                    radius: 3
-                                }
-                                contentItem: Text {
-                                    color: "white"
-                                    font.pixelSize: 9
-                                    leftPadding: 6
-                                    text: popupResolutionCombo.displayText
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                delegate: ItemDelegate {
-                                    id: delegateItem
-
-                                    required property int index
-                                    required property string modelData
-
-                                    height: 25
-                                    highlighted: popupResolutionCombo.highlightedIndex === delegateItem.index
-                                    width: popupResolutionCombo.width
-
-                                    background: Rectangle {
-                                        color: delegateItem.highlighted ? "#666666" : "transparent"
-                                    }
-                                    contentItem: Text {
-                                        color: "white"
-                                        font.pixelSize: 9
-                                        text: delegateItem.modelData
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                }
-                                popup: Popup {
-                                    implicitHeight: contentItem.implicitHeight
-                                    padding: 1
-                                    width: popupResolutionCombo.width
-                                    y: popupResolutionCombo.height - 1
-
-                                    background: Rectangle {
-                                        border.color: "#777777"
-                                        color: "#555555"
-                                        radius: 3
-                                    }
-                                    contentItem: ListView {
-                                        clip: true
-                                        currentIndex: popupResolutionCombo.highlightedIndex
-                                        implicitHeight: contentHeight
-                                        model: popupResolutionCombo.popup.visible ? popupResolutionCombo.delegateModel : null
-                                    }
-                                }
-
-                                onCurrentTextChanged: {
-                                    if (root.faceTracker && currentText !== root.faceTracker.currentResolution) {
-                                        root.faceTracker.setResolution(currentText);
-                                    }
-                                }
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "lightgray"
-                                font.pixelSize: 9
-                                text: "Current: " + (root.faceTracker ? root.faceTracker.currentResolution : "Unknown")
-                            }
-                        }
-
-                        // Detection Confidence
-                        Row {
-                            spacing: 10
-                            width: parent.width
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "white"
-                                font.pixelSize: 10
-                                text: "Confidence:"
-                                width: 70
-                            }
-
-                            Slider {
-                                id: confidenceSlider
-
-                                from: 0.3
-                                height: 20
-                                to: 0.9
-                                value: root.faceTracker ? root.faceTracker.detectionConfidence : 0.7
-                                width: 100
-
-                                onValueChanged: {
-                                    if (root.faceTracker) {
-                                        root.faceTracker.detectionConfidence = value;
-                                    }
-                                }
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "lightgray"
-                                font.pixelSize: 9
-                                text: confidenceSlider.value.toFixed(2)
-                            }
-                        }
-
-                        // Tracking Smoothing
-                        Row {
-                            spacing: 10
-                            width: parent.width
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "white"
-                                font.pixelSize: 10
-                                text: "Smoothing:"
-                                width: 70
-                            }
-
-                            Slider {
-                                id: smoothingSlider
-
-                                from: 0.0
-                                height: 20
-                                to: 1.0
-                                value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.3
-                                width: 100
-
-                                onValueChanged: {
-                                    if (root.faceTracker) {
-                                        root.faceTracker.trackingSmoothing = value;
-                                    }
-                                }
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "lightgray"
-                                font.pixelSize: 9
-                                text: smoothingSlider.value.toFixed(2)
-                            }
-                        }
-
-                        // Status info
-                        Row {
-                            spacing: 10
-                            width: parent.width
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "white"
-                                font.pixelSize: 10
-                                text: "Status:"
-                                width: 70
-                            }
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: root.faceTracker && root.faceTracker.faceDetected ? "lime" : (root.faceTracker && root.faceTracker.enabled ? "orange" : "gray")
-                                height: 12
-                                radius: 6
-                                width: 12
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "lightgray"
-                                font.pixelSize: 10
-                                text: {
-                                    if (!root.faceTracker || !root.faceTracker.enabled)
-                                        return "Disabled";
-                                    if (root.faceTracker.errorString !== "")
-                                        return "Error";
-                                    return root.faceTracker.faceDetected ? "Face Detected" : "Searching for Face";
+                            onValueChanged: {
+                                if (root.faceTracker) {
+                                    root.faceTracker.detectionConfidence = value;
                                 }
                             }
                         }
 
-                        // Performance info
                         Text {
+                            anchors.verticalCenter: parent.verticalCenter
                             color: "lightgray"
-                            font.pixelSize: 9
-                            text: {
-                                var info = "";
-                                if (root.faceTracker && popupImage.sourceSize.width > 0) {
-                                    info += "Display: " + popupImage.sourceSize.width + "×" + popupImage.sourceSize.height + " • ";
-                                    info += "Detection: Haar cascade with preprocessing";
+                            font.pixelSize: 10
+                            text: confidenceSlider.value.toFixed(2)
+                        }
+                    }
+
+                    // Tracking Smoothing
+                    Row {
+                        spacing: 15
+                        width: parent.width
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "white"
+                            font.pixelSize: 11
+                            text: "Tracking Smoothing:"
+                            width: 120
+                        }
+
+                        Slider {
+                            id: smoothingSlider
+
+                            from: 0.0
+                            height: 25
+                            to: 1.0
+                            value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.3
+                            width: 150
+
+                            onValueChanged: {
+                                if (root.faceTracker) {
+                                    root.faceTracker.trackingSmoothing = value;
                                 }
-                                return info;
                             }
-                            width: parent.width
-                            wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "lightgray"
+                            font.pixelSize: 10
+                            text: smoothingSlider.value.toFixed(2)
+                        }
+                    }
+
+                    // Status info
+                    Row {
+                        spacing: 15
+                        width: parent.width
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "white"
+                            font.pixelSize: 11
+                            text: "Status:"
+                            width: 120
+                        }
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.faceTracker && root.faceTracker.faceDetected ? "lime" : (root.faceTracker && root.faceTracker.enabled ? "orange" : "gray")
+                            height: 12
+                            radius: 6
+                            width: 12
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "lightgray"
+                            font.pixelSize: 11
+                            text: {
+                                if (!root.faceTracker || !root.faceTracker.enabled)
+                                    return "Face tracking disabled";
+                                if (root.faceTracker.errorString !== "")
+                                    return "Error: " + root.faceTracker.errorString;
+                                return root.faceTracker.faceDetected ? "Face detected and tracking" : "Searching for face...";
+                            }
                         }
                     }
                 }

@@ -12,7 +12,7 @@ WhisperEngine::WhisperEngine(QObject *parent)
 {
     // Setup processing timer
     m_processTimer = new QTimer(this);
-    m_processTimer->setInterval(500); // Process every 500ms
+    m_processTimer->setInterval(1000); // Process every 1 second (less frequent for better transcription)
     connect(m_processTimer, &QTimer::timeout, this, &WhisperEngine::processAudioBuffer);
 }
 
@@ -47,22 +47,27 @@ bool WhisperEngine::initialize(const QString &modelPath)
             "models/ggml-tiny.en.bin",
             "../models/ggml-tiny.en.bin",
             "../../models/ggml-tiny.en.bin",
-            QDir::homePath() + "/.local/share/kerfur/models/ggml-tiny.en.bin"
+            QDir::homePath() + "/.local/share/kerfur/models/ggml-tiny.en.bin",
+            "./ggml-tiny.en.bin",
+            "ggml-tiny.en.bin"
         };
 
-        bool found = false;
+        QString foundPath;
         for (const auto &path : searchPaths) {
             if (QFile::exists(path)) {
                 qDebug() << "Found model at:" << path;
-                return loadModel(path);
+                foundPath = path;
+                break;
             }
         }
 
-        if (!found) {
-            m_lastError = "Could not find Whisper model. Please run 'make download-models'";
+        if (foundPath.isEmpty()) {
+            m_lastError = "Could not find Whisper model. Please run 'make setup-models' or place ggml-tiny.en.bin in the models/ directory";
             qWarning() << m_lastError;
             return false;
         }
+
+        return loadModel(foundPath);
     }
 
     return loadModel(modelPath);
@@ -71,9 +76,11 @@ bool WhisperEngine::initialize(const QString &modelPath)
 bool WhisperEngine::loadModel(const QString &modelPath)
 {
     try {
-        // Initialize whisper with the new API
+        qDebug() << "Loading Whisper model from:" << modelPath;
+
+        // Initialize whisper context params - be more conservative with GPU
         struct whisper_context_params cparams = whisper_context_default_params();
-        cparams.use_gpu = true;  // Try to use GPU if available
+        cparams.use_gpu = false;  // Disable GPU to avoid issues, use CPU only
 
         m_context = whisper_init_from_file_with_params(modelPath.toUtf8().constData(), cparams);
 
@@ -86,26 +93,28 @@ bool WhisperEngine::loadModel(const QString &modelPath)
         // Setup default parameters for English transcription
         *m_params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
 
+        // Configure parameters for real-time processing
         m_params->print_realtime = false;
         m_params->print_progress = false;
         m_params->print_timestamps = false;
         m_params->print_special = false;
         m_params->translate = m_translate;
         m_params->language = m_language.toUtf8().constData();
-        m_params->n_threads = 4; // Use 4 threads for processing
+        m_params->n_threads = std::min(4, static_cast<int>(std::thread::hardware_concurrency())); // Use available threads but max 4
         m_params->n_max_text_ctx = 16384;
         m_params->offset_ms = 0;
         m_params->duration_ms = 0;
-        m_params->single_segment = false;
+        m_params->single_segment = false; // Allow multiple segments
         m_params->max_tokens = 0;
-
-        // These fields may not exist in newer versions, so we comment them out
-        // m_params->speed_up = false;  // This field doesn't exist anymore
         m_params->suppress_blank = true;
-        // m_params->suppress_non_speech_tokens = true;  // This field doesn't exist anymore
 
-        // For real-time processing
-        m_params->no_context = true;
+        // For better real-time performance
+        m_params->no_context = false; // Keep context for better accuracy
+        m_params->audio_ctx = 1500; // Reduce audio context for real-time
+
+        // Temperature settings for more stable output
+        m_params->temperature = 0.0f; // Use greedy decoding for deterministic output
+        m_params->temperature_inc = 0.0f;
 
         m_initialized = true;
         m_lastError.clear();
@@ -114,6 +123,7 @@ bool WhisperEngine::loadModel(const QString &modelPath)
         m_processTimer->start();
 
         qDebug() << "WhisperEngine initialized successfully with model:" << modelPath;
+        qDebug() << "Using" << m_params->n_threads << "threads for processing";
         return true;
 
     } catch (const std::exception &e) {
@@ -136,6 +146,7 @@ void WhisperEngine::processAudio(const std::vector<float> &samples)
     // Keep buffer size reasonable (max 30 seconds)
     const int maxBufferSize = SAMPLE_RATE * 30;
     if (m_audioBuffer.size() > maxBufferSize) {
+        // Remove older audio, keep most recent
         m_audioBuffer.erase(m_audioBuffer.begin(),
                             m_audioBuffer.begin() + (m_audioBuffer.size() - maxBufferSize));
     }
@@ -151,18 +162,24 @@ void WhisperEngine::processAudioBuffer()
     {
         QMutexLocker locker{&m_bufferMutex};
 
-        // Need at least minimum samples
+        // Need at least minimum samples for meaningful transcription
         if (m_audioBuffer.size() < MIN_SAMPLES_FOR_PROCESSING) {
             m_processing = false;
             return;
         }
 
-        // Take a chunk for processing
+        // Take a larger chunk for better transcription accuracy
         int samplesToTake = std::min(CHUNK_SIZE_SAMPLES, static_cast<int>(m_audioBuffer.size()));
-        samplesToProcess.assign(m_audioBuffer.begin(), m_audioBuffer.begin() + samplesToTake);
 
-        // Remove processed samples from buffer
-        m_audioBuffer.erase(m_audioBuffer.begin(), m_audioBuffer.begin() + samplesToTake);
+        // Always process from the end (most recent audio)
+        auto startIt = m_audioBuffer.end() - samplesToTake;
+        samplesToProcess.assign(startIt, m_audioBuffer.end());
+
+        // Keep some overlap for context but remove older samples
+        if (m_audioBuffer.size() > CHUNK_SIZE_SAMPLES) {
+            int removeCount = m_audioBuffer.size() - (CHUNK_SIZE_SAMPLES / 2); // Keep half for overlap
+            m_audioBuffer.erase(m_audioBuffer.begin(), m_audioBuffer.begin() + removeCount);
+        }
     }
 
     // Process in a separate thread to avoid blocking
@@ -171,7 +188,7 @@ void WhisperEngine::processAudioBuffer()
 
         auto result = transcribe(samplesToProcess);
 
-        if (!result.text.isEmpty()) {
+        if (!result.text.isEmpty() && result.text.length() > 3) { // Filter very short results
             emit transcriptionReady(result.text, result.confidence);
             checkForKeywords(result.text);
         }
@@ -190,43 +207,72 @@ WhisperEngine::TranscriptionResult WhisperEngine::transcribe(const std::vector<f
 
     QMutexLocker locker{&m_mutex};
 
-    // Run whisper
-    int ret = whisper_full(m_context, *m_params, samples.data(), samples.size());
+    try {
+        qDebug() << "Transcribing" << samples.size() << "samples ("
+        << (samples.size() / static_cast<float>(SAMPLE_RATE)) << "seconds)";
 
-    if (ret != 0) {
-        qWarning() << "Whisper processing failed with code:" << ret;
-        return result;
-    }
+        // Run whisper
+        int ret = whisper_full(m_context, *m_params, samples.data(), samples.size());
 
-    // Get the transcribed text
-    const int n_segments = whisper_full_n_segments(m_context);
+        if (ret != 0) {
+            qWarning() << "Whisper processing failed with code:" << ret;
+            return result;
+        }
 
-    QString fullText;
-    float totalConfidence = 0.0f;
-    int validSegments = 0;
+        // Get the transcribed text
+        const int n_segments = whisper_full_n_segments(m_context);
+        qDebug() << "Got" << n_segments << "segments from whisper";
 
-    for (int i = 0; i < n_segments; ++i) {
-        const char *text = whisper_full_get_segment_text(m_context, i);
-        if (text && strlen(text) > 0) {
-            fullText += QString::fromUtf8(text).trimmed() + " ";
+        QString fullText;
+        float totalConfidence = 0.0f;
+        int validSegments = 0;
 
-            // Calculate average probability for confidence
-            const int n_tokens = whisper_full_n_tokens(m_context, i);
-            float segmentProb = 0.0f;
-            for (int j = 0; j < n_tokens; ++j) {
-                auto token_data = whisper_full_get_token_data(m_context, i, j);
-                segmentProb += token_data.p;
-            }
-            if (n_tokens > 0) {
-                totalConfidence += segmentProb / n_tokens;
-                validSegments++;
+        for (int i = 0; i < n_segments; ++i) {
+            const char *text = whisper_full_get_segment_text(m_context, i);
+            if (text && strlen(text) > 0) {
+                QString segmentText = QString::fromUtf8(text).trimmed();
+
+                // Filter out very short or nonsensical segments
+                if (segmentText.length() >= 2) {
+                    fullText += segmentText + " ";
+
+                    // Calculate average probability for confidence
+                    const int n_tokens = whisper_full_n_tokens(m_context, i);
+                    float segmentProb = 0.0f;
+                    int validTokens = 0;
+
+                    for (int j = 0; j < n_tokens; ++j) {
+                        auto token_data = whisper_full_get_token_data(m_context, i, j);
+                        if (token_data.p > 0.0f) { // Only count valid probabilities
+                            segmentProb += token_data.p;
+                            validTokens++;
+                        }
+                    }
+
+                    if (validTokens > 0) {
+                        totalConfidence += segmentProb / validTokens;
+                        validSegments++;
+                    }
+
+                    qDebug() << "Segment" << i << ":" << segmentText
+                    << "tokens:" << validTokens << "prob:" << (validTokens > 0 ? segmentProb / validTokens : 0.0f);
+                }
             }
         }
-    }
 
-    result.text = fullText.trimmed();
-    result.confidence = validSegments > 0 ? totalConfidence / validSegments : 0.0f;
-    result.timestamp_ms = 0; // Could calculate from segments if needed
+        result.text = fullText.trimmed();
+        result.confidence = validSegments > 0 ? totalConfidence / validSegments : 0.0f;
+        result.timestamp_ms = 0; // Could calculate from segments if needed
+
+        qDebug() << "Final transcription result:" << result.text
+        << "confidence:" << result.confidence
+        << "segments:" << validSegments;
+
+    } catch (const std::exception &e) {
+        qWarning() << "Exception during transcription:" << e.what();
+    } catch (...) {
+        qWarning() << "Unknown exception during transcription";
+    }
 
     return result;
 }
@@ -235,11 +281,27 @@ void WhisperEngine::checkForKeywords(const QString &text)
 {
     QString lowerText = text.toLower();
 
+    // More comprehensive keyword detection
     for (const auto &keyword : m_keywords) {
-        if (lowerText.contains(keyword.toLower())) {
+        QString lowerKeyword = keyword.toLower();
+        if (lowerText.contains(lowerKeyword)) {
             emit keywordDetected(keyword);
             qDebug() << "Keyword detected:" << keyword << "in text:" << text;
-            break; // Only emit once per transcription
+            return; // Only emit once per transcription
+        }
+    }
+
+    // Also check for phonetic variations
+    QStringList phoneticVariations = {
+        "care for", "car fur", "cur fur", "ker fur",
+        "care four", "kerfur", "kerfür", "kerf ur"
+    };
+
+    for (const auto &variation : phoneticVariations) {
+        if (lowerText.contains(variation)) {
+            emit keywordDetected("kerfur"); // Always emit "kerfur" regardless of variation
+            qDebug() << "Phonetic keyword detected:" << variation << "in text:" << text;
+            return;
         }
     }
 }
@@ -263,6 +325,7 @@ void WhisperEngine::reset()
 {
     QMutexLocker locker{&m_bufferMutex};
     m_audioBuffer.clear();
+    qDebug() << "WhisperEngine audio buffer reset";
 }
 
 void WhisperEngine::setLanguage(const QString &lang)
@@ -271,6 +334,7 @@ void WhisperEngine::setLanguage(const QString &lang)
     if (m_params) {
         m_params->language = m_language.toUtf8().constData();
     }
+    qDebug() << "WhisperEngine language set to:" << lang;
 }
 
 void WhisperEngine::enableTranslation(bool enable)
@@ -279,4 +343,5 @@ void WhisperEngine::enableTranslation(bool enable)
     if (m_params) {
         m_params->translate = enable;
     }
+    qDebug() << "WhisperEngine translation:" << (enable ? "enabled" : "disabled");
 }

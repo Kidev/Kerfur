@@ -89,7 +89,6 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
-
                         onClicked: KSettings.faceTrackingEnabled = !KSettings.faceTrackingEnabled
                     }
                 }
@@ -98,78 +97,6 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     color: "white"
                     text: "Face Tracking"
-                }
-            }
-
-            // Camera Resolution
-            Text {
-                color: "white"
-                text: "Resolution: " + (root.faceTracker ? root.faceTracker.currentResolution : "Unknown")
-            }
-
-            ComboBox {
-                id: resolutionCombo
-
-                currentIndex: {
-                    if (root.faceTracker && root.faceTracker.availableResolutions) {
-                        return root.faceTracker.availableResolutions.indexOf(root.faceTracker.currentResolution);
-                    }
-                    return 0;
-                }
-                model: root.faceTracker ? root.faceTracker.availableResolutions : []
-                width: parent.width - 20
-
-                background: Rectangle {
-                    border.color: "#777777"
-                    border.width: 1
-                    color: "#555555"
-                    radius: 4
-                }
-                contentItem: Text {
-                    color: "white"
-                    leftPadding: 8
-                    text: resolutionCombo.displayText
-                    verticalAlignment: Text.AlignVCenter
-                }
-                delegate: ItemDelegate {
-                    highlighted: resolutionCombo.highlightedIndex === index
-                    width: resolutionCombo.width
-
-                    background: Rectangle {
-                        color: highlighted ? "#666666" : "transparent"
-                    }
-                    contentItem: Text {
-                        color: "white"
-                        text: modelData
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                }
-                popup: Popup {
-                    implicitHeight: contentItem.implicitHeight
-                    padding: 1
-                    width: resolutionCombo.width
-                    y: resolutionCombo.height - 1
-
-                    background: Rectangle {
-                        border.color: "#777777"
-                        color: "#555555"
-                        radius: 4
-                    }
-                    contentItem: ListView {
-                        clip: true
-                        currentIndex: resolutionCombo.highlightedIndex
-                        implicitHeight: contentHeight
-                        model: resolutionCombo.popup.visible ? resolutionCombo.delegateModel : null
-
-                        ScrollIndicator.vertical: ScrollIndicator {
-                        }
-                    }
-                }
-
-                onCurrentTextChanged: {
-                    if (root.faceTracker && currentText !== root.faceTracker.currentResolution) {
-                        root.faceTracker.setResolution(currentText);
-                    }
                 }
             }
 
@@ -276,6 +203,112 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     color: "white"
                     text: "Listen for 'Kerfur'"
+                }
+            }
+
+            // Audio input device selector
+            Row {
+                spacing: 8
+                width: parent.width
+
+                Text {
+                    color: "white"
+                    text: "Audio Device:"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Button {
+                    text: "Refresh"
+                    height: 25
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    background: Rectangle {
+                        color: parent.hovered ? "#666666" : "#555555"
+                        border.color: "#777777"
+                        border.width: 1
+                        radius: 3
+                    }
+                    contentItem: Text {
+                        color: "white"
+                        text: parent.text
+                        font.pixelSize: 9
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    onClicked: speechRecognizer.refreshDevices()
+                }
+            }
+
+            ComboBox {
+                id: audioDeviceCombo
+
+                width: parent.width - 20
+                model: speechRecognizer.availableDevices
+                currentIndex: {
+                    if (speechRecognizer && speechRecognizer.availableDevices) {
+                        return speechRecognizer.availableDevices.indexOf(speechRecognizer.currentDevice);
+                    }
+                    return -1;
+                }
+
+                background: Rectangle {
+                    border.color: "#777777"
+                    border.width: 1
+                    color: "#555555"
+                    radius: 4
+                }
+                contentItem: Text {
+                    color: "white"
+                    leftPadding: 8
+                    text: audioDeviceCombo.displayText || "No device selected"
+                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: 10
+                }
+                delegate: ItemDelegate {
+                    id: deviceDelegate
+                    required property string modelData
+                    required property int index
+
+                    highlighted: audioDeviceCombo.highlightedIndex === deviceDelegate.index
+                    width: audioDeviceCombo.width
+
+                    background: Rectangle {
+                        color: deviceDelegate.highlighted ? "#666666" : "transparent"
+                    }
+                    contentItem: Text {
+                        color: "white"
+                        text: deviceDelegate.modelData
+                        verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 10
+                    }
+                }
+                popup: Popup {
+                    implicitHeight: contentItem.implicitHeight
+                    padding: 1
+                    width: audioDeviceCombo.width
+                    y: audioDeviceCombo.height - 1
+
+                    background: Rectangle {
+                        border.color: "#777777"
+                        color: "#555555"
+                        radius: 4
+                    }
+                    contentItem: ListView {
+                        clip: true
+                        currentIndex: audioDeviceCombo.highlightedIndex
+                        implicitHeight: contentHeight
+                        model: audioDeviceCombo.popup.visible ? audioDeviceCombo.delegateModel : null
+
+                        ScrollIndicator.vertical: ScrollIndicator {
+                        }
+                    }
+                }
+
+                onCurrentTextChanged: {
+                    if (speechRecognizer && currentText !== speechRecognizer.currentDevice && currentText !== "") {
+                        speechRecognizer.setDevice(currentText);
+                    }
                 }
             }
 

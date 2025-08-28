@@ -2,7 +2,7 @@
 
 #include "WhisperEngine.hpp"
 #include <memory>
-#include <QAudioInput>
+#include <QAudioFormat>
 #include <QAudioSource>
 #include <QIODevice>
 #include <QMediaDevices>
@@ -38,6 +38,8 @@ class SpeechRecognizer : public QObject
     Q_PROPERTY(bool kerfurDetected READ kerfurDetected NOTIFY kerfurDetectedChanged)
     Q_PROPERTY(float volumeLevel READ volumeLevel NOTIFY volumeLevelChanged)
     Q_PROPERTY(bool processing READ processing NOTIFY processingChanged)
+    Q_PROPERTY(QStringList availableDevices READ availableDevices NOTIFY availableDevicesChanged)
+    Q_PROPERTY(QString currentDevice READ currentDevice NOTIFY currentDeviceChanged)
 
 public:
     explicit SpeechRecognizer(QObject *parent = nullptr);
@@ -53,6 +55,12 @@ public:
     bool kerfurDetected() const { return m_kerfurDetected; }
     float volumeLevel() const { return m_volumeLevel; }
     bool processing() const { return m_processing; }
+    QStringList availableDevices() const { return m_availableDevices; }
+    QString currentDevice() const { return m_currentDevice; }
+
+public slots:
+    void setDevice(const QString &deviceName);
+    void refreshDevices();
 
 signals:
     void enabledChanged();
@@ -63,6 +71,8 @@ signals:
     void kerfurDetectedChanged();
     void volumeLevelChanged();
     void processingChanged();
+    void availableDevicesChanged();
+    void currentDeviceChanged();
 
     // Action signals
     void kerfurHeard();
@@ -79,22 +89,29 @@ private slots:
     void setProcessing(bool processing);
 
 private:
+    void enumerateAudioDevices();
     void setListening(bool listening);
     void setLastText(const QString &text);
     void setConfidence(float confidence);
     void setErrorString(const QString &error);
     void setKerfurDetected(bool detected);
     void setVolumeLevel(float level);
+    void setAvailableDevices(const QStringList &devices);
+    void setCurrentDevice(const QString &device);
 
-    // Convert int16 audio to float for Whisper
+    // Convert audio to float for Whisper
     std::vector<float> convertAudioToFloat(const QByteArray &data);
     float calculateVolume(const QByteArray &data);
 
     // Core components
     std::unique_ptr<WhisperEngine> m_whisperEngine;
-    std::unique_ptr<QAudioInput> m_audioInput;
     std::unique_ptr<QAudioSource> m_audioSource;
     std::unique_ptr<AudioProcessor> m_audioProcessor;
+
+    // Audio format tracking
+    QAudioFormat m_actualFormat;
+    QList<QAudioDevice> m_audioDevices;
+    QAudioDevice m_selectedDevice;
 
     // State
     bool m_enabled {false};
@@ -105,11 +122,12 @@ private:
     bool m_kerfurDetected {false};
     float m_volumeLevel {0.0f};
     bool m_processing {false};
+    QStringList m_availableDevices;
+    QString m_currentDevice;
 
     // Configuration
     static constexpr int SAMPLE_RATE {16000};
     static constexpr int CHANNEL_COUNT {1};
-    static constexpr int SAMPLE_SIZE {16};
 
     // Timers
     QTimer m_volumeUpdateTimer;
@@ -117,5 +135,5 @@ private:
 
     // Audio buffer for processing
     QByteArray m_audioBuffer;
-    static constexpr int BUFFER_SIZE {8192};
+    static constexpr int BUFFER_SIZE {16384};
 };
