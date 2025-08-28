@@ -108,11 +108,11 @@ debug:
 
 web:
 	@echo "Building with MinSizeRel configuration for web"
-	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg download-models web-build ensure-config
+	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg setup-models web-build ensure-config
 
 web-debug:
 	@echo "Building with Debug configuration for web"
-	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg download-models web-build ensure-config
+	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg setup-models web-build ensure-config
 
 setup-vcpkg:
 	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
@@ -125,13 +125,20 @@ setup-vcpkg:
 		./vcpkg install --triplet $(VCPKG_TRIPLET) --disable-metrics; \
 	fi
 
-download-models:
+setup-models:
 	@if [ ! -f "${MODELS_DIR}/yunet_320x320.onnx" ]; then \
 		mkdir -p ${MODELS_DIR}; \
 		echo "Downloading YuNet face detection model..."; \
 		wget -O "${MODELS_DIR}/yunet_320x320.onnx" "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"; \
 	else \
 		echo "YuNet face detection model found"; \
+	fi
+	@if [ ! -f "${MODELS_DIR}/ggml-tiny.en.bin" ]; then \
+		mkdir -p ${MODELS_DIR}; \
+		echo "Downloading Whisper tiny.en model..."; \
+		wget -O "${MODELS_DIR}/ggml-tiny.en.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"; \
+	else \
+		echo "Whisper model found"; \
 	fi
 
 repo:
@@ -256,7 +263,7 @@ desktop-build:
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
-desktop: setup-vcpkg download-models desktop-build shortcut
+desktop: setup-vcpkg setup-models desktop-build shortcut
 
 shortcut:
 ifeq ($(IS_WINDOWS),1)
@@ -422,5 +429,5 @@ clean-env:
 
 clean-all: clean clean-vcpkg clean-models
 
-.PHONY: all debug web web-debug setup-vcpkg download-models repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config clean clean-vcpkg clean-models clean-env clean-all
+.PHONY: all debug web web-debug setup-vcpkg setup-models repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config clean clean-vcpkg clean-models clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-models clean-env clean-all

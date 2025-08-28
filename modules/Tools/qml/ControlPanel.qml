@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
 import Vision
+import Hearing
 import qml 1.0
 
 Rectangle {
@@ -239,6 +240,61 @@ Rectangle {
                         root.faceTracker.trackingSmoothing = value;
                     }
                 }
+            }
+
+            Text {
+                color: "white"
+                font.bold: true
+                text: "Speech Recognition"
+                topPadding: 15
+            }
+
+            // Speech Recognition Enable
+            Row {
+                spacing: 5
+
+                Rectangle {
+                    border.color: KSettings.speechRecognitionEnabled ? "green" : "gray"
+                    color: KSettings.speechRecognitionEnabled ? "lightgreen" : "darkgray"
+                    height: 30
+                    width: 60
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: "black"
+                        font.bold: true
+                        text: KSettings.speechRecognitionEnabled ? "ON" : "OFF"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: KSettings.speechRecognitionEnabled = !KSettings.speechRecognitionEnabled
+                    }
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: "white"
+                    text: "Listen for 'Kerfur'"
+                }
+            }
+
+            // Speech display
+            Text {
+                color: "white"
+                text: "Speech Monitor"
+            }
+
+            SpeechDisplay {
+                speechRecognizer: speechRecognizer
+                width: parent.width - 20
+                height: 120
+            }
+
+            // Create the speech recognizer instance
+            SpeechRecognizer {
+                id: speechRecognizer
+                enabled: KSettings.speechRecognitionEnabled
             }
 
             // Visual Effects Section
