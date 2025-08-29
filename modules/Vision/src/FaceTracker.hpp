@@ -35,6 +35,7 @@ class FaceTracker : public QObject
     Q_PROPERTY(qreal trackingSmoothing READ trackingSmoothing WRITE setTrackingSmoothing NOTIFY
                    trackingSmoothingChanged)
     Q_PROPERTY(QVariantList faceLandmarks READ faceLandmarks NOTIFY faceLandmarksChanged)
+    Q_PROPERTY(QVariantList faceLandmarksPixels READ faceLandmarksPixels NOTIFY faceLandmarksChanged)
 
 public:
     explicit FaceTracker(QObject *parent = nullptr);
@@ -55,6 +56,14 @@ public:
     qreal detectionConfidence() const { return m_detectionConfidence; }
     qreal trackingSmoothing() const { return m_trackingSmoothing; }
     QVariantList faceLandmarks() const { return m_faceLandmarks; }
+    QVariantList faceLandmarksPixels() const
+    {
+        QVariantList out;
+        out.reserve(static_cast<int>(m_faceLandmarksPixels.size()));
+        for (const QPointF &p : m_faceLandmarksPixels)
+            out.push_back(p);
+        return out;
+    }
 
 public slots:
     void setResolution(const QString &resolution);
@@ -103,6 +112,7 @@ private:
     QPointF m_facePixelCenter;
     QSize m_facePixelSize;
     QVariantList m_faceLandmarks;
+    QVector<QPointF> m_faceLandmarksPixels;
 
     // Camera and multimedia
     QCamera m_camera;
