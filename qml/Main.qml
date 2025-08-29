@@ -41,7 +41,7 @@ Window {
         anchors.right: parent.right
         anchors.top: parent.top
         faceTracker: face.faceTracker
-        height: parent.height
-        width: 150
+        height: Window.height
+        width: 0.15 * Window.width
     }
 }

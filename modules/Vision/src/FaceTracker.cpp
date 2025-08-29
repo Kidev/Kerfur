@@ -325,6 +325,16 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
         setFacePixelSize(pixelSize);
         setFaceDetected(true);
 
+        // Convert landmarks to QVariantList for QML
+        QVariantList landmarksList;
+        for (const QPointF &landmark : bestFace.landmarks) {
+            QVariantMap landmarkMap;
+            landmarkMap["x"] = landmark.x();
+            landmarkMap["y"] = landmark.y();
+            landmarksList.append(landmarkMap);
+        }
+        setFaceLandmarks(landmarksList);
+
         // Store last known position (use member variables directly)
         m_lastKnownFaceCenter = m_faceCenter;
         m_lastKnownFacePixelCenter = m_facePixelCenter;
@@ -346,6 +356,7 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
             setFaceCenter(QPointF {0.5, 0.5}); // Center position
             setFacePixelCenter(QPointF {displayImage.width() / 2.0, displayImage.height() / 2.0});
             setFacePixelSize(QSize {100, 100}); // Default size
+            setFaceLandmarks(QVariantList{}); // Clear landmarks
         }
     }
 }
@@ -528,4 +539,12 @@ void FaceTracker::setFacePixelSize(const QSize &size)
         return;
     m_facePixelSize = size;
     emit facePixelSizeChanged();
+}
+
+void FaceTracker::setFaceLandmarks(const QVariantList &landmarks)
+{
+    if (m_faceLandmarks == landmarks)
+        return;
+    m_faceLandmarks = landmarks;
+    emit faceLandmarksChanged();
 }

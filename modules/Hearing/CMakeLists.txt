@@ -15,19 +15,20 @@ qt_add_qml_module(
 find_package(whisper CONFIG REQUIRED)
 find_package(ggml CONFIG REQUIRED)
 
-target_link_libraries(${HEARING_MODULE}
-    PRIVATE
-        Qt6::Multimedia
-        Qt6::Core
-        whisper
-        ggml::all ggml::ggml ggml::ggml-base
+target_link_libraries(
+    ${HEARING_MODULE}
+    PRIVATE Qt::Multimedia
+            Qt::Core
+            whisper
+            ggml::all
+            ggml::ggml
+            ggml::ggml-base
 )
 
-target_include_directories(${HEARING_MODULE}
-    PRIVATE src
-)
+target_include_directories(${HEARING_MODULE} PRIVATE src)
 
-if(whisper_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/models/ggml-tiny.en.bin")
+if (whisper_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/models/ggml-tiny.en.bin")
     file(COPY "${CMAKE_SOURCE_DIR}/models/ggml-tiny.en.bin"
-         DESTINATION "${CMAKE_BINARY_DIR}/models/")
-endif()
+         DESTINATION "${CMAKE_BINARY_DIR}/models/"
+    )
+endif ()
