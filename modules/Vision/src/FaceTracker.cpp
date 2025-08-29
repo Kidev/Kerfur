@@ -13,15 +13,15 @@
 #include <QVideoFrameFormat>
 
 FaceTracker::FaceTracker(QObject *parent)
-: QObject {parent}
-, m_camera {this}
-, m_captureSession {this}
-, m_videoSink {this}
-, m_frameThrottleTimer {this}
-, m_cameraRetryTimer {this}
-, m_requestedResolution {1920, 1080}
-, m_detectionConfidence {0.6}      // Lower default confidence to detect more faces
-, m_trackingSmoothing {0.7}        // Higher smoothing to reduce jitter
+    : QObject {parent}
+    , m_camera {this}
+    , m_captureSession {this}
+    , m_videoSink {this}
+    , m_frameThrottleTimer {this}
+    , m_cameraRetryTimer {this}
+    , m_requestedResolution {1920, 1080}
+    , m_detectionConfidence {0.6} // Lower default confidence to detect more faces
+    , m_trackingSmoothing {0.7}   // Higher smoothing to reduce jitter
 {
     // Initialize AI face detector
     m_faceDetector = std::make_unique<AIFaceDetector>();
@@ -278,7 +278,8 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     setCameraFrame(displayImage);
 
     // Detect faces using AI (detector handles scaling internally for performance)
-    auto faces {m_faceDetector->detectFaces(image, m_detectionConfidence)};
+    //auto faces {m_faceDetector->detectFaces(image, m_detectionConfidence)};
+    auto faces {m_faceDetector->detectFaces(displayImage, m_detectionConfidence)};
 
     // Process results
     processFaceDetectionResults(faces, displayImage);
@@ -356,7 +357,7 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
             setFaceCenter(QPointF {0.5, 0.5}); // Center position
             setFacePixelCenter(QPointF {displayImage.width() / 2.0, displayImage.height() / 2.0});
             setFacePixelSize(QSize {100, 100}); // Default size
-            setFaceLandmarks(QVariantList{}); // Clear landmarks
+            setFaceLandmarks(QVariantList {});  // Clear landmarks
         }
     }
 }

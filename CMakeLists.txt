@@ -60,14 +60,14 @@ qt_add_qml_module(
 
 target_link_libraries(
     ${PROJECT_NAME}
-    PUBLIC Qt::Core
-           Qt::Gui
-           Qt::Quick
-           Qt::Qml
-           Qt::Concurrent
-           Qt::Multimedia
-           Qt::MultimediaWidgets
-           Qt::QuickControls2
+    PUBLIC Qt6::Core
+           Qt6::Gui
+           Qt6::Quick
+           Qt6::Qml
+           Qt6::Concurrent
+           Qt6::Multimedia
+           Qt6::MultimediaWidgets
+           Qt6::QuickControls2
            ${OpenCV_LIBS}
            Vision
            Tools

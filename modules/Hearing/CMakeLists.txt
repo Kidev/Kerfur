@@ -17,8 +17,8 @@ find_package(ggml CONFIG REQUIRED)
 
 target_link_libraries(
     ${HEARING_MODULE}
-    PRIVATE Qt::Multimedia
-            Qt::Core
+    PRIVATE Qt6::Multimedia
+            Qt6::Core
             whisper
             ggml::all
             ggml::ggml
