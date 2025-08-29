@@ -1,13 +1,11 @@
 #include "SpeechRecognizer.hpp"
+#include <cmath>
 #include <QAudioDevice>
 #include <QAudioFormat>
 #include <QDebug>
-#include <cmath>
-#include <QProcess>
 
 // AudioProcessor implementation
-AudioProcessor::AudioProcessor(QObject *parent)
-: QIODevice{parent}
+AudioProcessor::AudioProcessor(QObject *parent) : QIODevice {parent}
 {
     open(QIODevice::WriteOnly);
 }
@@ -21,44 +19,52 @@ qint64 AudioProcessor::readData(char *data, qint64 maxlen)
 
 qint64 AudioProcessor::writeData(const char *data, qint64 len)
 {
-    QByteArray audioData{data, static_cast<int>(len)};
+    QByteArray audioData {data, static_cast<int>(len)};
     emit audioDataReady(audioData);
     return len;
 }
 
 // SpeechRecognizer implementation
 SpeechRecognizer::SpeechRecognizer(QObject *parent)
-: QObject{parent}
-, m_whisperEngine{std::make_unique<WhisperEngine>(this)}
-, m_volumeUpdateTimer{this}
-, m_kerfurResetTimer{this}
+    : QObject {parent}
+    , m_whisperEngine {std::make_unique<WhisperEngine>(this)}
+    , m_volumeUpdateTimer {this}
+    , m_kerfurResetTimer {this}
 {
     // Initialize Whisper engine
-    QString modelPath = "models/ggml-tiny.en.bin";
+    QString modelPath {"models/ggml-tiny.en.bin"};
     if (!m_whisperEngine->initialize(modelPath)) {
-        setErrorString("Failed to initialize speech recognition: " + m_whisperEngine->getLastError());
+        setErrorString("Failed to initialize speech recognition: " +
+                       m_whisperEngine->getLastError());
+        qWarning() << "Whisper initialization failed:" << m_whisperEngine->getLastError();
+    } else {
+        qDebug() << "Whisper engine initialized successfully";
     }
 
     // Connect Whisper signals
-    connect(m_whisperEngine.get(), &WhisperEngine::transcriptionReady,
-            this, &SpeechRecognizer::handleTranscription);
-    connect(m_whisperEngine.get(), &WhisperEngine::keywordDetected,
-            this, &SpeechRecognizer::handleKeywordDetected);
-    connect(m_whisperEngine.get(), &WhisperEngine::processingStarted,
-            this, [this]() { setProcessing(true); });
-    connect(m_whisperEngine.get(), &WhisperEngine::processingFinished,
-            this, [this]() { setProcessing(false); });
+    connect(m_whisperEngine.get(),
+            &WhisperEngine::transcriptionReady,
+            this,
+            &SpeechRecognizer::handleTranscription);
+    connect(m_whisperEngine.get(),
+            &WhisperEngine::keywordDetected,
+            this,
+            &SpeechRecognizer::handleKeywordDetected);
+    connect(m_whisperEngine.get(), &WhisperEngine::processingStarted, this, [this]() {
+        setProcessing(true);
+    });
+    connect(m_whisperEngine.get(), &WhisperEngine::processingFinished, this, [this]() {
+        setProcessing(false);
+    });
 
     // Setup volume update timer
     m_volumeUpdateTimer.setInterval(50);
-    connect(&m_volumeUpdateTimer, &QTimer::timeout,
-            this, &SpeechRecognizer::updateVolumeLevel);
+    connect(&m_volumeUpdateTimer, &QTimer::timeout, this, &SpeechRecognizer::updateVolumeLevel);
 
     // Setup kerfur detection reset timer
     m_kerfurResetTimer.setSingleShot(true);
     m_kerfurResetTimer.setInterval(2000);
-    connect(&m_kerfurResetTimer, &QTimer::timeout,
-            this, &SpeechRecognizer::resetKerfurDetection);
+    connect(&m_kerfurResetTimer, &QTimer::timeout, this, &SpeechRecognizer::resetKerfurDetection);
 
     // Enumerate available audio devices
     enumerateAudioDevices();
@@ -73,126 +79,74 @@ SpeechRecognizer::~SpeechRecognizer()
 
 void SpeechRecognizer::enumerateAudioDevices()
 {
-    qDebug() << "=== Enumerating Audio Devices ===";
-
     m_audioDevices.clear();
-    QStringList deviceNames;
+    QStringList deviceNames {};
 
-    // Step 1: Get Qt's detected devices
-    QList<QAudioDevice> qtDevices = QMediaDevices::audioInputs();
-    qDebug() << "Qt detected" << qtDevices.size() << "audio input devices";
+    // First, always try to get the default device
+    QAudioDevice defaultDevice {QMediaDevices::defaultAudioInput()};
 
-    for (const auto& device : qtDevices) {
-        m_audioDevices.append(device);
-        QString name = device.description();
+    // Get all audio input devices
+    const QList<QAudioDevice> devices {QMediaDevices::audioInputs()};
+
+    qDebug() << "Qt detected" << devices.size() << "audio input devices";
+    qDebug() << "Default device is" << (defaultDevice.isNull() ? "NULL" : "valid");
+
+    // If we have a valid default device, use it
+    if (!defaultDevice.isNull()) {
+        m_selectedDevice = defaultDevice;
+        m_audioDevices.append(defaultDevice);
+        QString name {defaultDevice.description()};
         if (name.isEmpty()) {
-            name = QString("Audio Device %1").arg(m_audioDevices.size());
+            name = "Default Audio Input";
         }
         deviceNames.append(name);
-        qDebug() << "Qt device:" << name << "ID:" << device.id();
+        qDebug() << "Using default device:" << name << "ID:" << defaultDevice.id();
     }
 
-    // Step 2: Always try to get the default device
-    QAudioDevice defaultDevice = QMediaDevices::defaultAudioInput();
-    bool hasDefault = !defaultDevice.isNull();
-
-    if (hasDefault) {
-        // Check if default is already in our list
-        bool defaultAlreadyListed = false;
-        for (const auto& existing : m_audioDevices) {
-            if (existing.id() == defaultDevice.id()) {
-                defaultAlreadyListed = true;
-                break;
+    // Add other devices if they exist and are different from default
+    for (const auto &device : devices) {
+        if (!device.isNull() && device.id() != defaultDevice.id()) {
+            m_audioDevices.append(device);
+            QString name {device.description()};
+            if (name.isEmpty()) {
+                name = QString {"Audio Device %1"}.arg(m_audioDevices.size());
             }
-        }
-
-        if (!defaultAlreadyListed) {
-            m_audioDevices.append(defaultDevice);
-            QString defaultName = defaultDevice.description();
-            if (defaultName.isEmpty()) {
-                defaultName = "System Default";
-            }
-            deviceNames.append(defaultName);
-            qDebug() << "Added system default:" << defaultName;
+            deviceNames.append(name);
+            qDebug() << "Found device:" << name << "ID:" << device.id();
         }
     }
 
-    // Step 3: Linux fallback - if we have no devices but PulseAudio is available
-    if (m_audioDevices.isEmpty()) {
-        #ifdef Q_OS_LINUX
-        qDebug() << "No Qt devices found, checking PulseAudio availability...";
+    // If still no devices, create a dummy entry to prevent UI issues
+    if (m_audioDevices.isEmpty() && defaultDevice.isNull()) {
+        qWarning() << "No audio devices detected by Qt. Audio system may not be initialized.";
+        qWarning() << "Make sure PulseAudio or PipeWire is running.";
 
-        QProcess pactl;
-        pactl.start("pactl", {"info"});
-        pactl.waitForFinished(3000);
-
-        if (pactl.exitCode() == 0) {
-            qDebug() << "PulseAudio is running, will use system default";
-
-            // Create a synthetic "System Default" entry
-            // We'll handle this special case in audio initialization
-            deviceNames.append("System Default (PulseAudio)");
-            // Leave m_audioDevices empty for this case - we'll handle it specially
-
-            setAvailableDevices(deviceNames);
-            setCurrentDevice("System Default (PulseAudio)");
-
-            // Set a special flag that we're using PulseAudio fallback
-            m_selectedDevice = QAudioDevice{}; // Empty device as signal
-
-            qDebug() << "Created PulseAudio fallback entry";
-            qDebug() << "=== End Audio Device Enumeration ===";
-            return;
-        }
-        #endif
-
-        // No devices found and no PulseAudio
-        setErrorString("No audio input devices available");
-        setAvailableDevices(QStringList());
-        setCurrentDevice("");
-        qDebug() << "No audio devices found at all";
-        qDebug() << "=== End Audio Device Enumeration ===";
-        return;
+        // Check if we can still create a QAudioSource with default device
+        // This sometimes works even when device enumeration fails
+        m_selectedDevice = QAudioDevice {}; // Empty device will use system default
+        deviceNames.append("System Audio (No devices detected)");
     }
 
-    // Step 4: We have at least one device, set up the lists
     setAvailableDevices(deviceNames);
 
-    // Step 5: Select the best device
-    if (hasDefault) {
-        // Use the default device
-        m_selectedDevice = defaultDevice;
-        QString defaultName = defaultDevice.description();
-        if (defaultName.isEmpty()) {
-            defaultName = "System Default";
-        }
-        setCurrentDevice(defaultName);
-        qDebug() << "Selected default device:" << defaultName;
-    } else if (!m_audioDevices.isEmpty()) {
-        // Use the first available device
-        m_selectedDevice = m_audioDevices.first();
-        setCurrentDevice(deviceNames.first());
-        qDebug() << "Selected first device:" << deviceNames.first();
+    if (!m_selectedDevice.isNull() || !deviceNames.isEmpty()) {
+        setCurrentDevice(deviceNames.isEmpty() ? "System Audio" : deviceNames.first());
     }
 
-    // Clear any previous error
-    setErrorString("");
-
-    qDebug() << "Final setup:";
+    qDebug() << "Audio enumeration complete:";
     qDebug() << "  Available devices:" << deviceNames.size();
-    qDebug() << "  Selected device:" << (m_selectedDevice.isNull() ? "NULL" : m_selectedDevice.description());
-    qDebug() << "  Current device name:" << m_currentDevice;
-    qDebug() << "=== End Audio Device Enumeration ===";
+    qDebug() << "  Selected device:"
+             << (m_selectedDevice.isNull() ? "NULL (will try system default)"
+                                           : m_selectedDevice.description());
 }
 
 void SpeechRecognizer::setDevice(const QString &deviceName)
 {
-    qDebug() << "Attempting to set audio device to:" << deviceName;
+    QAudioDevice selectedDevice {};
 
-    // Find device by name
-    QAudioDevice selectedDevice;
-    for (const auto& device : m_audioDevices) {
-        if (device.description() == deviceName) {
+    for (const auto &device : m_audioDevices) {
+        if (device.description() == deviceName ||
+            (device.description().isEmpty() && deviceName == "Default Audio Input")) {
             selectedDevice = device;
             break;
         }
@@ -200,22 +154,17 @@ void SpeechRecognizer::setDevice(const QString &deviceName)
 
     if (selectedDevice.isNull()) {
         qWarning() << "Device not found:" << deviceName;
-        setErrorString("Selected audio device not found: " + deviceName);
         return;
     }
 
-    // If device is the same, don't restart
     if (m_selectedDevice == selectedDevice) {
-        qDebug() << "Device already selected:" << deviceName;
-        return;
+        return; // No change
     }
 
     m_selectedDevice = selectedDevice;
     setCurrentDevice(deviceName);
 
-    // If currently enabled, restart with new device
     if (m_enabled) {
-        qDebug() << "Restarting audio with new device:" << deviceName;
         uninitializeAudio();
         initializeAudio();
     }
@@ -223,7 +172,6 @@ void SpeechRecognizer::setDevice(const QString &deviceName)
 
 void SpeechRecognizer::refreshDevices()
 {
-    qDebug() << "Refreshing audio devices...";
     uninitializeAudio();
     enumerateAudioDevices();
     if (m_enabled) {
@@ -239,9 +187,6 @@ void SpeechRecognizer::setEnabled(bool enabled)
     m_enabled = enabled;
 
     if (m_enabled) {
-        if (m_audioDevices.isEmpty()) {
-            enumerateAudioDevices();
-        }
         initializeAudio();
     } else {
         uninitializeAudio();
@@ -257,158 +202,75 @@ void SpeechRecognizer::initializeAudio()
         return;
     }
 
-    if (m_audioDevices.isEmpty() && m_selectedDevice.isNull()) {
+    // If no device selected, try to enumerate again
+    if (m_selectedDevice.isNull() && m_audioDevices.isEmpty()) {
         enumerateAudioDevices();
-
-        // Check if we still don't have a device after enumeration
-        if (m_audioDevices.isEmpty() && m_selectedDevice.isNull() && !m_currentDevice.contains("PulseAudio")) {
-            setErrorString("No audio input devices available");
-            return;
-        }
     }
-
-    qDebug() << "Initializing audio...";
-    qDebug() << "Current device:" << m_currentDevice;
-    qDebug() << "Selected device null:" << m_selectedDevice.isNull();
-    qDebug() << "Audio devices count:" << m_audioDevices.size();
 
     // Setup audio format
-    QAudioFormat format;
-    format.setSampleRate(SAMPLE_RATE);
-    format.setChannelCount(CHANNEL_COUNT);
-    format.setSampleFormat(QAudioFormat::Int16);
+    QAudioFormat format {};
+    format.setSampleRate(48000);
+    //format.setChannelCount(1);
+    //format.setSampleFormat(QAudioFormat::UInt8);
 
-    QAudioDevice deviceToUse;
+    QAudioDevice deviceToUse {m_selectedDevice};
 
-    // Determine which device to use
-    if (m_currentDevice.contains("PulseAudio") || (m_selectedDevice.isNull() && m_audioDevices.isEmpty())) {
-        // Use system default for PulseAudio fallback
-        deviceToUse = QMediaDevices::defaultAudioInput();
-        qDebug() << "Using PulseAudio fallback with system default";
-
-        if (deviceToUse.isNull()) {
-            // Create with default constructor - Qt will try to find something
-            qDebug() << "System default is null, using default constructor";
-        }
-    } else if (!m_selectedDevice.isNull()) {
-        deviceToUse = m_selectedDevice;
-        qDebug() << "Using selected device:" << deviceToUse.description();
-    } else if (!m_audioDevices.isEmpty()) {
-        deviceToUse = m_audioDevices.first();
-        qDebug() << "Using first available device:" << deviceToUse.description();
-    } else {
-        setErrorString("No usable audio device found");
-        return;
+    // If still no device, try using an empty QAudioDevice which will use system default
+    if (deviceToUse.isNull()) {
+        qWarning() << "No audio device selected, attempting to use system default";
+        deviceToUse = QAudioDevice {}; // Empty device = system default
     }
 
-    // Check format support if we have a valid device
+    // Check format support
     if (!deviceToUse.isNull() && !deviceToUse.isFormatSupported(format)) {
-        qDebug() << "Preferred format not supported, using device's preferred format";
-
-        // Try some common formats
-        QList<std::tuple<int, int, QAudioFormat::SampleFormat>> formats = {
-            {16000, 1, QAudioFormat::Int16},
-            {44100, 1, QAudioFormat::Int16},
-            {48000, 1, QAudioFormat::Int16},
-            {16000, 2, QAudioFormat::Int16},
-            {44100, 2, QAudioFormat::Int16}
-        };
-
-        bool formatFound = false;
-        for (const auto& [rate, channels, sampleFormat] : formats) {
-            format.setSampleRate(rate);
-            format.setChannelCount(channels);
-            format.setSampleFormat(sampleFormat);
-
-            if (deviceToUse.isFormatSupported(format)) {
-                qDebug() << "Using format: Rate=" << rate << "Channels=" << channels;
-                formatFound = true;
-                break;
-            }
+        format = deviceToUse.preferredFormat();
+        if (format.channelCount() > 1) {
+            format.setChannelCount(1);
         }
-
-        if (!formatFound) {
-            qDebug() << "No supported format found, trying with preferred format anyway";
-            format.setSampleRate(SAMPLE_RATE);
-            format.setChannelCount(CHANNEL_COUNT);
-            format.setSampleFormat(QAudioFormat::Int16);
+        if (format.sampleRate() > 16000) {
+            format.setSampleRate(16000);
         }
     }
 
     m_actualFormat = format;
 
+    qDebug() << "Initializing audio with format: Rate=" << format.sampleRate()
+             << "Channels=" << format.channelCount() << "Format=" << format.sampleFormat();
+
     try {
-        // Create audio source
-        qDebug() << "Creating QAudioSource with format:" << format.sampleRate() << "Hz," << format.channelCount() << "ch";
+        // Create audio source - will use system default if device is null
         m_audioSource = std::make_unique<QAudioSource>(deviceToUse, format);
-        m_audioSource->setBufferSize(BUFFER_SIZE * 2);
+        m_audioSource->setBufferSize(200);
 
         // Connect state monitoring
-        connect(m_audioSource.get(), &QAudioSource::stateChanged,
-                this, [this](QAudio::State state) {
-                    qDebug() << "Audio state changed to:" << state;
-                    switch (state) {
-                        case QAudio::ActiveState:
-                            setListening(true);
-                            setErrorString("");
-                            qDebug() << "Audio is now active and listening";
-                            break;
-                        case QAudio::IdleState:
-                            setListening(true); // Still listening, just no input
-                            break;
-                        case QAudio::StoppedState:
-                            setListening(false);
-                            if (m_audioSource && m_audioSource->error() != QAudio::NoError) {
-                                int errorCode = static_cast<int>(m_audioSource->error());
-                                setErrorString("Audio stopped with error code: " + QString::number(errorCode));
-                                qDebug() << "Audio error:" << errorCode;
-                            }
-                            break;
-                    }
-                });
-
-        // Create audio processor
-        m_audioProcessor = std::make_unique<AudioProcessor>(this);
-        connect(m_audioProcessor.get(), &AudioProcessor::audioDataReady,
-                this, &SpeechRecognizer::processAudioData);
-
-        // Start audio capture
-        qDebug() << "Starting audio capture...";
-        m_audioSource->start(m_audioProcessor.get());
-
-        QAudio::Error initialError = m_audioSource->error();
-        if (initialError != QAudio::NoError) {
-            setErrorString("Failed to start audio: error " + QString::number(static_cast<int>(initialError)));
-            qDebug() << "Initial audio error:" << static_cast<int>(initialError);
-            return;
-        }
-
-        // Check status after a short delay
-        QTimer::singleShot(500, this, [this]() {
-            if (!m_audioSource) return;
-
-            QAudio::Error error = m_audioSource->error();
-            QAudio::State state = m_audioSource->state();
-
-            qDebug() << "Audio status check - State:" << state << "Error:" << error;
-
-            if (error != QAudio::NoError) {
-                setErrorString("Audio error: " + QString::number(static_cast<int>(error)));
-            } else if (state == QAudio::ActiveState || state == QAudio::IdleState) {
-                qDebug() << "Audio system working correctly";
-                m_volumeUpdateTimer.start();
+        connect(m_audioSource.get(), &QAudioSource::stateChanged, this, [this](QAudio::State state) {
+            if (state == QAudio::ActiveState) {
+                setListening(true);
                 setErrorString("");
-            } else {
-                setErrorString("Audio failed to activate properly");
+                m_volumeUpdateTimer.start();
+            } else if (state == QAudio::StoppedState) {
+                setListening(false);
+                if (m_audioSource && m_audioSource->error() != QAudio::NoError) {
+                    setErrorString("Audio error occurred");
+                }
             }
         });
 
-    } catch (const std::exception& e) {
-        setErrorString(QString("Audio initialization failed: %1").arg(e.what()));
-        qDebug() << "Audio init exception:" << e.what();
-    }
+        // Create audio processor
+        m_audioProcessor = std::make_unique<AudioProcessor>(this);
+        connect(m_audioProcessor.get(),
+                &AudioProcessor::audioDataReady,
+                this,
+                &SpeechRecognizer::processAudioData);
 
-    qDebug() << "Audio initialization completed";
+        // Start audio capture
+        m_audioSource->start(m_audioProcessor.get());
+
+        qDebug() << "Audio capture started";
+
+    } catch (const std::exception &e) {
+        setErrorString(QString {"Audio initialization failed: %1"}.arg(e.what()));
+    }
 }
 
 void SpeechRecognizer::uninitializeAudio()
@@ -432,8 +294,6 @@ void SpeechRecognizer::uninitializeAudio()
 
     setListening(false);
     setVolumeLevel(0.0f);
-
-    qDebug() << "Speech recognition stopped";
 }
 
 void SpeechRecognizer::processAudioData(const QByteArray &data)
@@ -442,93 +302,76 @@ void SpeechRecognizer::processAudioData(const QByteArray &data)
         return;
 
     // Keep buffer for volume calculation
-    m_audioBuffer.append(data);
-    if (m_audioBuffer.size() > BUFFER_SIZE * 4) {
-        m_audioBuffer = m_audioBuffer.mid(m_audioBuffer.size() - BUFFER_SIZE * 2);
-    }
+    m_audioBuffer = data;
 
-    // Convert to float and send to Whisper
-    auto floatSamples = convertAudioToFloat(data);
-    if (!floatSamples.empty()) {
-        m_whisperEngine->processAudio(floatSamples);
-    }
-}
+    // Convert to float samples for Whisper
+    std::vector<float> floatSamples {};
 
-std::vector<float> SpeechRecognizer::convertAudioToFloat(const QByteArray &data)
-{
-    std::vector<float> floatSamples;
-
-    if (data.isEmpty()) {
-        return floatSamples;
-    }
-
-    if (m_actualFormat.sampleFormat() == QAudioFormat::Int16) {
-        const int16_t *samples = reinterpret_cast<const int16_t*>(data.constData());
-        int sampleCount = data.size() / sizeof(int16_t);
-
+    if (m_actualFormat.sampleFormat() == QAudioFormat::UInt8) {
+        // Convert UInt8 to float [-1, 1]
+        const uint8_t *samples {reinterpret_cast<const uint8_t *>(data.constData())};
+        int sampleCount {static_cast<int>(data.size())};
         floatSamples.reserve(sampleCount);
 
-        // Handle mono/stereo conversion
+        for (int i {0}; i < sampleCount; ++i) {
+            floatSamples.push_back((samples[i] - 128) / 128.0f);
+        }
+    } else if (m_actualFormat.sampleFormat() == QAudioFormat::Int16) {
+        // Convert Int16 to float [-1, 1]
+        const int16_t *samples {reinterpret_cast<const int16_t *>(data.constData())};
+        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(int16_t))};
+        floatSamples.reserve(sampleCount);
+
         if (m_actualFormat.channelCount() == 1) {
-            // Mono - direct conversion
-            for (int i = 0; i < sampleCount; ++i) {
+            for (int i {0}; i < sampleCount; ++i) {
                 floatSamples.push_back(samples[i] / 32768.0f);
             }
-        } else if (m_actualFormat.channelCount() == 2) {
-            // Stereo - convert to mono by averaging
-            floatSamples.reserve(sampleCount / 2);
-            for (int i = 0; i < sampleCount - 1; i += 2) {
-                float left = samples[i] / 32768.0f;
-                float right = samples[i + 1] / 32768.0f;
-                floatSamples.push_back((left + right) * 0.5f);
+        } else {
+            // Convert stereo to mono by averaging
+            for (int i {0}; i < sampleCount - 1; i += 2) {
+                floatSamples.push_back((samples[i] + samples[i + 1]) / 65536.0f);
             }
         }
     } else if (m_actualFormat.sampleFormat() == QAudioFormat::Float) {
-        const float *samples = reinterpret_cast<const float*>(data.constData());
-        int sampleCount = data.size() / sizeof(float);
-
-        floatSamples.reserve(sampleCount);
+        const float *samples {reinterpret_cast<const float *>(data.constData())};
+        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(float))};
 
         if (m_actualFormat.channelCount() == 1) {
-            // Mono - direct copy
-            for (int i = 0; i < sampleCount; ++i) {
-                floatSamples.push_back(samples[i]);
-            }
-        } else if (m_actualFormat.channelCount() == 2) {
-            // Stereo - convert to mono by averaging
+            floatSamples.assign(samples, samples + sampleCount);
+        } else {
+            // Convert stereo to mono
             floatSamples.reserve(sampleCount / 2);
-            for (int i = 0; i < sampleCount - 1; i += 2) {
+            for (int i {0}; i < sampleCount - 1; i += 2) {
                 floatSamples.push_back((samples[i] + samples[i + 1]) * 0.5f);
             }
         }
     }
 
-    // Resample if needed (simple linear interpolation)
+    // Resample to 16kHz if needed
     if (m_actualFormat.sampleRate() != SAMPLE_RATE && !floatSamples.empty()) {
-        std::vector<float> resampledSamples;
-        float ratio = static_cast<float>(SAMPLE_RATE) / m_actualFormat.sampleRate();
-        int newSize = static_cast<int>(floatSamples.size() * ratio);
+        std::vector<float> resampled {};
+        float ratio {static_cast<float>(SAMPLE_RATE) / m_actualFormat.sampleRate()};
+        int newSize {static_cast<int>(floatSamples.size() * ratio)};
+        resampled.reserve(newSize);
 
-        resampledSamples.reserve(newSize);
+        for (int i {0}; i < newSize; ++i) {
+            float srcIdx {i / ratio};
+            int idx {static_cast<int>(srcIdx)};
+            float frac {srcIdx - idx};
 
-        for (int i = 0; i < newSize; ++i) {
-            float srcIndex = i / ratio;
-            int srcIdx = static_cast<int>(srcIndex);
-            float frac = srcIndex - srcIdx;
-
-            if (srcIdx + 1 < static_cast<int>(floatSamples.size())) {
-                float sample = floatSamples[srcIdx] * (1.0f - frac) +
-                floatSamples[srcIdx + 1] * frac;
-                resampledSamples.push_back(sample);
-            } else if (srcIdx < static_cast<int>(floatSamples.size())) {
-                resampledSamples.push_back(floatSamples[srcIdx]);
+            if (idx + 1 < static_cast<int>(floatSamples.size())) {
+                resampled.push_back(floatSamples[idx] * (1.0f - frac) +
+                                    floatSamples[idx + 1] * frac);
+            } else if (idx < static_cast<int>(floatSamples.size())) {
+                resampled.push_back(floatSamples[idx]);
             }
         }
-
-        return resampledSamples;
+        floatSamples = std::move(resampled);
     }
 
-    return floatSamples;
+    if (!floatSamples.empty()) {
+        m_whisperEngine->processAudio(floatSamples);
+    }
 }
 
 void SpeechRecognizer::handleTranscription(const QString &text, float confidence)
@@ -553,10 +396,11 @@ void SpeechRecognizer::handleKeywordDetected(const QString &keyword)
 void SpeechRecognizer::updateVolumeLevel()
 {
     if (!m_audioBuffer.isEmpty()) {
-        float volume = calculateVolume(m_audioBuffer);
+        float volume {calculateVolume(m_audioBuffer)};
         setVolumeLevel(volume);
+        m_audioBuffer.clear();
     } else {
-        setVolumeLevel(m_volumeLevel * 0.9f);
+        setVolumeLevel(m_volumeLevel * 0.95f);
     }
 }
 
@@ -565,30 +409,34 @@ float SpeechRecognizer::calculateVolume(const QByteArray &data)
     if (data.isEmpty())
         return 0.0f;
 
-    if (m_actualFormat.sampleFormat() == QAudioFormat::Int16) {
-        const int16_t *samples = reinterpret_cast<const int16_t*>(data.constData());
-        int sampleCount = data.size() / sizeof(int16_t);
+    float maxAmplitude {0.0f};
 
-        if (sampleCount == 0)
-            return 0.0f;
+    if (m_actualFormat.sampleFormat() == QAudioFormat::UInt8) {
+        const uint8_t *samples {reinterpret_cast<const uint8_t *>(data.constData())};
+        int sampleCount {static_cast<int>(data.size())};
 
-        // Calculate RMS
-        float sum = 0.0f;
-        int step = std::max(1, sampleCount / 1000);
-
-        for (int i = 0; i < sampleCount; i += step) {
-            float normalized = samples[i] / 32768.0f;
-            sum += normalized * normalized;
+        for (int i {0}; i < sampleCount; ++i) {
+            float amplitude {std::abs((samples[i] - 128) / 128.0f)};
+            maxAmplitude = std::max(maxAmplitude, amplitude);
         }
+    } else if (m_actualFormat.sampleFormat() == QAudioFormat::Int16) {
+        const int16_t *samples {reinterpret_cast<const int16_t *>(data.constData())};
+        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(int16_t))};
 
-        float rms = std::sqrt(sum / (sampleCount / step));
-        float db = 20.0f * std::log10(std::max(rms, 0.00001f));
-        float normalized = (db + 60.0f) / 60.0f;
+        for (int i {0}; i < sampleCount; ++i) {
+            float amplitude {std::abs(samples[i] / 32768.0f)};
+            maxAmplitude = std::max(maxAmplitude, amplitude);
+        }
+    } else if (m_actualFormat.sampleFormat() == QAudioFormat::Float) {
+        const float *samples {reinterpret_cast<const float *>(data.constData())};
+        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(float))};
 
-        return std::clamp(normalized, 0.0f, 1.0f);
+        for (int i {0}; i < sampleCount; ++i) {
+            maxAmplitude = std::max(maxAmplitude, std::abs(samples[i]));
+        }
     }
 
-    return 0.0f;
+    return std::clamp(maxAmplitude, 0.0f, 1.0f);
 }
 
 void SpeechRecognizer::resetKerfurDetection()
@@ -627,10 +475,6 @@ void SpeechRecognizer::setErrorString(const QString &error)
         return;
     m_errorString = error;
     emit errorStringChanged();
-
-    if (!error.isEmpty()) {
-        qWarning() << "SpeechRecognizer error:" << error;
-    }
 }
 
 void SpeechRecognizer::setKerfurDetected(bool detected)

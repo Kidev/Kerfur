@@ -26,6 +26,13 @@ Rectangle {
         readonly property real scaleX: imageAspectRatio > displayAspectRatio ? paintedWidth / sourceSize.width : paintedHeight / sourceSize.height * imageAspectRatio
         readonly property real scaleY: imageAspectRatio > displayAspectRatio ? paintedWidth / sourceSize.width / imageAspectRatio : paintedHeight / sourceSize.height
 
+        readonly property real displayOffsetX: (cameraImage.width - cameraImage.paintedWidth) / 2
+        readonly property real displayOffsetY: (cameraImage.height - cameraImage.paintedHeight) / 2
+
+        // Calculate proper scaling from source image to displayed image
+        readonly property real displayScaleX: cameraImage.paintedWidth / cameraImage.sourceSize.width
+        readonly property real displayScaleY: cameraImage.paintedHeight / cameraImage.sourceSize.height
+
         anchors.fill: parent
         anchors.margins: 2
         asynchronous: true
@@ -41,11 +48,11 @@ Rectangle {
             border.color: "lime"
             border.width: 2
             color: "transparent"
-            height: faceOverlay.visible ? root.faceTracker.facePixelSize.height * cameraImage.scaleY : 0
+            height: faceOverlay.visible ? root.faceTracker.facePixelSize.height * cameraImage.displayScaleY : 0
             visible: root.faceTracker && root.faceTracker.faceDetected && cameraImage.status === Image.Ready && cameraImage.sourceSize.width > 0 && cameraImage.paintedWidth > 0
-            width: faceOverlay.visible ? root.faceTracker.facePixelSize.width * cameraImage.scaleX : 0
-            x: faceOverlay.visible ? cameraImage.offsetX + root.faceTracker.facePixelCenter.x * cameraImage.scaleX - width / 2 : 0
-            y: faceOverlay.visible ? cameraImage.offsetY + root.faceTracker.facePixelCenter.y * cameraImage.scaleY - height / 2 : 0
+            width: faceOverlay.visible ? root.faceTracker.facePixelSize.width * cameraImage.displayScaleX : 0
+            x: faceOverlay.visible ? cameraImage.displayOffsetX + (root.faceTracker.facePixelCenter.x - root.faceTracker.facePixelSize.width / 2) * cameraImage.displayScaleX : 0
+            y: faceOverlay.visible ? cameraImage.displayOffsetY + (root.faceTracker.facePixelCenter.y - root.faceTracker.facePixelSize.height / 2) * cameraImage.displayScaleY : 0
 
             Behavior on height {
                 enabled: faceOverlay.visible
@@ -82,7 +89,7 @@ Rectangle {
                 }
             }
 
-            // Center dot only
+            // Center dot
             Rectangle {
                 anchors.centerIn: parent
                 color: "red"
@@ -90,6 +97,27 @@ Rectangle {
                 radius: 2
                 visible: faceOverlay.visible
                 width: 4
+            }
+
+            // Face landmarks - matching demo colors
+            Repeater {
+                model: root.faceTracker ? root.faceTracker.faceLandmarks : []
+
+                delegate: Rectangle {
+                    required property int index
+                    required property var modelData
+
+                    // Landmark colors matching demo: right eye (red), left eye (blue), nose (green), right mouth (magenta), left mouth (cyan)
+                    readonly property var landmarkColors: ["red", "blue", "lime", "magenta", "cyan"]
+
+                    color: landmarkColors[index] || "white"
+                    height: 4
+                    radius: 2
+                    visible: faceOverlay.visible && modelData && typeof modelData.x !== "undefined" && typeof modelData.y !== "undefined"
+                    width: 4
+                    x: visible ? cameraImage.displayOffsetX + modelData.x * cameraImage.displayScaleX - width / 2 : 0
+                    y: visible ? cameraImage.displayOffsetY + modelData.y * cameraImage.displayScaleY - height / 2 : 0
+                }
             }
         }
 
@@ -99,17 +127,18 @@ Rectangle {
 
             acceptedButtons: Qt.LeftButton
             anchors.fill: parent
-            hoverEnabled: true
             enabled: root.faceTracker && root.faceTracker.enabled && cameraImage.status === Image.Ready
+            hoverEnabled: true
 
-            onClicked: (mouse) => {
+            onClicked: mouse => {
                 mouse.accepted = true;
                 popup.open();
             }
 
             // Visual feedback on hover
             Rectangle {
-                anchors.fill: parent
+                id: rectPopupHover
+                anchors.fill: popupMouseArea
                 anchors.margins: 2
                 border.color: "white"
                 border.width: 1
@@ -123,7 +152,7 @@ Rectangle {
 
                     PropertyChanges {
                         opacity: 0.3
-                        target: parent
+                        target: rectPopupHover
                     }
                 }
                 transitions: Transition {
@@ -200,16 +229,16 @@ Rectangle {
 
             // Header
             Item {
-                width: parent.width
                 height: 30
+                width: parent.width
 
                 Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
                     color: "white"
                     font.bold: true
                     font.pixelSize: 16
                     text: "Camera Feed"
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
                 }
 
                 // Close button
@@ -243,11 +272,11 @@ Rectangle {
 
             // Large camera image
             Rectangle {
-                width: parent.width
-                height: parent.height - controlsPanel.height - parent.spacing - 50
-                color: "#000"
                 border.color: "#444"
                 border.width: 1
+                color: "#000"
+                height: parent.height - controlsPanel.height - parent.spacing - 50
+                width: parent.width
 
                 Image {
                     id: popupImage
@@ -288,6 +317,27 @@ Rectangle {
                             width: 8
                         }
 
+                        // Face landmarks for popup
+                        Repeater {
+                            model: root.faceTracker ? root.faceTracker.faceLandmarks : []
+
+                            delegate: Rectangle {
+                                required property int index
+                                required property var modelData
+
+                                // Landmark colors matching demo: right eye (red), left eye (blue), nose (green), right mouth (magenta), left mouth (cyan)
+                                readonly property var landmarkColors: ["red", "blue", "lime", "magenta", "cyan"]
+
+                                color: landmarkColors[index] || "white"
+                                height: 6
+                                radius: 3
+                                visible: popupFaceOverlay.visible && modelData && typeof modelData.x !== "undefined" && typeof modelData.y !== "undefined"
+                                width: 6
+                                x: visible ? popupImage.popupOffsetX + modelData.x * popupImage.popupScaleX - width / 2 : 0
+                                y: visible ? popupImage.popupOffsetY + modelData.y * popupImage.popupScaleY - height / 2 : 0
+                            }
+                        }
+
                         // Face label for popup
                         Rectangle {
                             anchors.bottom: parent.top
@@ -301,6 +351,7 @@ Rectangle {
 
                             Text {
                                 id: faceLabel
+
                                 anchors.centerIn: parent
                                 color: "lime"
                                 font.bold: true

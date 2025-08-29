@@ -21,7 +21,7 @@ find_package(
                QuickControls2
 )
 
-qt_standard_project_setup(REQUIRES 6.5)
+qt_standard_project_setup()
 if (QT_KNOWN_POLICY_QTP0004)
     qt_policy(SET QTP0004 NEW)
 endif ()
@@ -60,14 +60,14 @@ qt_add_qml_module(
 
 target_link_libraries(
     ${PROJECT_NAME}
-    PUBLIC Qt6::Core
-           Qt6::Gui
-           Qt6::Quick
-           Qt6::Qml
-           Qt6::Concurrent
-           Qt6::Multimedia
-           Qt6::MultimediaWidgets
-           Qt6::QuickControls2
+    PUBLIC Qt::Core
+           Qt::Gui
+           Qt::Quick
+           Qt::Qml
+           Qt::Concurrent
+           Qt::Multimedia
+           Qt::MultimediaWidgets
+           Qt::QuickControls2
            ${OpenCV_LIBS}
            Vision
            Tools

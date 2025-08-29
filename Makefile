@@ -243,7 +243,8 @@ setup-installer:
 	@echo "  - installer/config/meta/package.xml"
 	@echo "  - installer/packages/$(TARGET_PACKAGE)/meta/package.xml"
 
-desktop-build:
+
+deskop-configure:
 	cmake -S . -B $(BUILD_DIR) \
 	-DVERSION_TAG=$(VERSION_TAG) \
 	-DPROJECT_TITLE=$(PROJECT_TITLE) \
@@ -260,10 +261,16 @@ desktop-build:
 	-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN) \
 	-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$(QT_TOOLCHAIN_HOST) \
 	-DVCPKG_TARGET_TRIPLET=$(VCPKG_TRIPLET)
+
+desktop-build:
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
+
+desktop-install:
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
-desktop: setup-vcpkg setup-models desktop-build shortcut
+desktop-fast: desktop-build
+
+desktop: setup-vcpkg setup-models deskop-configure desktop-build desktop-install shortcut
 
 shortcut:
 ifeq ($(IS_WINDOWS),1)
