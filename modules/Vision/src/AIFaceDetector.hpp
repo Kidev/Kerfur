@@ -41,8 +41,8 @@ private:
     cv::Size m_inputSize {320, 320};
     QString m_modelPath;
 
-    // YuNet model parameters matching demo
-    static constexpr float DEFAULT_CONF_THRESHOLD {0.9f};
+    // YuNet model parameters - lowered confidence for better tilted face detection
+    static constexpr float DEFAULT_CONF_THRESHOLD {0.6f};
     static constexpr float DEFAULT_NMS_THRESHOLD {0.3f};
     static constexpr int DEFAULT_TOP_K {5000};
     static constexpr int DEFAULT_BACKEND_ID {0}; // DNN_BACKEND_OPENCV

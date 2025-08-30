@@ -53,21 +53,21 @@ Rectangle {
             x: cameraImage.displayOffsetX + (root.faceTracker.facePixelCenter.x - root.faceTracker.facePixelSize.width / 2) * cameraImage.displayScaleX
             y: cameraImage.displayOffsetY + (root.faceTracker.facePixelCenter.y - root.faceTracker.facePixelSize.height / 2) * cameraImage.displayScaleY
 
-            // Disable animations to prevent flickering issues
-
             // Center dot
-            Rectangle {
-                anchors.centerIn: parent
-                color: "red"
-                height: 4
-                radius: 2
-                visible: faceOverlay.visible
-                width: 4
-            }
+            //Rectangle {
+            //    anchors.centerIn: parent
+            //    color: "red"
+            //    height: 4
+            //    radius: 2
+            //    visible: faceOverlay.visible
+            //    width: 4
+            //}
         }
 
         // Face landmarks - using same coordinate system as face rectangle
         Repeater {
+            id: landmarkRepeater
+
             model: root.faceTracker ? root.faceTracker.faceLandmarks : []
 
             delegate: Rectangle {
@@ -78,14 +78,11 @@ Rectangle {
 
                 color: landmarkColors[index] || "white"
                 height: 6
-                parent: cameraImage
                 radius: 3
                 visible: isValidLandmark
                 width: 6
-
-                // Position landmarks using same coordinate system as face rectangle
-                x: isValidLandmark ? cameraImage.displayOffsetX + modelData.x * cameraImage.displayScaleX - width / 2 : -100
-                y: isValidLandmark ? cameraImage.displayOffsetY + modelData.y * cameraImage.displayScaleY - height / 2 : -100
+                x: isValidLandmark ? cameraImage.displayOffsetX + modelData.x * cameraImage.displayScaleX - width / 2 : 1
+                y: isValidLandmark ? cameraImage.displayOffsetY + modelData.y * cameraImage.displayScaleY - height / 2 : 1
             }
         }
 
@@ -279,13 +276,13 @@ Rectangle {
                         y: isValidPopupFace ? popupImage.popupOffsetY + (root.faceTracker.facePixelCenter.y - root.faceTracker.facePixelSize.height / 2) * popupImage.popupScaleY : 0
 
                         // Center dot
-                        Rectangle {
-                            anchors.centerIn: parent
-                            color: "red"
-                            height: 8
-                            radius: 4
-                            width: 8
-                        }
+                        //Rectangle {
+                        //    anchors.centerIn: parent
+                        //   color: "red"
+                        //    height: 8
+                        //    radius: 4
+                        //    width: 8
+                        //}
                     }
 
                     // Face landmarks for popup - using same coordinate system as popup face rectangle
@@ -329,7 +326,7 @@ Rectangle {
                             color: "lime"
                             font.bold: true
                             font.pixelSize: 12
-                            text: "FACE DETECTED"
+                            text: "FACE"
                         }
                     }
                 }
@@ -340,7 +337,7 @@ Rectangle {
                 id: controlsPanel
 
                 color: "#C0000000"
-                height: 120
+                height: 140
                 radius: 6
                 width: parent.width
 
@@ -420,6 +417,27 @@ Rectangle {
                             color: "lightgray"
                             font.pixelSize: 10
                             text: smoothingSlider.value.toFixed(2)
+                        }
+                    }
+
+                    // Resolution info
+                    Row {
+                        spacing: 15
+                        width: parent.width
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "white"
+                            font.pixelSize: 11
+                            text: "Camera Resolution:"
+                            width: 120
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "lightgray"
+                            font.pixelSize: 11
+                            text: root.faceTracker ? root.faceTracker.currentResolution : "Unknown"
                         }
                     }
 
