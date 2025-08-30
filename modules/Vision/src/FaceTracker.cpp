@@ -257,6 +257,7 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
 
     // Convert frame to QImage
     QImage image {frame.toImage()};
+    QImage image2 {frame.toImage()};
     if (image.isNull()) {
         return;
     }
@@ -288,76 +289,95 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
 void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::FaceInfo> &faces,
                                               const QImage &displayImage)
 {
+    // Validate frame
+    if (displayImage.isNull() || displayImage.width() <= 0 || displayImage.height() <= 0) {
+        setFaceDetected(false);
+        setFaceCenter(QPointF {0.5, 0.5});
+        setFacePixelCenter(QPointF {0.0, 0.0});
+        setFacePixelSize(QSize {0, 0});
+        setFaceLandmarks(QVariantList {});
+        m_hasLastKnownPosition = false;
+        return;
+    }
+
     if (!faces.empty()) {
-        // Use the face with highest confidence (already sorted by detector)
-        const auto &bestFace {faces[0]};
+        // Use highest-confidence face (detector provides sorted list)
+        const auto &bestFace = faces.front();
 
-        // Calculate normalized face center (0.0 to 1.0)
-        QPointF faceCenter {bestFace.bbox.center()};
-        const QPointF normalizedCenter {faceCenter.x() / displayImage.width(),
-                                        faceCenter.y() / displayImage.height()};
+        // --- Pixel-space center/size in displayImage coordinates (detector runs on displayImage) ---
+        const QPointF faceCenterPx = bestFace.bbox.center();
+        const QSize faceSizePx {static_cast<int>(bestFace.bbox.width()),
+                                static_cast<int>(bestFace.bbox.height())};
 
-        // Calculate pixel coordinates for display overlay
-        const QPointF pixelCenter {faceCenter};
-        const QSize pixelSize {static_cast<int>(bestFace.bbox.width()),
-                               static_cast<int>(bestFace.bbox.height())};
+        // Normalized center (0..1) in displayImage space
+        const QPointF normalizedCenter {faceCenterPx.x() / static_cast<qreal>(displayImage.width()),
+                                        faceCenterPx.y() /
+                                            static_cast<qreal>(displayImage.height())};
 
-        // Apply smoothing to reduce jitter
-        if (m_hasLastKnownPosition && m_trackingSmoothing > 0.0) {
-            QPointF smoothedCenter {};
-            smoothedCenter.setX(m_lastKnownFaceCenter.x() * m_trackingSmoothing +
-                                normalizedCenter.x() * (1.0 - m_trackingSmoothing));
-            smoothedCenter.setY(m_lastKnownFaceCenter.y() * m_trackingSmoothing +
-                                normalizedCenter.y() * (1.0 - m_trackingSmoothing));
+        // Clamp smoothing factor
+        qreal s = m_trackingSmoothing;
+        if (s < 0.0)
+            s = 0.0;
+        if (s > 1.0)
+            s = 1.0;
 
-            QPointF smoothedPixelCenter {};
-            smoothedPixelCenter.setX(m_lastKnownFacePixelCenter.x() * m_trackingSmoothing +
-                                     pixelCenter.x() * (1.0 - m_trackingSmoothing));
-            smoothedPixelCenter.setY(m_lastKnownFacePixelCenter.y() * m_trackingSmoothing +
-                                     pixelCenter.y() * (1.0 - m_trackingSmoothing));
+        if (m_hasLastKnownPosition && s > 0.0) {
+            const qreal inv = 1.0 - s;
 
-            setFaceCenter(smoothedCenter);
-            setFacePixelCenter(smoothedPixelCenter);
+            // Smooth normalized center
+            QPointF smoothedNorm {m_lastKnownFaceCenter.x() * s + normalizedCenter.x() * inv,
+                                  m_lastKnownFaceCenter.y() * s + normalizedCenter.y() * inv};
+
+            // Smooth pixel center
+            QPointF smoothedPx {m_lastKnownFacePixelCenter.x() * s + faceCenterPx.x() * inv,
+                                m_lastKnownFacePixelCenter.y() * s + faceCenterPx.y() * inv};
+
+            setFaceCenter(smoothedNorm);
+            setFacePixelCenter(smoothedPx);
         } else {
             setFaceCenter(normalizedCenter);
-            setFacePixelCenter(pixelCenter);
+            setFacePixelCenter(faceCenterPx);
         }
 
-        setFacePixelSize(pixelSize);
-        setFaceDetected(true);
+        // Box size (no smoothing needed)
+        setFacePixelSize(faceSizePx);
 
-        // Convert landmarks to QVariantList for QML
+        // --- Landmarks: YuNet provides correct (x,y) coordinates ---
+        // YuNet landmarks are already in correct order: (x, y) pixel coordinates
+        // Convert to QVariantList in displayImage pixel space.
         QVariantList landmarksList;
-        for (const QPointF &landmark : bestFace.landmarks) {
-            QVariantMap landmarkMap;
-            landmarkMap["x"] = landmark.x();
-            landmarkMap["y"] = landmark.y();
-            landmarksList.append(landmarkMap);
+        landmarksList.reserve(static_cast<int>(bestFace.landmarks.size()));
+        for (const QPointF &lm : bestFace.landmarks) {
+            QVariantMap m;
+            m.insert(QStringLiteral("y"), lm.x()); // Use detector's X as Y
+            m.insert(QStringLiteral("x"), lm.y()); // Use detector's Y as X
+            landmarksList.append(m);
         }
         setFaceLandmarks(landmarksList);
 
-        // Store last known position (use member variables directly)
+        // Mark detection and remember last-knowns
+        setFaceDetected(true);
         m_lastKnownFaceCenter = m_faceCenter;
         m_lastKnownFacePixelCenter = m_facePixelCenter;
-        m_lastKnownFacePixelSize = pixelSize;
+        m_lastKnownFacePixelSize = faceSizePx;
         m_hasLastKnownPosition = true;
 
-        if (m_errorString.contains("No face")) {
-            setErrorString("");
-        }
+        if (!m_errorString.isEmpty() && m_errorString.contains(QStringLiteral("No face")))
+            setErrorString(QString {});
     } else {
-        // No face detected - use last known position if available
+        // No face this frame
         if (m_hasLastKnownPosition && m_enabled) {
-            // Keep the last known positions but mark as not detected
             setFaceDetected(false);
-            // Don't update face positions - keep the last known values
+            // Keep last-known geometry; overlays should hide based on faceDetected
         } else {
-            // No previous position available, reset everything
+            // Reset to defaults
             setFaceDetected(false);
-            setFaceCenter(QPointF {0.5, 0.5}); // Center position
-            setFacePixelCenter(QPointF {displayImage.width() / 2.0, displayImage.height() / 2.0});
-            setFacePixelSize(QSize {100, 100}); // Default size
-            setFaceLandmarks(QVariantList {});  // Clear landmarks
+            setFaceCenter(QPointF {0.5, 0.5});
+            setFacePixelCenter(QPointF {static_cast<qreal>(displayImage.width()) * 0.5,
+                                        static_cast<qreal>(displayImage.height()) * 0.5});
+            setFacePixelSize(QSize {100, 100});
+            setFaceLandmarks(QVariantList {});
+            m_hasLastKnownPosition = false;
         }
     }
 }

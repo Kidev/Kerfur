@@ -22,6 +22,9 @@ find_package(
 )
 
 qt_standard_project_setup()
+if (QT_KNOWN_POLICY_QTP0001)
+    qt_policy(SET QTP0001 NEW)
+endif ()
 if (QT_KNOWN_POLICY_QTP0004)
     qt_policy(SET QTP0004 NEW)
 endif ()
