@@ -87,6 +87,20 @@ CDN_UPLOAD_PASSWORD ?=
 WASM_UPLOAD_SOCKET ?=
 WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
+MODEL_VISION_DETECT ?= face_detection_yunet_2023mar.onnx
+MODEL_VISION_DETECT_URL ?= https://huggingface.co/opencv/face_detection_yunet/resolve/main
+MODEL_VISION_IDENTIFY ?= face_recognition_sface_2021dec.onnx
+MODEL_VISION_IDENTIFY_URL ?= https://huggingface.co/opencv/face_recognition_sface/resolve/main
+MODEL_VISION_IDENTIFY_GALLERY ?= assets/faces
+MODEL_HEARING_GGML ?= ggml-small.bin
+MODEL_HEARING_GGML_URL ?= https://huggingface.co/ggerganov/whisper.cpp/resolve/main
+QRC_TEMPLATE := resources.qrc.template
+QRC_OUTPUT := resources.qrc
+QRC_PREFIX ?= /
+EXTRA_QRC_FILES := \
+	$(MODELS_DIR)/$(MODEL_VISION_DETECT) \
+	$(MODELS_DIR)/$(MODEL_VISION_IDENTIFY) \
+	$(MODELS_DIR)/$(MODEL_HEARING_GGML)
 
 ifeq ($(DEBUG),1)
   BUILD_MODE := Debug
@@ -108,11 +122,11 @@ debug:
 
 web:
 	@echo "Building with MinSizeRel configuration for web"
-	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg setup-models web-build ensure-config
+	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg handle-resources web-build ensure-config
 
 web-debug:
 	@echo "Building with Debug configuration for web"
-	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg setup-models web-build ensure-config
+	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg handle-resources web-build ensure-config
 
 setup-vcpkg:
 	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
@@ -125,21 +139,44 @@ setup-vcpkg:
 		./vcpkg install --triplet $(VCPKG_TRIPLET) --disable-metrics; \
 	fi
 
-setup-models:
-	@if [ ! -f "${MODELS_DIR}/yunet_320x320.onnx" ]; then \
+download-models:
+	@if [ ! -f "${MODELS_DIR}/${MODEL_VISION_DETECT}" ]; then \
 		mkdir -p ${MODELS_DIR}; \
-		echo "Downloading YuNet face detection model..."; \
-		wget -O "${MODELS_DIR}/yunet_320x320.onnx" "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"; \
+		echo "Downloading face detection model..."; \
+		wget -O "${MODELS_DIR}/${MODEL_VISION_DETECT}" "${MODEL_VISION_DETECT_URL}/${MODEL_VISION_DETECT}"; \
 	else \
-		echo "YuNet face detection model found"; \
+		echo "Face detection model found: ${MODEL_VISION_DETECT}"; \
 	fi
-	@if [ ! -f "${MODELS_DIR}/ggml-tiny.en.bin" ]; then \
+	@if [ ! -f "${MODELS_DIR}/${MODEL_VISION_IDENTIFY}" ]; then \
 		mkdir -p ${MODELS_DIR}; \
-		echo "Downloading Whisper tiny.en model..."; \
-		wget -O "${MODELS_DIR}/ggml-tiny.en.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"; \
+		echo "Downloading face recognition model..."; \
+		wget -O "${MODELS_DIR}/${MODEL_VISION_IDENTIFY}" "${MODEL_VISION_IDENTIFY_URL}/${MODEL_VISION_IDENTIFY}"; \
 	else \
-		echo "Whisper model found"; \
+		echo "Face recognition model found: ${MODEL_VISION_IDENTIFY}"; \
 	fi
+	@if [ ! -f "${MODELS_DIR}/${MODEL_HEARING_GGML}" ]; then \
+		mkdir -p ${MODELS_DIR}; \
+		echo "Downloading speech to text model..."; \
+		wget -O "${MODELS_DIR}/${MODEL_HEARING_GGML}" "${MODEL_HEARING_GGML_URL}/${MODEL_HEARING_GGML}"; \
+	else \
+		echo "Speech to text model found: ${MODEL_HEARING_GGML}"; \
+	fi
+
+create-resources-file:
+	@rm -f "$(QRC_OUTPUT)"; \
+	extras="$(EXTRA_QRC_FILES)"; \
+	awk -v prefix="$(QRC_PREFIX)" -v extras="$$extras" '\
+	  BEGIN { n = split(extras, a, /[[:space:]]+/) } \
+	  /<qresource[[:space:]]+prefix=/ { sub(/prefix="[^"]*"/, "prefix=\"" prefix "\"") } \
+	  /<\/qresource>/ { \
+	    for (i = 1; i <= n; ++i) if (length(a[i])) printf "        <file>%s</file>\n", a[i]; \
+	  } \
+	  { print }' \
+	  "$(QRC_TEMPLATE)" > "$(QRC_OUTPUT)"; \
+	echo "Generated $(QRC_OUTPUT) (prefix='$(QRC_PREFIX)', extras: $$([ -n "$$extras" ] && echo "$$extras" || echo none))"
+
+
+handle-resources: download-models create-resources-file
 
 repo:
 	mkdir -p "installer/packages/$(TARGET_PACKAGE)/data"
@@ -250,6 +287,9 @@ deskop-configure:
 	-DPROJECT_TITLE=$(PROJECT_TITLE) \
 	-DPROJECT_ORG=$(PROJECT_ORG) \
 	-DPROJECT_DOMAIN=$(PROJECT_DOMAIN) \
+	-DMODEL_VISION_DETECT=$(MODEL_VISION_DETECT) \
+	-DMODEL_VISION_IDENTIFY=$(MODEL_VISION_IDENTIFY) \
+	-DMODEL_HEARING_GGML=$(MODEL_HEARING_GGML) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=OFF \
@@ -270,7 +310,7 @@ desktop-install:
 
 desktop-fast: desktop-build
 
-desktop: setup-vcpkg setup-models deskop-configure desktop-build desktop-install shortcut
+desktop: setup-vcpkg handle-resources deskop-configure desktop-build desktop-install shortcut
 
 shortcut:
 ifeq ($(IS_WINDOWS),1)
@@ -343,6 +383,9 @@ web-build:
 	-DPROJECT_TITLE=$(PROJECT_TITLE) \
 	-DPROJECT_ORG=$(PROJECT_ORG) \
 	-DPROJECT_DOMAIN=$(PROJECT_DOMAIN) \
+	-DMODEL_VISION_DETECT=$(MODEL_VISION_DETECT) \
+	-DMODEL_VISION_IDENTIFY=$(MODEL_VISION_IDENTIFY) \
+	-DMODEL_HEARING_GGML=$(MODEL_HEARING_GGML) \
 	-DCMAKE_BUILD_TYPE=$(BUILD_MODE) \
 	-DQT_ROOT_DIR=$(QT_ROOT_DIR) \
 	-DEMSCRIPTEN=ON \
@@ -358,6 +401,7 @@ web-build:
 
 	mkdir -p $(ABS_INSTALL_DIR)
 	cp -r $(ASSETS_DIR) $(ABS_INSTALL_DIR)
+	cp -r $(MODELS_DIR) $(ABS_INSTALL_DIR)
 
 	cp $(BUILD_DIR)/$(PROJECT_BINARY).html $(ABS_INSTALL_DIR)/index.html
 	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
@@ -423,18 +467,19 @@ ensure-config:
 
 clean:
 	rm -rf $(BUILD_DIR) $(ABS_INSTALL_DIR) emsdk installer/packages installer/config/config.xml installer/config/meta/package.xml
-	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user 
+	rm -rf $(INSTALLER_NAME) $(TARGET_PACKAGE) $(REPO_NAME) CMakeLists.txt.user
 
 clean-vcpkg:
 	rm -rf $(VCPKG_ROOT) $(VCPKG_ROOT)_installed
 
 clean-models:
-	rm -rf ${MODELS_DIR}
+	rm -rf $(MODELS_DIR)
+	rm $(QRC_OUTPUT)
 
 clean-env:
 	rm -rf .env
 
 clean-all: clean clean-vcpkg clean-models
 
-.PHONY: all debug web web-debug setup-vcpkg setup-models repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config clean clean-vcpkg clean-models clean-env clean-all
+.PHONY: all debug web web-debug setup-vcpkg download-models create-resources-file handle-resources repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config clean clean-vcpkg clean-models clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-models clean-env clean-all

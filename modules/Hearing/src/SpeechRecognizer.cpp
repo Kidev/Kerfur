@@ -32,7 +32,7 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     , m_kerfurResetTimer {this}
 {
     // Initialize Whisper engine
-    QString modelPath {"models/ggml-tiny.en.bin"};
+    QString modelPath {"models/" % QStringLiteral(MODEL_HEARING_GGML)};
     if (!m_whisperEngine->initialize(modelPath)) {
         setErrorString("Failed to initialize speech recognition: " +
                        m_whisperEngine->getLastError());
