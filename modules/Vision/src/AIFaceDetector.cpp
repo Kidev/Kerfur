@@ -91,22 +91,7 @@ cv::Mat AIFaceDetector::qImageToCvMat(const QImage &image)
 
 QString AIFaceDetector::findModelPath()
 {
-    // Check multiple possible locations for the YuNet model
-    const QStringList possiblePaths {
-        QCoreApplication::applicationDirPath() + "/models/yunet_320x320.onnx",
-        QCoreApplication::applicationDirPath() + "/../models/yunet_320x320.onnx",
-        QDir::currentPath() + "/models/yunet_320x320.onnx",
-        "./models/yunet_320x320.onnx",
-        "models/yunet_320x320.onnx"
-    };
-
-    for (const QString &path : possiblePaths) {
-        if (QFile::exists(path)) {
-            return QDir::cleanPath(path);
-        }
-    }
-
-    return QString{}; // Not found
+    return QCoreApplication::applicationDirPath() % "/models/" % QStringLiteral(MODEL_VISION_DETECT);
 }
 
 void AIFaceDetector::setInputSize(const cv::Size &inputSize)
