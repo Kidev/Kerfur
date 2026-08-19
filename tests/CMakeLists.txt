@@ -14,3 +14,4 @@ function (kerfur_add_test NAME)
 endfunction ()
 
 kerfur_add_test(harness)
+kerfur_add_test(boundedqueue Core)
