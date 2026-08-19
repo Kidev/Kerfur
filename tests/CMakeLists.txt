@@ -20,3 +20,32 @@ kerfur_add_test(peoplemodel Core)
 kerfur_add_test(worldmodel Core)
 kerfur_add_test(perceptionpipe Core)
 kerfur_add_test(resourcemonitor Core)
+kerfur_add_test(modeldirectory Core)
+kerfur_add_test(settingspath Core)
+
+# The CPU perception suites. They exercise the decode arithmetic, the tracker
+# and the orientation recovery, none of which need a camera, a model file or an
+# accelerator, which is what makes them runnable in CI.
+if (KERFUR_PERCEPTION_BACKEND STREQUAL "cpu")
+    kerfur_add_test(visiondecode Vision)
+    kerfur_add_test(persontracker Vision)
+    kerfur_add_test(orientation Vision)
+    kerfur_add_test(modelcatalog Vision)
+    kerfur_add_test(identitystore Vision)
+
+    # Vision keeps OpenCV private, so neither its headers nor its libraries
+    # reach a consumer. The suites build cv::Mat inputs of their own, so they
+    # need both, and say so here rather than the module widening its interface
+    # for the benefit of its tests. dnn as well as core, because FacePipeline
+    # holds cv::dnn::Net members by value and tst_identitystore builds one, so
+    # the inline destructor lands in the suite rather than in libVision.
+    find_package(OpenCV 4.8 REQUIRED COMPONENTS core dnn)
+    foreach (SUITE visiondecode persontracker orientation modelcatalog identitystore)
+        target_include_directories(tst_${SUITE} PRIVATE ${OpenCV_INCLUDE_DIRS})
+        target_link_libraries(tst_${SUITE} PRIVATE ${OpenCV_LIBS})
+    endforeach ()
+
+    target_compile_definitions(
+        tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    )
+endif ()

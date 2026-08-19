@@ -1,5 +1,5 @@
 {
-  "$comment": "opencv4 is pinned to a headless feature set: frames are rendered by Qt Quick, so the gtk/highgui backends are excluded. They pull in the entire GTK stack (gtk3, at-spi2-core, dbus, libsystemd) for windows this application never opens.",
+  "$comment": "opencv4 is pinned to a headless feature set: frames are rendered by Qt Quick, so the gtk/highgui backends are excluded. They pull in the entire GTK stack (gtk3, at-spi2-core, dbus, libsystemd) for windows this application never opens. dnn and calib3d are load bearing rather than incidental: dnn runs every model in the CPU perception backend, and calib3d provides the similarity transform that aligns a face onto the ArcFace reference points. whisper-cpp and ggml stay for the desktop and web speech path, which the Pi replaces with Moonshine; see docs/superpowers/specs/2026-08-19-cpu-perception-backends.md.",
   "dependencies": [
     {
       "name": "opencv4",
