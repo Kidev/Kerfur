@@ -12,9 +12,11 @@ qt_add_qml_module(
     SOURCES src/queuestatssource.cpp
             src/queuestatssource.h
             src/boundedqueue.h
+            src/perceptiontypes.cpp
+            src/perceptiontypes.h
 )
 
-target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core)
+target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Qml)
 
 # PUBLIC so that consumers and the test tree can include these headers by their
 # bare name, which is how every file in this module refers to its neighbours.
