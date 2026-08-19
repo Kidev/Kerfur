@@ -8,7 +8,7 @@
 
 namespace Kerfur {
 
-WorldModel::WorldModel(QObject *parent) : QObject{parent} {}
+WorldModel::WorldModel(QObject *parent) : QObject{parent}, m_people{this} {}
 
 WorldModel &WorldModel::instance()
 {
@@ -91,12 +91,12 @@ void WorldModel::applyPerceptionFrame(const Kerfur::PerceptionFrame &frame)
     const QList<TrackedPerson> people{frame.people()};
     m_people.setPeople(people);
     m_personCount = static_cast<int>(people.size());
-    m_cameraOrientation = frame.orientationDegrees();
+    setCameraOrientation(frame.orientationDegrees());
 
     // Nearest is the largest share of the frame height. It needs no camera
     // calibration and it is what decides who Kerfur looks at, so a tie is
-    // resolved by keeping the first, which is the lower track id and therefore
-    // the person who has been here longer.
+    // resolved by keeping the first element in whatever order the producer
+    // supplied the people in.
     m_hasNearestPerson = false;
     qreal bestProximity{-1.0};
     for (const TrackedPerson &person : people) {
