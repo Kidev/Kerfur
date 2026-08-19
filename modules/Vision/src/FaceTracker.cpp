@@ -304,7 +304,7 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
         // Use highest-confidence face (detector provides sorted list)
         const auto &bestFace = faces.front();
 
-        // --- Pixel-space center/size in displayImage coordinates (detector runs on displayImage) ---
+        // Pixel-space center/size in displayImage coordinates (detector runs on displayImage)
         const QPointF faceCenterPx = bestFace.bbox.center();
         const QSize faceSizePx{static_cast<int>(bestFace.bbox.width()),
                                static_cast<int>(bestFace.bbox.height())};
@@ -341,7 +341,7 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
         // Box size (no smoothing needed)
         setFacePixelSize(faceSizePx);
 
-        // --- Landmarks: YuNet provides correct (x,y) coordinates ---
+        // Landmarks: YuNet provides correct (x,y) coordinates
         // YuNet landmarks are already in correct order: (x, y) pixel coordinates
         // Convert to QVariantList in displayImage pixel space.
         QVariantList landmarksList;

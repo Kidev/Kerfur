@@ -75,6 +75,7 @@ signals:
     void processingChanged();
     void availableDevicesChanged();
     void currentDeviceChanged();
+    void modelPathChanged();
 
     // Action signals
     void kerfurHeard();

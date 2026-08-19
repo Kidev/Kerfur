@@ -82,7 +82,10 @@ void SpeechRecognizer::setModelPath(const QString &modelPath)
         setEnabled(false);
     }
     if (!modelPath.isEmpty() && m_whisperEngine->initialize(modelPath)) {
-        m_modelPath = modelPath;
+        if (m_modelPath != modelPath) {
+            m_modelPath = modelPath;
+            emit modelPathChanged();
+        }
         setEnabled(true);
     }
 }
