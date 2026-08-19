@@ -16,6 +16,7 @@ find_package(
                Qml
                Concurrent
                ShaderTools
+               Test
                Multimedia
                MultimediaWidgets
                QuickControls2
@@ -47,6 +48,11 @@ qt_add_shaders(
 )
 
 add_subdirectory(modules)
+
+include(CTest)
+if (BUILD_TESTING AND NOT EMSCRIPTEN)
+    add_subdirectory(tests)
+endif ()
 
 qt_add_qml_module(
     ${PROJECT_NAME}
