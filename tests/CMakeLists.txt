@@ -15,3 +15,4 @@ endfunction ()
 
 kerfur_add_test(harness)
 kerfur_add_test(boundedqueue Core)
+kerfur_add_test(perceptiontypes Core)
