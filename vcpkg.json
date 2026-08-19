@@ -1,6 +1,23 @@
 {
+  "$comment": "opencv4 is pinned to a headless feature set: frames are rendered by Qt Quick, so the gtk/highgui backends are excluded. They pull in the entire GTK stack (gtk3, at-spi2-core, dbus, libsystemd) for windows this application never opens.",
   "dependencies": [
-    "opencv",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "calib3d",
+        "dnn",
+        "fs",
+        "gapi",
+        "intrinsics",
+        "jpeg",
+        "png",
+        "quirc",
+        "thread",
+        "tiff",
+        "webp"
+      ]
+    },
     "whisper-cpp",
     "ggml"
   ]
