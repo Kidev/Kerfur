@@ -33,7 +33,7 @@ You can also chose to build the project. It is very straightforward.
 - An internet connection, it will download `vcpkg` and if required `emsdk`
 
 ### Build
-Run the following, replacing the value of `QT_ROOT_DIR` with yours.  You must include the version and the architecture:  
+Run the following, replacing the value of `QT_ROOT_DIR` with yours. You must include the version and the architecture:  
 ```console
 kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.8.3/gcc_64
 ````
@@ -45,4 +45,4 @@ kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.8.3/gcc_64
     - `make installer` to create an online installer using a FTP as CDN. You will need to provide credentials (`CDN_UPLOAD_SOCKET` `CDN_UPLOAD_USERNAME` `CDN_UPLOAD_PASSWORD`). The repository for the OS you built on will be created inside a folder named after your OS, in the folder you are in upon connection.  
     - `make web` to create a WASM build  
     - `make run-web` to start a localserver running the application (requires to have a WASM build first with `make web`)  
-    - `make upload-web` to upload the WASM application to a web server.  You will need to provide credentials (`WASM_UPLOAD_SOCKET` `WASM_UPLOAD_USERNAME` `WASM_UPLOAD_PASSWORD`). The application will be uploaded inside a folder `Kerfur` in the folder you are in upon connection.  
+    - `make upload-web` to upload the WASM application to a web server. You will need to provide credentials (`WASM_UPLOAD_SOCKET` `WASM_UPLOAD_USERNAME` `WASM_UPLOAD_PASSWORD`). The application will be uploaded inside a folder `Kerfur` in the folder you are in upon connection.  

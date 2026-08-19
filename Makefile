@@ -46,6 +46,17 @@ WINDOWS_ENV := $(OS)
 IS_WINDOWS := $(if $(or $(findstring MINGW,$(OS_NAME_UNAME)),$(findstring MSYS,$(OS_NAME_UNAME)),$(findstring CYGWIN,$(OS_NAME_UNAME)),$(findstring Windows_NT,$(WINDOWS_ENV))),1,0)
 OS_NAME := $(if $(filter 1,$(IS_WINDOWS)),Windows,$(OS_NAME_UNAME))
 EXE_EXT := $(if $(filter 1,$(IS_WINDOWS)),.exe,)
+
+# vcpkg asset download shim: some distfile hosts (kernel.org GeoDNS) hand out
+# IPv6-only mirrors, which hard-fails the dependency install on hosts without
+# IPv6 routing. The helper retries such downloads over IPv4; vcpkg still falls
+# back to its own downloader if the helper fails. POSIX shell only, so it is
+# left unset on native Windows.
+VCPKG_ASSET_SCRIPT := $(shell pwd)/cmake/fetch-vcpkg-asset.sh
+ifeq ($(IS_WINDOWS),0)
+  X_VCPKG_ASSET_SOURCES ?= x-script,$(VCPKG_ASSET_SCRIPT) {url} {dst}
+  export X_VCPKG_ASSET_SOURCES
+endif
 PROJECT_BINARY ?= kerfur
 PROJECT_TITLE ?= Kerfur
 PROJECT_ORG := kidev
