@@ -99,9 +99,9 @@ private:
     void setModelPath(const QString &modelPath);
 
     // Face tracking state
-    bool m_enabled {false};
-    bool m_faceDetected {false};
-    QPointF m_faceCenter {0.5, 0.5};
+    bool m_enabled{false};
+    bool m_faceDetected{false};
+    QPointF m_faceCenter{0.5, 0.5};
     QString m_errorString;
     QImage m_cameraFrame;
     QPointF m_facePixelCenter;
@@ -114,24 +114,24 @@ private:
     QMediaCaptureSession m_captureSession;
     QVideoSink m_videoSink;
     QCameraDevice m_preferredCamera;
-    QSize m_requestedResolution {1920, 1080}; // Fixed at 1920x1080
+    QSize m_requestedResolution{1920, 1080}; // Fixed at 1920x1080
 
     // AI Face detection
     std::unique_ptr<AIFaceDetector> m_faceDetector;
 
     // Detection parameters
-    qreal m_detectionConfidence {0.7};
-    qreal m_trackingSmoothing {0.3};
+    qreal m_detectionConfidence{0.7};
+    qreal m_trackingSmoothing{0.3};
 
     // Timing and performance
     QTimer m_frameThrottleTimer;
     QTimer m_cameraRetryTimer;
 
     // Processing parameters
-    static constexpr int PROCESSING_INTERVAL_MS {100}; // ~10 FPS instead of 30 FPS
+    static constexpr int PROCESSING_INTERVAL_MS{100}; // ~10 FPS instead of 30 FPS
     QPointF m_lastKnownFaceCenter;
     QPointF m_lastKnownFacePixelCenter;
     QSize m_lastKnownFacePixelSize;
-    bool m_hasLastKnownPosition {false};
-    bool m_isInitializing {false};
+    bool m_hasLastKnownPosition{false};
+    bool m_isInitializing{false};
 };

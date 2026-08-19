@@ -5,7 +5,7 @@
 #include <QDebug>
 
 // AudioProcessor implementation
-AudioProcessor::AudioProcessor(QObject *parent) : QIODevice {parent}
+AudioProcessor::AudioProcessor(QObject *parent) : QIODevice{parent}
 {
     open(QIODevice::WriteOnly);
 }
@@ -19,17 +19,17 @@ qint64 AudioProcessor::readData(char *data, qint64 maxlen)
 
 qint64 AudioProcessor::writeData(const char *data, qint64 len)
 {
-    QByteArray audioData {data, static_cast<int>(len)};
+    QByteArray audioData{data, static_cast<int>(len)};
     emit audioDataReady(audioData);
     return len;
 }
 
 // SpeechRecognizer implementation
 SpeechRecognizer::SpeechRecognizer(QObject *parent)
-    : QObject {parent}
-    , m_whisperEngine {std::make_unique<WhisperEngine>(this)}
-    , m_volumeUpdateTimer {this}
-    , m_kerfurResetTimer {this}
+    : QObject{parent}
+    , m_whisperEngine{std::make_unique<WhisperEngine>(this)}
+    , m_volumeUpdateTimer{this}
+    , m_kerfurResetTimer{this}
 {
     // Initialize Whisper engine
     if (!m_whisperEngine->initialize(m_modelPath)) {
@@ -90,13 +90,13 @@ void SpeechRecognizer::setModelPath(const QString &modelPath)
 void SpeechRecognizer::enumerateAudioDevices()
 {
     m_audioDevices.clear();
-    QStringList deviceNames {};
+    QStringList deviceNames{};
 
     // First, always try to get the default device
-    QAudioDevice defaultDevice {QMediaDevices::defaultAudioInput()};
+    QAudioDevice defaultDevice{QMediaDevices::defaultAudioInput()};
 
     // Get all audio input devices
-    const QList<QAudioDevice> devices {QMediaDevices::audioInputs()};
+    const QList<QAudioDevice> devices{QMediaDevices::audioInputs()};
 
     qDebug() << "Qt detected" << devices.size() << "audio input devices";
     qDebug() << "Default device is" << (defaultDevice.isNull() ? "NULL" : "valid");
@@ -105,7 +105,7 @@ void SpeechRecognizer::enumerateAudioDevices()
     if (!defaultDevice.isNull()) {
         m_selectedDevice = defaultDevice;
         m_audioDevices.append(defaultDevice);
-        QString name {defaultDevice.description()};
+        QString name{defaultDevice.description()};
         if (name.isEmpty()) {
             name = "Default Audio Input";
         }
@@ -117,9 +117,9 @@ void SpeechRecognizer::enumerateAudioDevices()
     for (const auto &device : devices) {
         if (!device.isNull() && device.id() != defaultDevice.id()) {
             m_audioDevices.append(device);
-            QString name {device.description()};
+            QString name{device.description()};
             if (name.isEmpty()) {
-                name = QString {"Audio Device %1"}.arg(m_audioDevices.size());
+                name = QString{"Audio Device %1"}.arg(m_audioDevices.size());
             }
             deviceNames.append(name);
             qDebug() << "Found device:" << name << "ID:" << device.id();
@@ -133,7 +133,7 @@ void SpeechRecognizer::enumerateAudioDevices()
 
         // Check if we can still create a QAudioSource with default device
         // This sometimes works even when device enumeration fails
-        m_selectedDevice = QAudioDevice {}; // Empty device will use system default
+        m_selectedDevice = QAudioDevice{}; // Empty device will use system default
         deviceNames.append("System Audio (No devices detected)");
     }
 
@@ -152,7 +152,7 @@ void SpeechRecognizer::enumerateAudioDevices()
 
 void SpeechRecognizer::setDevice(const QString &deviceName)
 {
-    QAudioDevice selectedDevice {};
+    QAudioDevice selectedDevice{};
 
     for (const auto &device : m_audioDevices) {
         if (device.description() == deviceName ||
@@ -218,17 +218,17 @@ void SpeechRecognizer::initializeAudio()
     }
 
     // Setup audio format
-    QAudioFormat format {};
+    QAudioFormat format{};
     format.setSampleRate(48000);
     //format.setChannelCount(1);
     //format.setSampleFormat(QAudioFormat::UInt8);
 
-    QAudioDevice deviceToUse {m_selectedDevice};
+    QAudioDevice deviceToUse{m_selectedDevice};
 
     // If still no device, try using an empty QAudioDevice which will use system default
     if (deviceToUse.isNull()) {
         qWarning() << "No audio device selected, attempting to use system default";
-        deviceToUse = QAudioDevice {}; // Empty device = system default
+        deviceToUse = QAudioDevice{}; // Empty device = system default
     }
 
     // Check format support
@@ -279,7 +279,7 @@ void SpeechRecognizer::initializeAudio()
         qDebug() << "Audio capture started";
 
     } catch (const std::exception &e) {
-        setErrorString(QString {"Audio initialization failed: %1"}.arg(e.what()));
+        setErrorString(QString{"Audio initialization failed: %1"}.arg(e.what()));
     }
 }
 
@@ -315,43 +315,43 @@ void SpeechRecognizer::processAudioData(const QByteArray &data)
     m_audioBuffer = data;
 
     // Convert to float samples for Whisper
-    std::vector<float> floatSamples {};
+    std::vector<float> floatSamples{};
 
     if (m_actualFormat.sampleFormat() == QAudioFormat::UInt8) {
         // Convert UInt8 to float [-1, 1]
-        const uint8_t *samples {reinterpret_cast<const uint8_t *>(data.constData())};
-        int sampleCount {static_cast<int>(data.size())};
+        const uint8_t *samples{reinterpret_cast<const uint8_t *>(data.constData())};
+        int sampleCount{static_cast<int>(data.size())};
         floatSamples.reserve(sampleCount);
 
-        for (int i {0}; i < sampleCount; ++i) {
+        for (int i{0}; i < sampleCount; ++i) {
             floatSamples.push_back((samples[i] - 128) / 128.0f);
         }
     } else if (m_actualFormat.sampleFormat() == QAudioFormat::Int16) {
         // Convert Int16 to float [-1, 1]
-        const int16_t *samples {reinterpret_cast<const int16_t *>(data.constData())};
-        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(int16_t))};
+        const int16_t *samples{reinterpret_cast<const int16_t *>(data.constData())};
+        int sampleCount{static_cast<int>(data.size()) / static_cast<int>(sizeof(int16_t))};
         floatSamples.reserve(sampleCount);
 
         if (m_actualFormat.channelCount() == 1) {
-            for (int i {0}; i < sampleCount; ++i) {
+            for (int i{0}; i < sampleCount; ++i) {
                 floatSamples.push_back(samples[i] / 32768.0f);
             }
         } else {
             // Convert stereo to mono by averaging
-            for (int i {0}; i < sampleCount - 1; i += 2) {
+            for (int i{0}; i < sampleCount - 1; i += 2) {
                 floatSamples.push_back((samples[i] + samples[i + 1]) / 65536.0f);
             }
         }
     } else if (m_actualFormat.sampleFormat() == QAudioFormat::Float) {
-        const float *samples {reinterpret_cast<const float *>(data.constData())};
-        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(float))};
+        const float *samples{reinterpret_cast<const float *>(data.constData())};
+        int sampleCount{static_cast<int>(data.size()) / static_cast<int>(sizeof(float))};
 
         if (m_actualFormat.channelCount() == 1) {
             floatSamples.assign(samples, samples + sampleCount);
         } else {
             // Convert stereo to mono
             floatSamples.reserve(sampleCount / 2);
-            for (int i {0}; i < sampleCount - 1; i += 2) {
+            for (int i{0}; i < sampleCount - 1; i += 2) {
                 floatSamples.push_back((samples[i] + samples[i + 1]) * 0.5f);
             }
         }
@@ -359,15 +359,15 @@ void SpeechRecognizer::processAudioData(const QByteArray &data)
 
     // Resample to 16kHz if needed
     if (m_actualFormat.sampleRate() != SAMPLE_RATE && !floatSamples.empty()) {
-        std::vector<float> resampled {};
-        float ratio {static_cast<float>(SAMPLE_RATE) / m_actualFormat.sampleRate()};
-        int newSize {static_cast<int>(floatSamples.size() * ratio)};
+        std::vector<float> resampled{};
+        float ratio{static_cast<float>(SAMPLE_RATE) / m_actualFormat.sampleRate()};
+        int newSize{static_cast<int>(floatSamples.size() * ratio)};
         resampled.reserve(newSize);
 
-        for (int i {0}; i < newSize; ++i) {
-            float srcIdx {i / ratio};
-            int idx {static_cast<int>(srcIdx)};
-            float frac {srcIdx - idx};
+        for (int i{0}; i < newSize; ++i) {
+            float srcIdx{i / ratio};
+            int idx{static_cast<int>(srcIdx)};
+            float frac{srcIdx - idx};
 
             if (idx + 1 < static_cast<int>(floatSamples.size())) {
                 resampled.push_back(floatSamples[idx] * (1.0f - frac) +
@@ -406,7 +406,7 @@ void SpeechRecognizer::handleKeywordDetected(const QString &keyword)
 void SpeechRecognizer::updateVolumeLevel()
 {
     if (!m_audioBuffer.isEmpty()) {
-        float volume {calculateVolume(m_audioBuffer)};
+        float volume{calculateVolume(m_audioBuffer)};
         setVolumeLevel(volume);
         m_audioBuffer.clear();
     } else {
@@ -419,29 +419,29 @@ float SpeechRecognizer::calculateVolume(const QByteArray &data)
     if (data.isEmpty())
         return 0.0f;
 
-    float maxAmplitude {0.0f};
+    float maxAmplitude{0.0f};
 
     if (m_actualFormat.sampleFormat() == QAudioFormat::UInt8) {
-        const uint8_t *samples {reinterpret_cast<const uint8_t *>(data.constData())};
-        int sampleCount {static_cast<int>(data.size())};
+        const uint8_t *samples{reinterpret_cast<const uint8_t *>(data.constData())};
+        int sampleCount{static_cast<int>(data.size())};
 
-        for (int i {0}; i < sampleCount; ++i) {
-            float amplitude {std::abs((samples[i] - 128) / 128.0f)};
+        for (int i{0}; i < sampleCount; ++i) {
+            float amplitude{std::abs((samples[i] - 128) / 128.0f)};
             maxAmplitude = std::max(maxAmplitude, amplitude);
         }
     } else if (m_actualFormat.sampleFormat() == QAudioFormat::Int16) {
-        const int16_t *samples {reinterpret_cast<const int16_t *>(data.constData())};
-        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(int16_t))};
+        const int16_t *samples{reinterpret_cast<const int16_t *>(data.constData())};
+        int sampleCount{static_cast<int>(data.size()) / static_cast<int>(sizeof(int16_t))};
 
-        for (int i {0}; i < sampleCount; ++i) {
-            float amplitude {std::abs(samples[i] / 32768.0f)};
+        for (int i{0}; i < sampleCount; ++i) {
+            float amplitude{std::abs(samples[i] / 32768.0f)};
             maxAmplitude = std::max(maxAmplitude, amplitude);
         }
     } else if (m_actualFormat.sampleFormat() == QAudioFormat::Float) {
-        const float *samples {reinterpret_cast<const float *>(data.constData())};
-        int sampleCount {static_cast<int>(data.size()) / static_cast<int>(sizeof(float))};
+        const float *samples{reinterpret_cast<const float *>(data.constData())};
+        int sampleCount{static_cast<int>(data.size()) / static_cast<int>(sizeof(float))};
 
-        for (int i {0}; i < sampleCount; ++i) {
+        for (int i{0}; i < sampleCount; ++i) {
             maxAmplitude = std::max(maxAmplitude, std::abs(samples[i]));
         }
     }
