@@ -32,6 +32,7 @@ private slots:
     void clearsTheNearestPersonWhenEverybodyLeaves();
     void onlyNotifiesHeardTextOnAChange();
     void tracksCameraAndMicrophoneAvailability();
+    void notifiesWhenAFrameChangesCameraOrientation();
 };
 
 void TestWorldModel::startsWithNobodyPresent()
@@ -124,6 +125,25 @@ void TestWorldModel::tracksCameraAndMicrophoneAvailability()
     QVERIFY(model.isCameraOnline());
     QVERIFY(model.isMicrophoneOnline());
     QCOMPARE(model.cameraOrientation(), 180);
+}
+
+void TestWorldModel::notifiesWhenAFrameChangesCameraOrientation()
+{
+    WorldModel model;
+    QSignalSpy spy{&model, &WorldModel::cameraOrientationChanged};
+
+    PerceptionFrame frame;
+    frame.setOrientationDegrees(180);
+    model.applyPerceptionFrame(frame);
+
+    // The property declares NOTIFY cameraOrientationChanged, so a binding on it
+    // alone has to update when a frame carries a new orientation.
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(model.cameraOrientation(), 180);
+
+    // Same orientation again is not a change and must not notify.
+    model.applyPerceptionFrame(frame);
+    QCOMPARE(spy.count(), 1);
 }
 
 QTEST_GUILESS_MAIN(TestWorldModel)
