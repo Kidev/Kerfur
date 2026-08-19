@@ -60,6 +60,7 @@ qt_add_qml_module(
     VERSION 1.0
     QML_FILES ${SOURCES_QML} ${SOURCES_QML_SINGLETON}
     DEPENDENCIES TARGET
+                 Core
                  Vision
                  Tools
                  Display
@@ -77,14 +78,28 @@ target_link_libraries(
            Qt6::Multimedia
            Qt6::MultimediaWidgets
            Qt6::QuickControls2
-           ${OpenCV_LIBS}
+           Core
            Vision
            Tools
            Display
            Hearing
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
+# WebAssembly has no filesystem to provision models into, so they are baked
+# into the Emscripten virtual one at link time and ModelCatalog looks there.
+# Absent at configure time means a build with no perception rather than a build
+# failure, which is the state a fresh clone that has not run `make models` is in.
+if (EMSCRIPTEN)
+    if (EXISTS "${CMAKE_SOURCE_DIR}/models")
+        target_link_options(
+            ${PROJECT_NAME}
+            PRIVATE "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/models@/models"
+        )
+        message(STATUS "Preloading models from ${CMAKE_SOURCE_DIR}/models")
+    else ()
+        message(WARNING "No models directory; the web build will start without perception")
+    endif ()
+endif ()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")
 

@@ -31,7 +31,13 @@
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
+#include <QSettings>
 #include <QSurfaceFormat>
+
+#ifdef KERFUR_PERCEPTION_CPU
+#include "visionproducer.h"
+#include "worldmodel.h"
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -45,6 +51,27 @@ int main(int argc, char *argv[])
 
     QGuiApplication app{argc, argv};
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
+
+#ifdef KERFUR_PERCEPTION_CPU
+    // Instantiated at the application root and never exposed to QML. The
+    // producer pushes into WorldModel and consumers read WorldModel; nothing
+    // imports a producer, which is what makes an inference free build a module
+    // list change rather than a code change.
+    //
+    // Constructed before the engine so that the first frame the face renders
+    // already reflects whether a camera was found.
+    //
+    // Its own key rather than `Shader/faceTrackingEnabled`, and off by default,
+    // because Face.qml still drives the legacy FaceTracker and the two stacks
+    // would open the same camera device. The key goes away with the legacy
+    // stack, when Face.qml starts reading WorldModel.
+    Kerfur::VisionProducer vision{Kerfur::WorldModel::instance()};
+    {
+        const QSettings settings;
+        vision.setEnabled(
+            settings.value(QStringLiteral("Perception/cpuPipelineEnabled"), false).toBool());
+    }
+#endif
 
     QQmlApplicationEngine engine;
 

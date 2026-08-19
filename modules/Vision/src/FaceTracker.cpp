@@ -1,4 +1,5 @@
 #include "FaceTracker.hpp"
+#include "modeldirectory.h"
 #include <QBuffer>
 #include <QCameraDevice>
 #include <QCoreApplication>
@@ -12,6 +13,16 @@
 #include <QThread>
 #include <QVideoFrameFormat>
 
+namespace {
+
+// Stage C of assets/models.json, and the same file ModelCatalog names for
+// ModelId::Face. Spelled out here rather than taken from the catalog because
+// the catalog is only compiled for the CPU backend, while this detector is the
+// one Face.qml still drives; both disappear when the QML moves to WorldModel.
+constexpr QLatin1StringView faceModelFile{"face_detection_yunet_2023mar.onnx"};
+
+} // namespace
+
 FaceTracker::FaceTracker(QObject *parent)
     : QObject{parent}
     , m_camera{this}
@@ -23,11 +34,13 @@ FaceTracker::FaceTracker(QObject *parent)
     , m_detectionConfidence{0.6} // Lower default confidence to detect more faces
     , m_trackingSmoothing{0.7}   // Higher smoothing to reduce jitter
 {
-    // Initialize AI face detector
+    // Initialize AI face detector. The model is provisioned outside the binary
+    // by `make models`, so where it lives is a runtime fact and there is
+    // nothing for the view layer to decide about it: resolving here is what
+    // makes the tracker usable without QML having to know a file name.
     m_faceDetector = std::make_unique<AIFaceDetector>();
-    if (!m_faceDetector->isInitialized()) {
-        setErrorString("Failed to initialize AI face detector: " + m_faceDetector->getLastError());
-    }
+    m_modelPath = Kerfur::ModelDirectory::locate(faceModelFile);
+    applyModelPath();
 
     // Setup frame throttling - reduce frequency to reduce jitter
     m_frameThrottleTimer.setSingleShot(true);
@@ -94,7 +107,8 @@ void FaceTracker::initializeCamera()
     m_isInitializing = true;
 
     if (!m_faceDetector || !m_faceDetector->isInitialized()) {
-        setErrorString("Face detection models not loaded");
+        setErrorString(m_modelError.isEmpty() ? QStringLiteral("Face detection models not loaded")
+                                              : m_modelError);
         m_isInitializing = false;
         return;
     }
@@ -497,13 +511,43 @@ void FaceTracker::setResolution(const QString &resolution)
 
 void FaceTracker::setModelPath(const QString &modelPath)
 {
-    if (m_enabled) {
-        setEnabled(false);
+    if (m_modelPath == modelPath) {
+        return;
     }
+
+    // Restored rather than forced on: which model to load and whether to track
+    // are separate decisions, and a binding on this property must not be able
+    // to switch the camera on behind the user's back.
+    const bool wasEnabled{m_enabled};
+    setEnabled(false);
+
     m_modelPath = modelPath;
-    if (!m_modelPath.isEmpty()) {
-        m_faceDetector->setModelPath(modelPath);
+    applyModelPath();
+    emit modelPathChanged();
+
+    if (wasEnabled) {
         setEnabled(true);
+    }
+}
+
+void FaceTracker::applyModelPath()
+{
+    m_modelError.clear();
+
+    if (m_modelPath.isEmpty()) {
+        m_modelError = QStringLiteral("Face detection model %1 not found. Searched %2. "
+                                      "Run `make models` to provision it.")
+                           .arg(faceModelFile, Kerfur::ModelDirectory::describeSearchPath());
+    } else {
+        m_faceDetector->setModelPath(m_modelPath);
+        if (!m_faceDetector->isInitialized()) {
+            m_modelError = QStringLiteral("Failed to load face detection model %1: %2")
+                               .arg(m_modelPath, m_faceDetector->getLastError());
+        }
+    }
+
+    if (!m_modelError.isEmpty()) {
+        setErrorString(m_modelError);
     }
 }
 

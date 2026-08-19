@@ -98,6 +98,36 @@ WASM_UPLOAD_SOCKET ?=
 WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
 
+# The web build resolves its dependencies for Emscripten rather than for the
+# host. The overlay triplet adds -msimd128 and -pthread: without the first,
+# opencv4 cannot be built for wasm at all, because intrin_wasm.hpp calls SIMD
+# intrinsics the community triplet compiles without enabling; without the
+# second, the objects disagree with Qt's wasm_multithread ABI.
+ifeq ($(WEB),1)
+  VCPKG_TRIPLET := wasm32-emscripten
+  VCPKG_OVERLAY_TRIPLETS := $(shell pwd)/triplets
+  export VCPKG_OVERLAY_TRIPLETS
+endif
+
+# Model provisioning. Kerfur boots offline, so the inference models are fetched
+# and checksum verified once rather than at run time. The desktop profile lands
+# in the application data directory, which is where KSettings points
+# `Paths/modelsPath` by default. The wasm profile lands in the source tree,
+# because the web build bakes that directory into the Emscripten file system at
+# link time and a browser has nowhere else to read it from.
+MODELS_SCRIPT := $(shell pwd)/cmake/fetch-models.sh
+MODELS_WEB_DIR ?= $(shell pwd)/models
+# Make's own conditionals rather than a $(shell) with a case statement: the
+# closing paren of a shell case label terminates the $(shell ...) expansion.
+MODELS_APP_SUFFIX := $(PROJECT_ORG)/$(PROJECT_TITLE)/models
+ifeq ($(IS_WINDOWS),1)
+  MODELS_DESKTOP_DIR ?= $(if $(APPDATA),$(APPDATA),$(HOME)/AppData/Roaming)/$(MODELS_APP_SUFFIX)
+else ifeq ($(OS_NAME_UNAME),Darwin)
+  MODELS_DESKTOP_DIR ?= $(HOME)/Library/Application Support/$(MODELS_APP_SUFFIX)
+else
+  MODELS_DESKTOP_DIR ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)/$(MODELS_APP_SUFFIX)
+endif
+
 ifeq ($(DEBUG),1)
   BUILD_MODE := Debug
 else
@@ -263,6 +293,12 @@ desktop-install:
 	cmake --install $(BUILD_DIR) --config $(BUILD_MODE)
 
 desktop-fast: desktop-build
+
+models:
+	@$(MODELS_SCRIPT) desktop "$(MODELS_DESKTOP_DIR)"
+
+models-web:
+	@$(MODELS_SCRIPT) wasm "$(MODELS_WEB_DIR)"
 
 test: deskop-configure
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
@@ -430,5 +466,5 @@ clean-env:
 
 clean-all: clean clean-vcpkg
 
-.PHONY: all debug web web-debug setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
+.PHONY: all debug web web-debug models models-web setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-env clean-all

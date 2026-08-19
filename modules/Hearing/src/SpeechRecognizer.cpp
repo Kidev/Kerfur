@@ -1,8 +1,18 @@
 #include "SpeechRecognizer.hpp"
+#include "modeldirectory.h"
 #include <cmath>
 #include <QAudioDevice>
 #include <QAudioFormat>
 #include <QDebug>
+
+namespace {
+
+// The speech entry of assets/models.json. English only, because the wake word
+// and the transcript consumers are English; the manifest is what pins the
+// checksum and `make models` is what puts the file on disk.
+constexpr QLatin1StringView speechModelFile{"ggml-tiny.en.bin"};
+
+} // namespace
 
 // AudioProcessor implementation
 AudioProcessor::AudioProcessor(QObject *parent) : QIODevice{parent}
@@ -31,14 +41,12 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     , m_volumeUpdateTimer{this}
     , m_kerfurResetTimer{this}
 {
-    // Initialize Whisper engine
-    if (!m_whisperEngine->initialize(m_modelPath)) {
-        setErrorString("Failed to initialize speech recognition: " +
-                       m_whisperEngine->getLastError());
-        qDebug() << "Whisper initialization failed:" << m_whisperEngine->getLastError();
-    } else {
-        qDebug() << "Whisper engine initialized successfully";
-    }
+    // The model is provisioned outside the binary by `make models`, so where it
+    // lives is a runtime fact rather than something the view layer decides.
+    // Resolving it here is what makes the recognizer usable without QML having
+    // to know a file name.
+    m_modelPath = Kerfur::ModelDirectory::locate(speechModelFile);
+    applyModelPath();
 
     // Connect Whisper signals
     connect(m_whisperEngine.get(),
@@ -78,15 +86,43 @@ SpeechRecognizer::~SpeechRecognizer()
 
 void SpeechRecognizer::setModelPath(const QString &modelPath)
 {
-    if (m_enabled) {
-        setEnabled(false);
+    if (m_modelPath == modelPath) {
+        return;
     }
-    if (!modelPath.isEmpty() && m_whisperEngine->initialize(modelPath)) {
-        if (m_modelPath != modelPath) {
-            m_modelPath = modelPath;
-            emit modelPathChanged();
-        }
+
+    // Restored rather than forced on: which model to load and whether to
+    // listen are separate decisions, and a binding on this property must not be
+    // able to open the microphone behind the user's back.
+    const bool wasEnabled{m_enabled};
+    setEnabled(false);
+
+    m_modelPath = modelPath;
+    applyModelPath();
+    emit modelPathChanged();
+
+    if (wasEnabled) {
         setEnabled(true);
+    }
+}
+
+void SpeechRecognizer::applyModelPath()
+{
+    m_modelError.clear();
+
+    if (m_modelPath.isEmpty()) {
+        m_modelError = QStringLiteral("Speech recognition model %1 not found. Searched %2. "
+                                      "Run `make models` to provision it.")
+                           .arg(speechModelFile, Kerfur::ModelDirectory::describeSearchPath());
+    } else if (!m_whisperEngine->initialize(m_modelPath)) {
+        m_modelError = QStringLiteral("Failed to load speech recognition model %1: %2")
+                           .arg(m_modelPath, m_whisperEngine->getLastError());
+    }
+
+    if (m_modelError.isEmpty()) {
+        qDebug() << "Whisper engine initialized with" << m_modelPath;
+    } else {
+        setErrorString(m_modelError);
+        qDebug() << m_modelError;
     }
 }
 
@@ -211,7 +247,9 @@ void SpeechRecognizer::setEnabled(bool enabled)
 void SpeechRecognizer::initializeAudio()
 {
     if (!m_whisperEngine->isInitialized()) {
-        setErrorString("Speech recognition engine not initialized");
+        setErrorString(m_modelError.isEmpty()
+                           ? QStringLiteral("Speech recognition engine not initialized")
+                           : m_modelError);
         return;
     }
 

@@ -19,6 +19,7 @@ target_link_libraries(
     ${HEARING_MODULE}
     PRIVATE Qt6::Multimedia
             Qt6::Core
+            Core
             whisper
             ggml::all
             ggml::ggml
@@ -26,9 +27,3 @@ target_link_libraries(
 )
 
 target_include_directories(${HEARING_MODULE} PRIVATE src)
-
-if (whisper_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/models/ggml-tiny.en.bin")
-    file(COPY "${CMAKE_SOURCE_DIR}/models/ggml-tiny.en.bin"
-         DESTINATION "${CMAKE_BINARY_DIR}/models/"
-    )
-endif ()

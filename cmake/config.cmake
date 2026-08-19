@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/functions.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/platform.cmake")
 
 set(SOURCES_CPP src/main.cpp)
 file(

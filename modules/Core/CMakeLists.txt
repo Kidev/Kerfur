@@ -11,6 +11,10 @@ qt_add_qml_module(
     VERSION 1.0
     SOURCES src/queuestatssource.cpp
             src/queuestatssource.h
+            src/modeldirectory.cpp
+            src/modeldirectory.h
+            src/settingspath.cpp
+            src/settingspath.h
             src/boundedqueue.h
             src/perceptiontypes.cpp
             src/perceptiontypes.h

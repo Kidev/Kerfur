@@ -98,6 +98,10 @@ private:
     void setFaceLandmarks(const QVariantList &landmarks);
     void setModelPath(const QString &modelPath);
 
+    /// Hands the current path to the detector and records why it failed when it
+    /// did, so the reason survives until the camera is actually asked for.
+    void applyModelPath();
+
     // Face tracking state
     bool m_enabled{false};
     bool m_faceDetected{false};
@@ -108,6 +112,7 @@ private:
     QSize m_facePixelSize;
     QVariantList m_faceLandmarks;
     QString m_modelPath;
+    QString m_modelError;
 
     // Camera and multimedia
     QCamera m_camera;
