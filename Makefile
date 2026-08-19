@@ -253,6 +253,10 @@ desktop-install:
 
 desktop-fast: desktop-build
 
+test: deskop-configure
+	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
+	cd $(BUILD_DIR) && ctest --output-on-failure
+
 desktop: setup-vcpkg deskop-configure desktop-build desktop-install shortcut
 
 shortcut:
@@ -415,5 +419,5 @@ clean-env:
 
 clean-all: clean clean-vcpkg
 
-.PHONY: all debug web web-debug setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config clean clean-vcpkg clean-env clean-all
+.PHONY: all debug web web-debug setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-env clean-all
