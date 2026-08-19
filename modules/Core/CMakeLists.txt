@@ -16,6 +16,8 @@ qt_add_qml_module(
             src/perceptiontypes.h
             src/peoplemodel.cpp
             src/peoplemodel.h
+            src/worldmodel.cpp
+            src/worldmodel.h
 )
 
 target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Qml)
