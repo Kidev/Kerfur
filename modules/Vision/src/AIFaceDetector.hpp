@@ -36,16 +36,16 @@ private:
     void setInputSize(const cv::Size &inputSize);
 
     cv::Ptr<cv::FaceDetectorYN> m_detector;
-    bool m_initialized {false};
+    bool m_initialized{false};
     QString m_lastError;
     QMutex m_mutex;
-    cv::Size m_inputSize {320, 320};
+    cv::Size m_inputSize{320, 320};
     QString m_modelPath;
 
     // YuNet model parameters - lowered confidence for better tilted face detection
-    static constexpr float DEFAULT_CONF_THRESHOLD {0.6f};
-    static constexpr float DEFAULT_NMS_THRESHOLD {0.3f};
-    static constexpr int DEFAULT_TOP_K {5000};
-    static constexpr int DEFAULT_BACKEND_ID {0}; // DNN_BACKEND_OPENCV
-    static constexpr int DEFAULT_TARGET_ID {0};  // DNN_TARGET_CPU
+    static constexpr float DEFAULT_CONF_THRESHOLD{0.6f};
+    static constexpr float DEFAULT_NMS_THRESHOLD{0.3f};
+    static constexpr int DEFAULT_TOP_K{5000};
+    static constexpr int DEFAULT_BACKEND_ID{0}; // DNN_BACKEND_OPENCV
+    static constexpr int DEFAULT_TARGET_ID{0};  // DNN_TARGET_CPU
 };

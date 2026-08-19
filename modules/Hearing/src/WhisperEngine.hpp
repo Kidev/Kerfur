@@ -1,15 +1,15 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
-#include <vector>
-#include <atomic>
 #include <thread>
+#include <vector>
 #include <QMutex>
 #include <QObject>
+#include <QQueue>
 #include <QString>
 #include <QTimer>
-#include <QQueue>
 
 // Forward declarations
 struct whisper_context;
@@ -26,7 +26,8 @@ public:
     bool initialize(const QString &modelPath);
     bool isInitialized() const { return m_initialized; }
 
-    struct TranscriptionResult {
+    struct TranscriptionResult
+    {
         QString text;
         float confidence;
         int64_t timestamp_ms;
@@ -60,34 +61,34 @@ private:
     // Convert int16 to float samples
     std::vector<float> convertToFloat(const QByteArray &audioData);
 
-    whisper_context *m_context {nullptr};
+    whisper_context *m_context{nullptr};
     std::unique_ptr<whisper_full_params> m_params;
 
-    bool m_initialized {false};
+    bool m_initialized{false};
     QString m_lastError;
     QMutex m_mutex;
 
     // Audio buffer management
     std::vector<float> m_audioBuffer;
     QMutex m_bufferMutex;
-    std::atomic<bool> m_processing {false};
+    std::atomic<bool> m_processing{false};
 
     // Processing thread
     std::unique_ptr<std::thread> m_processingThread;
-    std::atomic<bool> m_shouldStop {false};
+    std::atomic<bool> m_shouldStop{false};
 
     // Configuration
-    static constexpr int SAMPLE_RATE {16000};
-    static constexpr int CHUNK_SIZE_MS {3000}; // Process 3 second chunks
-    static constexpr int CHUNK_SIZE_SAMPLES {SAMPLE_RATE * CHUNK_SIZE_MS / 1000};
-    static constexpr int MIN_SAMPLES_FOR_PROCESSING {SAMPLE_RATE / 2}; // 0.5 seconds minimum
+    static constexpr int SAMPLE_RATE{16000};
+    static constexpr int CHUNK_SIZE_MS{3000}; // Process 3 second chunks
+    static constexpr int CHUNK_SIZE_SAMPLES{SAMPLE_RATE * CHUNK_SIZE_MS / 1000};
+    static constexpr int MIN_SAMPLES_FOR_PROCESSING{SAMPLE_RATE / 2}; // 0.5 seconds minimum
 
-    QString m_language {"en"};
-    bool m_translate {false};
+    QString m_language{"en"};
+    bool m_translate{false};
 
     // Keywords to detect
-    QStringList m_keywords {"kerfur", "kerf", "fur", "kerfür", "care fur", "curve fur"};
+    QStringList m_keywords{"kerfur", "kerf", "fur", "kerfür", "care fur", "curve fur"};
 
     // Processing timer
-    QTimer *m_processTimer {nullptr};
+    QTimer *m_processTimer{nullptr};
 };

@@ -117,21 +117,21 @@ private:
     QAudioDevice m_selectedDevice;
 
     // State
-    bool m_enabled {false};
-    bool m_listening {false};
+    bool m_enabled{false};
+    bool m_listening{false};
     QString m_lastText;
-    float m_confidence {0.0f};
+    float m_confidence{0.0f};
     QString m_errorString;
-    bool m_kerfurDetected {false};
-    float m_volumeLevel {0.0f};
-    bool m_processing {false};
+    bool m_kerfurDetected{false};
+    float m_volumeLevel{0.0f};
+    bool m_processing{false};
     QStringList m_availableDevices;
     QString m_currentDevice;
     QString m_modelPath;
 
     // Configuration
-    static constexpr int SAMPLE_RATE {16000};
-    static constexpr int CHANNEL_COUNT {1};
+    static constexpr int SAMPLE_RATE{16000};
+    static constexpr int CHANNEL_COUNT{1};
 
     // Timers
     QTimer m_volumeUpdateTimer;
@@ -139,5 +139,5 @@ private:
 
     // Audio buffer for processing
     QByteArray m_audioBuffer;
-    static constexpr int BUFFER_SIZE {16384};
+    static constexpr int BUFFER_SIZE{16384};
 };

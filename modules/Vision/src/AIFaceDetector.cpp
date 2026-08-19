@@ -27,7 +27,7 @@ QString AIFaceDetector::getModelPath()
 
 bool AIFaceDetector::initialize()
 {
-    QMutexLocker locker {&m_mutex};
+    QMutexLocker locker{&m_mutex};
 
     try {
         // Find the YuNet model file
@@ -55,12 +55,12 @@ bool AIFaceDetector::initialize()
 
         // Test the detector with a small image to ensure it works
         try {
-            cv::Mat testImage {cv::Mat::zeros(320, 320, CV_8UC3)};
+            cv::Mat testImage{cv::Mat::zeros(320, 320, CV_8UC3)};
             cv::Mat faces;
             m_detector->detect(testImage, faces);
             qDebug() << "YuNet detector test successful";
         } catch (const cv::Exception &e) {
-            m_lastError = QString {"Detector test failed: %1"}.arg(e.what());
+            m_lastError = QString{"Detector test failed: %1"}.arg(e.what());
             qWarning() << m_lastError;
             return false;
         }
@@ -71,11 +71,11 @@ bool AIFaceDetector::initialize()
         return true;
 
     } catch (const cv::Exception &e) {
-        m_lastError = QString {"OpenCV error during initialization: %1"}.arg(e.what());
+        m_lastError = QString{"OpenCV error during initialization: %1"}.arg(e.what());
         qWarning() << m_lastError;
         return false;
     } catch (const std::exception &e) {
-        m_lastError = QString {"Initialization error: %1"}.arg(e.what());
+        m_lastError = QString{"Initialization error: %1"}.arg(e.what());
         qWarning() << m_lastError;
         return false;
     }
@@ -83,16 +83,16 @@ bool AIFaceDetector::initialize()
 
 cv::Mat AIFaceDetector::qImageToCvMat(const QImage &image)
 {
-    QImage rgbImage {image};
+    QImage rgbImage{image};
     if (rgbImage.format() != QImage::Format_RGB888) {
         rgbImage = rgbImage.convertToFormat(QImage::Format_RGB888);
     }
 
-    cv::Mat mat {rgbImage.height(),
-                 rgbImage.width(),
-                 CV_8UC3,
-                 const_cast<uchar *>(rgbImage.constBits()),
-                 static_cast<size_t>(rgbImage.bytesPerLine())};
+    cv::Mat mat{rgbImage.height(),
+                rgbImage.width(),
+                CV_8UC3,
+                const_cast<uchar *>(rgbImage.constBits()),
+                static_cast<size_t>(rgbImage.bytesPerLine())};
 
     // Convert RGB to BGR (OpenCV format) and clone to ensure data ownership
     cv::Mat bgrMat;
@@ -115,11 +115,11 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
         return {};
     }
 
-    QMutexLocker locker {&m_mutex};
+    QMutexLocker locker{&m_mutex};
 
     try {
         // Convert QImage to OpenCV Mat
-        cv::Mat inputImage {qImageToCvMat(image)};
+        cv::Mat inputImage{qImageToCvMat(image)};
         if (inputImage.empty()) {
             qWarning() << "Failed to convert image";
             return {};
@@ -127,7 +127,7 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
 
         // Set the input size to match the image dimensions
         // This allows YuNet to work with any input size
-        setInputSize(cv::Size {inputImage.cols, inputImage.rows});
+        setInputSize(cv::Size{inputImage.cols, inputImage.rows});
 
         // Detect faces using YuNet
         cv::Mat faces;
@@ -137,16 +137,16 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
         std::vector<FaceInfo> faceInfos;
 
         if (faces.rows > 0) {
-            for (int i {0}; i < faces.rows; ++i) {
-                const float *data {faces.ptr<float>(i)};
+            for (int i{0}; i < faces.rows; ++i) {
+                const float *data{faces.ptr<float>(i)};
 
                 // YuNet output format: [x1, y1, w, h, score, x_re, y_re, x_le, y_le, x_nt, y_nt, x_rcm, y_rcm, x_lcm, y_lcm]
                 // Where: re=right eye, le=left eye, nt=nose tip, rcm=right corner mouth, lcm=left corner mouth
-                float x1 {data[0]};
-                float y1 {data[1]};
-                float w {data[2]};
-                float h {data[3]};
-                float confidence {data[4]};
+                float x1{data[0]};
+                float y1{data[1]};
+                float w{data[2]};
+                float h{data[3]};
+                float confidence{data[4]};
 
                 // Skip low confidence detections
                 if (confidence < confidenceThreshold) {
@@ -161,7 +161,7 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
 
                 FaceInfo faceInfo;
                 faceInfo.confidence = confidence;
-                faceInfo.bbox = QRectF {x1, y1, w, h};
+                faceInfo.bbox = QRectF{x1, y1, w, h};
 
                 // Extract landmarks (5 points: right eye, left eye, nose tip, right mouth corner, left mouth corner)
                 if (faces.cols >= 15) { // Ensure we have all landmark data
