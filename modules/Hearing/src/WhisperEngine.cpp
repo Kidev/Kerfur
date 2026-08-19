@@ -7,7 +7,7 @@
 #include <QFile>
 
 WhisperEngine::WhisperEngine(QObject *parent)
-    : QObject {parent}, m_params {std::make_unique<whisper_full_params>()}
+    : QObject{parent}, m_params{std::make_unique<whisper_full_params>()}
 {
     // Setup processing timer
     m_processTimer = new QTimer(this);
@@ -32,7 +32,7 @@ WhisperEngine::~WhisperEngine()
 
 bool WhisperEngine::initialize(const QString &modelPath)
 {
-    QMutexLocker locker {&m_mutex};
+    QMutexLocker locker{&m_mutex};
 
     if (m_initialized) {
         qDebug() << "WhisperEngine already initialized";
@@ -40,7 +40,7 @@ bool WhisperEngine::initialize(const QString &modelPath)
     }
 
     // Check if model file exists
-    QFile modelFile {modelPath};
+    QFile modelFile{modelPath};
     if (!modelFile.exists()) {
         qDebug() << "WhisperEngine model not found at " << modelPath;
         m_lastError = QString("WhisperEngine model not found at %1").arg(modelPath);
@@ -62,7 +62,7 @@ bool WhisperEngine::loadModel(const QString &modelPath)
         m_context = whisper_init_from_file_with_params(modelPath.toUtf8().constData(), cparams);
 
         if (!m_context) {
-            m_lastError = QString {"Failed to load Whisper model from: %1"}.arg(modelPath);
+            m_lastError = QString{"Failed to load Whisper model from: %1"}.arg(modelPath);
             qWarning() << m_lastError;
             return false;
         }
@@ -107,7 +107,7 @@ bool WhisperEngine::loadModel(const QString &modelPath)
         return true;
 
     } catch (const std::exception &e) {
-        m_lastError = QString {"Exception during initialization: %1"}.arg(e.what());
+        m_lastError = QString{"Exception during initialization: %1"}.arg(e.what());
         qWarning() << m_lastError;
         return false;
     }
@@ -118,7 +118,7 @@ void WhisperEngine::processAudio(const std::vector<float> &samples)
     if (!m_initialized || samples.empty())
         return;
 
-    QMutexLocker locker {&m_bufferMutex};
+    QMutexLocker locker{&m_bufferMutex};
 
     // Append to buffer
     m_audioBuffer.insert(m_audioBuffer.end(), samples.begin(), samples.end());
@@ -140,7 +140,7 @@ void WhisperEngine::processAudioBuffer()
     std::vector<float> samplesToProcess;
 
     {
-        QMutexLocker locker {&m_bufferMutex};
+        QMutexLocker locker{&m_bufferMutex};
 
         // Need at least minimum samples for meaningful transcription
         if (m_audioBuffer.size() < MIN_SAMPLES_FOR_PROCESSING) {
@@ -186,7 +186,7 @@ WhisperEngine::TranscriptionResult WhisperEngine::transcribe(const std::vector<f
     if (!m_context || samples.empty())
         return result;
 
-    QMutexLocker locker {&m_mutex};
+    QMutexLocker locker{&m_mutex};
 
     try {
         qDebug() << "Transcribing" << samples.size() << "samples ("
@@ -300,7 +300,7 @@ std::vector<float> WhisperEngine::convertToFloat(const QByteArray &audioData)
 
 void WhisperEngine::reset()
 {
-    QMutexLocker locker {&m_bufferMutex};
+    QMutexLocker locker{&m_bufferMutex};
     m_audioBuffer.clear();
     qDebug() << "WhisperEngine audio buffer reset";
 }

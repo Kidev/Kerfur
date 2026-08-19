@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
         "*.ffmpeg.*=false\n*.multimedia.*=false\n*.warning=true\n*.debug=" %
         QStringLiteral(DEBUG_LOG) % "\nqt.*.debug=false");
 
-    QGuiApplication app {argc, argv};
+    QGuiApplication app{argc, argv};
     app.setApplicationVersion(QStringLiteral(VERSION_TAG));
 
     QQmlApplicationEngine engine;

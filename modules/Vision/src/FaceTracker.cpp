@@ -13,15 +13,15 @@
 #include <QVideoFrameFormat>
 
 FaceTracker::FaceTracker(QObject *parent)
-    : QObject {parent}
-    , m_camera {this}
-    , m_captureSession {this}
-    , m_videoSink {this}
-    , m_frameThrottleTimer {this}
-    , m_cameraRetryTimer {this}
-    , m_requestedResolution {1920, 1080}
-    , m_detectionConfidence {0.6} // Lower default confidence to detect more faces
-    , m_trackingSmoothing {0.7}   // Higher smoothing to reduce jitter
+    : QObject{parent}
+    , m_camera{this}
+    , m_captureSession{this}
+    , m_videoSink{this}
+    , m_frameThrottleTimer{this}
+    , m_cameraRetryTimer{this}
+    , m_requestedResolution{1920, 1080}
+    , m_detectionConfidence{0.6} // Lower default confidence to detect more faces
+    , m_trackingSmoothing{0.7}   // Higher smoothing to reduce jitter
 {
     // Initialize AI face detector
     m_faceDetector = std::make_unique<AIFaceDetector>();
@@ -46,10 +46,10 @@ FaceTracker::~FaceTracker() = default;
 
 void FaceTracker::enumerateCameras()
 {
-    const QList<QCameraDevice> cameras {QMediaDevices::videoInputs()};
+    const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
 
-    for (int i {0}; i < cameras.size(); ++i) {
-        const QCameraDevice &camera {cameras[i]};
+    for (int i{0}; i < cameras.size(); ++i) {
+        const QCameraDevice &camera{cameras[i]};
 
         // Prefer front-facing cameras for face tracking
         if (camera.position() == QCameraDevice::FrontFace && m_preferredCamera.isNull()) {
@@ -75,9 +75,9 @@ void FaceTracker::setEnabled(bool enabled)
     } else {
         // Reset last known position when disabling
         m_hasLastKnownPosition = false;
-        m_lastKnownFaceCenter = QPointF {};
-        m_lastKnownFacePixelCenter = QPointF {};
-        m_lastKnownFacePixelSize = QSize {};
+        m_lastKnownFaceCenter = QPointF{};
+        m_lastKnownFacePixelCenter = QPointF{};
+        m_lastKnownFacePixelSize = QSize{};
         uninitializeCamera();
     }
 
@@ -115,12 +115,12 @@ void FaceTracker::initializeCamera()
     m_camera.setCameraDevice(m_preferredCamera);
 
     // Force 1920x1080 resolution
-    const auto formats {m_preferredCamera.videoFormats()};
-    QCameraFormat bestFormat {};
+    const auto formats{m_preferredCamera.videoFormats()};
+    QCameraFormat bestFormat{};
 
     // Find exact 1920x1080 format
     for (const auto &format : formats) {
-        if (format.resolution() == QSize {1920, 1080}) {
+        if (format.resolution() == QSize{1920, 1080}) {
             bestFormat = format;
             break;
         }
@@ -128,15 +128,15 @@ void FaceTracker::initializeCamera()
 
     // If no exact match, find closest resolution (prefer larger)
     if (bestFormat.resolution().isEmpty()) {
-        int targetPixels {1920 * 1080};
-        int bestDiff {INT_MAX};
+        int targetPixels{1920 * 1080};
+        int bestDiff{INT_MAX};
 
         for (const auto &format : formats) {
-            QSize res {format.resolution()};
+            QSize res{format.resolution()};
             // Prefer resolutions >= 1920x1080
             if (res.width() >= 1920 && res.height() >= 1080) {
-                int pixels {res.width() * res.height()};
-                int diff {pixels - targetPixels};
+                int pixels{res.width() * res.height()};
+                int diff{pixels - targetPixels};
                 if (diff < bestDiff) {
                     bestDiff = diff;
                     bestFormat = format;
@@ -166,7 +166,7 @@ void FaceTracker::initializeCamera()
             &QCamera::errorOccurred,
             this,
             [this](QCamera::Error error, const QString &errorString) {
-                setErrorString(QString {"Camera error: %1"}.arg(errorString));
+                setErrorString(QString{"Camera error: %1"}.arg(errorString));
 
                 if (m_enabled && !m_cameraRetryTimer.isActive()) {
                     m_cameraRetryTimer.start();
@@ -180,7 +180,7 @@ void FaceTracker::initializeCamera()
             m_cameraRetryTimer.stop();
             m_isInitializing = false;
 
-            QCameraFormat actualFormat {m_camera.cameraFormat()};
+            QCameraFormat actualFormat{m_camera.cameraFormat()};
             qDebug() << "Camera started with resolution:" << actualFormat.resolution();
 
             emit currentResolutionChanged();
@@ -242,7 +242,7 @@ void FaceTracker::uninitializeCamera()
 
     // Reset state
     setFaceDetected(false);
-    setCameraFrame(QImage {});
+    setCameraFrame(QImage{});
 }
 
 void FaceTracker::processVideoFrame(const QVideoFrame &frame)
@@ -256,8 +256,8 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     m_frameThrottleTimer.start();
 
     // Convert frame to QImage
-    QImage image {frame.toImage()};
-    QImage image2 {frame.toImage()};
+    QImage image{frame.toImage()};
+    QImage image2{frame.toImage()};
     if (image.isNull()) {
         return;
     }
@@ -266,13 +266,13 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     image = image.flipped(Qt::Horizontal);
 
     // Scale for display (maintain aspect ratio with max dimension of 640)
-    int displayMaxDim {640};
-    QSize displaySize {image.size()};
+    int displayMaxDim{640};
+    QSize displaySize{image.size()};
     if (displaySize.width() > displayMaxDim || displaySize.height() > displayMaxDim) {
         displaySize.scale(displayMaxDim, displayMaxDim, Qt::KeepAspectRatio);
     }
 
-    const QImage displayImage {
+    const QImage displayImage{
         image.scaled(displaySize, Qt::KeepAspectRatio, Qt::SmoothTransformation)};
 
     // Set the display frame
@@ -280,7 +280,7 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
 
     // Detect faces using AI (detector handles scaling internally for performance)
     //auto faces {m_faceDetector->detectFaces(image, m_detectionConfidence)};
-    auto faces {m_faceDetector->detectFaces(displayImage, m_detectionConfidence)};
+    auto faces{m_faceDetector->detectFaces(displayImage, m_detectionConfidence)};
 
     // Process results
     processFaceDetectionResults(faces, displayImage);
@@ -292,10 +292,10 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
     // Validate frame
     if (displayImage.isNull() || displayImage.width() <= 0 || displayImage.height() <= 0) {
         setFaceDetected(false);
-        setFaceCenter(QPointF {0.5, 0.5});
-        setFacePixelCenter(QPointF {0.0, 0.0});
-        setFacePixelSize(QSize {0, 0});
-        setFaceLandmarks(QVariantList {});
+        setFaceCenter(QPointF{0.5, 0.5});
+        setFacePixelCenter(QPointF{0.0, 0.0});
+        setFacePixelSize(QSize{0, 0});
+        setFaceLandmarks(QVariantList{});
         m_hasLastKnownPosition = false;
         return;
     }
@@ -306,13 +306,12 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
 
         // --- Pixel-space center/size in displayImage coordinates (detector runs on displayImage) ---
         const QPointF faceCenterPx = bestFace.bbox.center();
-        const QSize faceSizePx {static_cast<int>(bestFace.bbox.width()),
-                                static_cast<int>(bestFace.bbox.height())};
+        const QSize faceSizePx{static_cast<int>(bestFace.bbox.width()),
+                               static_cast<int>(bestFace.bbox.height())};
 
         // Normalized center (0..1) in displayImage space
-        const QPointF normalizedCenter {faceCenterPx.x() / static_cast<qreal>(displayImage.width()),
-                                        faceCenterPx.y() /
-                                            static_cast<qreal>(displayImage.height())};
+        const QPointF normalizedCenter{faceCenterPx.x() / static_cast<qreal>(displayImage.width()),
+                                       faceCenterPx.y() / static_cast<qreal>(displayImage.height())};
 
         // Clamp smoothing factor
         qreal s = m_trackingSmoothing;
@@ -325,12 +324,12 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
             const qreal inv = 1.0 - s;
 
             // Smooth normalized center
-            QPointF smoothedNorm {m_lastKnownFaceCenter.x() * s + normalizedCenter.x() * inv,
-                                  m_lastKnownFaceCenter.y() * s + normalizedCenter.y() * inv};
+            QPointF smoothedNorm{m_lastKnownFaceCenter.x() * s + normalizedCenter.x() * inv,
+                                 m_lastKnownFaceCenter.y() * s + normalizedCenter.y() * inv};
 
             // Smooth pixel center
-            QPointF smoothedPx {m_lastKnownFacePixelCenter.x() * s + faceCenterPx.x() * inv,
-                                m_lastKnownFacePixelCenter.y() * s + faceCenterPx.y() * inv};
+            QPointF smoothedPx{m_lastKnownFacePixelCenter.x() * s + faceCenterPx.x() * inv,
+                               m_lastKnownFacePixelCenter.y() * s + faceCenterPx.y() * inv};
 
             setFaceCenter(smoothedNorm);
             setFacePixelCenter(smoothedPx);
@@ -363,7 +362,7 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
         m_hasLastKnownPosition = true;
 
         if (!m_errorString.isEmpty() && m_errorString.contains(QStringLiteral("No face")))
-            setErrorString(QString {});
+            setErrorString(QString{});
     } else {
         // No face this frame
         if (m_hasLastKnownPosition && m_enabled) {
@@ -372,11 +371,11 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
         } else {
             // Reset to defaults
             setFaceDetected(false);
-            setFaceCenter(QPointF {0.5, 0.5});
-            setFacePixelCenter(QPointF {static_cast<qreal>(displayImage.width()) * 0.5,
-                                        static_cast<qreal>(displayImage.height()) * 0.5});
-            setFacePixelSize(QSize {100, 100});
-            setFaceLandmarks(QVariantList {});
+            setFaceCenter(QPointF{0.5, 0.5});
+            setFacePixelCenter(QPointF{static_cast<qreal>(displayImage.width()) * 0.5,
+                                       static_cast<qreal>(displayImage.height()) * 0.5});
+            setFacePixelSize(QSize{100, 100});
+            setFaceLandmarks(QVariantList{});
             m_hasLastKnownPosition = false;
         }
     }
@@ -385,43 +384,43 @@ void FaceTracker::processFaceDetectionResults(const std::vector<AIFaceDetector::
 QString FaceTracker::cameraFrameBase64() const
 {
     if (m_cameraFrame.isNull()) {
-        return QString {};
+        return QString{};
     }
 
-    QByteArray ba {};
-    QBuffer buffer {&ba};
+    QByteArray ba{};
+    QBuffer buffer{&ba};
     buffer.open(QIODevice::WriteOnly);
 
-    bool success {m_cameraFrame.save(&buffer, "JPEG", 75)};
+    bool success{m_cameraFrame.save(&buffer, "JPEG", 75)};
     if (!success) {
-        return QString {};
+        return QString{};
     }
 
-    return QString {"data:image/jpeg;base64,"} + ba.toBase64();
+    return QString{"data:image/jpeg;base64,"} + ba.toBase64();
 }
 
 QStringList FaceTracker::availableResolutions() const
 {
-    QStringList resolutions {};
+    QStringList resolutions{};
     if (m_preferredCamera.isNull()) {
         return resolutions;
     }
 
-    const auto formats {m_preferredCamera.videoFormats()};
-    QSet<QString> uniqueResolutions {};
+    const auto formats{m_preferredCamera.videoFormats()};
+    QSet<QString> uniqueResolutions{};
 
     for (const auto &format : formats) {
-        QSize res {format.resolution()};
-        QString resStr {QString {"%1x%2"}.arg(res.width()).arg(res.height())};
+        QSize res{format.resolution()};
+        QString resStr{QString{"%1x%2"}.arg(res.width()).arg(res.height())};
         uniqueResolutions.insert(resStr);
     }
 
     resolutions = uniqueResolutions.values();
     std::sort(resolutions.begin(), resolutions.end(), [](const QString &a, const QString &b) {
-        QStringList aParts {a.split('x')};
-        QStringList bParts {b.split('x')};
-        int aWidth {aParts[0].toInt()};
-        int bWidth {bParts[0].toInt()};
+        QStringList aParts{a.split('x')};
+        QStringList bParts{b.split('x')};
+        int aWidth{aParts[0].toInt()};
+        int bWidth{bParts[0].toInt()};
         return aWidth > bWidth; // Sort descending by width
     });
 
@@ -434,27 +433,27 @@ QString FaceTracker::currentResolution() const
         return "Unknown";
     }
 
-    QCameraFormat format {m_camera.cameraFormat()};
-    QSize res {format.resolution()};
-    return QString {"%1x%2"}.arg(res.width()).arg(res.height());
+    QCameraFormat format{m_camera.cameraFormat()};
+    QSize res{format.resolution()};
+    return QString{"%1x%2"}.arg(res.width()).arg(res.height());
 }
 
 void FaceTracker::setResolution(const QString &resolution)
 {
-    QStringList parts {resolution.split('x')};
+    QStringList parts{resolution.split('x')};
     if (parts.size() != 2) {
         return;
     }
 
-    bool ok1 {false}, ok2 {false};
-    int width {parts[0].toInt(&ok1)};
-    int height {parts[1].toInt(&ok2)};
+    bool ok1{false}, ok2{false};
+    int width{parts[0].toInt(&ok1)};
+    int height{parts[1].toInt(&ok2)};
 
     if (!ok1 || !ok2) {
         return;
     }
 
-    QSize newResolution {width, height};
+    QSize newResolution{width, height};
     if (m_requestedResolution == newResolution) {
         return; // No change needed
     }
@@ -464,14 +463,14 @@ void FaceTracker::setResolution(const QString &resolution)
     // Force camera restart with new resolution if currently active
     if (m_enabled && m_camera.isActive()) {
         // Clear current frame to avoid showing stale data during restart
-        setCameraFrame(QImage {});
+        setCameraFrame(QImage{});
         setFaceDetected(false);
 
         // Stop the camera completely first
         m_camera.stop();
 
         // Wait for camera to fully stop using event loop
-        QEventLoop loop {};
+        QEventLoop loop{};
         connect(&m_camera, &QCamera::activeChanged, &loop, [&loop](bool active) {
             if (!active) {
                 loop.quit();
