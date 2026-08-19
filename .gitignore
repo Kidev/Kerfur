@@ -15,3 +15,5 @@ assets/faces/
 !vcpkg.json
 !vcpkg-configuration.json
 docs/
+/models/
+

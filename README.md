@@ -45,4 +45,17 @@ kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.8.3/gcc_64
     - `make installer` to create an online installer using a FTP as CDN. You will need to provide credentials (`CDN_UPLOAD_SOCKET` `CDN_UPLOAD_USERNAME` `CDN_UPLOAD_PASSWORD`). The repository for the OS you built on will be created inside a folder named after your OS, in the folder you are in upon connection.  
     - `make web` to create a WASM build  
     - `make run-web` to start a localserver running the application (requires to have a WASM build first with `make web`)  
-    - `make upload-web` to upload the WASM application to a web server. You will need to provide credentials (`WASM_UPLOAD_SOCKET` `WASM_UPLOAD_USERNAME` `WASM_UPLOAD_PASSWORD`). The application will be uploaded inside a folder `Kerfur` in the folder you are in upon connection.  
+    - `make upload-web` to upload the WASM application to a web server. You will need to provide credentials (`WASM_UPLOAD_SOCKET` `WASM_UPLOAD_USERNAME` `WASM_UPLOAD_PASSWORD`). The application will be uploaded inside a folder `Kerfur` in the folder you are in upon connection.
+    - `make models` to fetch and checksum verify the perception models into the application data directory, which is where a desktop build looks for them
+    - `make models-web` to fetch the smaller web profile into `models/` in the source tree, which `make web` bakes into the WebAssembly file system
+
+### Perception
+Kerfur sees and hears with models that are provisioned separately from the binary, because it has to boot without a network. `assets/models.json` is the manifest: it pins every file by SHA-256, and `make models` is what reads it. The desktop profile covers the five vision stages and the speech model; the web profile drops the ones a browser cannot afford.
+
+Without them the face still runs; it simply has nothing to look at. Any stage whose model file is missing is disabled and logged at startup rather than failing the start.
+
+Two build knobs select what is compiled:
+- `KERFUR_PLATFORM` is `pi`, `desktop`, `wasm` or `auto`
+- `KERFUR_PERCEPTION_BACKEND` is `cpu`, `hailo`, `none` or `auto`
+
+The CPU backend runs on desktop and in the browser through OpenCV DNN. Which models it uses, and why those and not others, is in `docs/superpowers/specs/2026-08-19-cpu-perception-backends.md`.  

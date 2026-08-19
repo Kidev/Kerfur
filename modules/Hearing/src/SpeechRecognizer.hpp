@@ -103,6 +103,10 @@ private:
     void setCurrentDevice(const QString &device);
     void setModelPath(const QString &modelPath);
 
+    /// Hands the current path to the engine and records why it failed when it
+    /// did, so the reason survives until the microphone is actually asked for.
+    void applyModelPath();
+
     // Convert audio to float for Whisper
     std::vector<float> convertAudioToFloat(const QByteArray &data);
     float calculateVolume(const QByteArray &data);
@@ -129,6 +133,7 @@ private:
     QStringList m_availableDevices;
     QString m_currentDevice;
     QString m_modelPath;
+    QString m_modelError;
 
     // Configuration
     static constexpr int SAMPLE_RATE{16000};

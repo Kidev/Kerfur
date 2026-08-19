@@ -76,7 +76,7 @@ bool WhisperEngine::loadModel(const QString &modelPath)
         m_params->print_timestamps = false;
         m_params->print_special = false;
         m_params->translate = m_translate;
-        m_params->language = m_language.toUtf8().constData();
+        m_params->language = m_languageUtf8.constData();
         m_params->n_threads =
             std::min(4,
                      static_cast<int>(
@@ -308,8 +308,9 @@ void WhisperEngine::reset()
 void WhisperEngine::setLanguage(const QString &lang)
 {
     m_language = lang;
+    m_languageUtf8 = m_language.toUtf8();
     if (m_params) {
-        m_params->language = m_language.toUtf8().constData();
+        m_params->language = m_languageUtf8.constData();
     }
     qDebug() << "WhisperEngine language set to:" << lang;
 }

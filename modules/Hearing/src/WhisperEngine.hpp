@@ -8,6 +8,7 @@
 #include <QMutex>
 #include <QObject>
 #include <QQueue>
+#include <QByteArray>
 #include <QString>
 #include <QTimer>
 
@@ -84,6 +85,12 @@ private:
     static constexpr int MIN_SAMPLES_FOR_PROCESSING{SAMPLE_RATE / 2}; // 0.5 seconds minimum
 
     QString m_language{"en"};
+
+    // whisper_full_params::language is a borrowed const char*, so the bytes it
+    // points at must outlive every call that reads them. Keeping the encoded
+    // form here is what makes that true: assigning it from a temporary
+    // QByteArray leaves the pointer dangling as soon as the statement ends.
+    QByteArray m_languageUtf8{"en"};
     bool m_translate{false};
 
     // Keywords to detect
