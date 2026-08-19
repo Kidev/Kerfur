@@ -1,10 +1,10 @@
 #include "AIFaceDetector.hpp"
 #include <algorithm>
 #include <opencv2/opencv.hpp>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
 #include <QStandardPaths>
-#include <QCoreApplication>
 
 AIFaceDetector::AIFaceDetector()
 {
@@ -13,13 +13,24 @@ AIFaceDetector::AIFaceDetector()
 
 AIFaceDetector::~AIFaceDetector() = default;
 
+void AIFaceDetector::setModelPath(const QString &modelPath)
+{
+    m_modelPath = modelPath;
+    if (!modelPath.isEmpty())
+        initialize();
+}
+
+QString AIFaceDetector::getModelPath()
+{
+    return m_modelPath;
+}
+
 bool AIFaceDetector::initialize()
 {
     QMutexLocker locker {&m_mutex};
 
     try {
         // Find the YuNet model file
-        m_modelPath = findModelPath();
         if (m_modelPath.isEmpty()) {
             m_lastError = "YuNet model file not found";
             return false;
@@ -29,7 +40,7 @@ bool AIFaceDetector::initialize()
 
         // Create FaceDetectorYN using the same parameters as the demo
         m_detector = cv::FaceDetectorYN::create(m_modelPath.toStdString(),
-                                                "",  // config (empty for ONNX)
+                                                "", // config (empty for ONNX)
                                                 m_inputSize,
                                                 DEFAULT_CONF_THRESHOLD,
                                                 DEFAULT_NMS_THRESHOLD,
@@ -89,11 +100,6 @@ cv::Mat AIFaceDetector::qImageToCvMat(const QImage &image)
     return bgrMat.clone();
 }
 
-QString AIFaceDetector::findModelPath()
-{
-    return QCoreApplication::applicationDirPath() % "/models/" % QStringLiteral(MODEL_VISION_DETECT);
-}
-
 void AIFaceDetector::setInputSize(const cv::Size &inputSize)
 {
     if (m_inputSize != inputSize && m_detector) {
@@ -121,7 +127,7 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
 
         // Set the input size to match the image dimensions
         // This allows YuNet to work with any input size
-        setInputSize(cv::Size{inputImage.cols, inputImage.rows});
+        setInputSize(cv::Size {inputImage.cols, inputImage.rows});
 
         // Detect faces using YuNet
         cv::Mat faces;
@@ -129,7 +135,7 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
 
         // Convert results to our FaceInfo format
         std::vector<FaceInfo> faceInfos;
-        
+
         if (faces.rows > 0) {
             for (int i {0}; i < faces.rows; ++i) {
                 const float *data {faces.ptr<float>(i)};
@@ -148,20 +154,20 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
                 }
 
                 // Validate bounding box
-                if (w <= 0 || h <= 0 || x1 < 0 || y1 < 0 || 
-                    x1 + w > inputImage.cols || y1 + h > inputImage.rows) {
+                if (w <= 0 || h <= 0 || x1 < 0 || y1 < 0 || x1 + w > inputImage.cols ||
+                    y1 + h > inputImage.rows) {
                     continue;
                 }
 
                 FaceInfo faceInfo;
                 faceInfo.confidence = confidence;
-                faceInfo.bbox = QRectF{x1, y1, w, h};
+                faceInfo.bbox = QRectF {x1, y1, w, h};
 
                 // Extract landmarks (5 points: right eye, left eye, nose tip, right mouth corner, left mouth corner)
                 if (faces.cols >= 15) { // Ensure we have all landmark data
                     faceInfo.landmarks.reserve(5);
                     faceInfo.landmarks.emplace_back(data[5], data[6]);   // right eye
-                    faceInfo.landmarks.emplace_back(data[7], data[8]);   // left eye  
+                    faceInfo.landmarks.emplace_back(data[7], data[8]);   // left eye
                     faceInfo.landmarks.emplace_back(data[9], data[10]);  // nose tip
                     faceInfo.landmarks.emplace_back(data[11], data[12]); // right mouth corner
                     faceInfo.landmarks.emplace_back(data[13], data[14]); // left mouth corner
@@ -172,10 +178,9 @@ std::vector<AIFaceDetector::FaceInfo> AIFaceDetector::detectFaces(const QImage &
         }
 
         // Sort by confidence (highest first)
-        std::sort(faceInfos.begin(), faceInfos.end(), 
-                  [](const FaceInfo &a, const FaceInfo &b) {
-                      return a.confidence > b.confidence;
-                  });
+        std::sort(faceInfos.begin(), faceInfos.end(), [](const FaceInfo &a, const FaceInfo &b) {
+            return a.confidence > b.confidence;
+        });
 
         return faceInfos;
 

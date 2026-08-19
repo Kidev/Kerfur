@@ -1,10 +1,6 @@
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/functions.cmake")
 
-file(
-    GLOB_RECURSE SOURCES_CPP
-    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-    src/*.c*
-)
+set(SOURCES_CPP src/main.cpp)
 file(
     GLOB_RECURSE SOURCES_SHADERS
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
@@ -60,9 +56,6 @@ add_definitions(-DBUILD_NAME="${PROJECT_BUILD_NAME}")
 add_definitions(-DPROJECT_TITLE="${PROJECT_TITLE}")
 add_definitions(-DPROJECT_ORG="${PROJECT_ORG}")
 add_definitions(-DPROJECT_DOMAIN="${PROJECT_DOMAIN}")
-add_definitions(-DMODEL_VISION_DETECT="${MODEL_VISION_DETECT}")
-add_definitions(-DMODEL_VISION_IDENTIFY="${MODEL_VISION_IDENTIFY}")
-add_definitions(-DMODEL_HEARING_GGML="${MODEL_HEARING_GGML}")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG_BUILD)
@@ -75,9 +68,6 @@ if (CCACHE_FOUND)
 endif ()
 
 message(STATUS "${PROJECT_TITLE} by ${PROJECT_ORG}")
-message(STATUS "Detect model: ${MODEL_VISION_DETECT}")
-message(STATUS "Identify model: ${MODEL_VISION_IDENTIFY}")
-message(STATUS "GGML: ${MODEL_HEARING_GGML}")
 message(STATUS "QT_INSTALL_DIR=${QT_INSTALL_DIR}")
 message(STATUS "QML_SOURCES_PATHS=${QML_SOURCES_PATHS}")
 message(STATUS "QT_PLUGIN_PATH=$ENV{QT_PLUGIN_PATH}")

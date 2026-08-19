@@ -32,11 +32,10 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     , m_kerfurResetTimer {this}
 {
     // Initialize Whisper engine
-    QString modelPath {"models/" % QStringLiteral(MODEL_HEARING_GGML)};
-    if (!m_whisperEngine->initialize(modelPath)) {
+    if (!m_whisperEngine->initialize(m_modelPath)) {
         setErrorString("Failed to initialize speech recognition: " +
                        m_whisperEngine->getLastError());
-        qWarning() << "Whisper initialization failed:" << m_whisperEngine->getLastError();
+        qDebug() << "Whisper initialization failed:" << m_whisperEngine->getLastError();
     } else {
         qDebug() << "Whisper engine initialized successfully";
     }
@@ -74,6 +73,17 @@ SpeechRecognizer::~SpeechRecognizer()
 {
     if (m_enabled) {
         uninitializeAudio();
+    }
+}
+
+void SpeechRecognizer::setModelPath(const QString &modelPath)
+{
+    if (m_enabled) {
+        setEnabled(false);
+    }
+    if (!modelPath.isEmpty() && m_whisperEngine->initialize(modelPath)) {
+        m_modelPath = modelPath;
+        setEnabled(true);
     }
 }
 

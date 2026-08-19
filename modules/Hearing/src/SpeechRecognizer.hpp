@@ -40,6 +40,7 @@ class SpeechRecognizer : public QObject
     Q_PROPERTY(bool processing READ processing NOTIFY processingChanged)
     Q_PROPERTY(QStringList availableDevices READ availableDevices NOTIFY availableDevicesChanged)
     Q_PROPERTY(QString currentDevice READ currentDevice NOTIFY currentDeviceChanged)
+    Q_PROPERTY(QString modelPath READ modelPath WRITE setModelPath NOTIFY modelPathChanged)
 
 public:
     explicit SpeechRecognizer(QObject *parent = nullptr);
@@ -57,6 +58,7 @@ public:
     bool processing() const { return m_processing; }
     QStringList availableDevices() const { return m_availableDevices; }
     QString currentDevice() const { return m_currentDevice; }
+    QString modelPath() const { return m_modelPath; }
 
 public slots:
     void setDevice(const QString &deviceName);
@@ -98,6 +100,7 @@ private:
     void setVolumeLevel(float level);
     void setAvailableDevices(const QStringList &devices);
     void setCurrentDevice(const QString &device);
+    void setModelPath(const QString &modelPath);
 
     // Convert audio to float for Whisper
     std::vector<float> convertAudioToFloat(const QByteArray &data);
@@ -124,6 +127,7 @@ private:
     bool m_processing {false};
     QStringList m_availableDevices;
     QString m_currentDevice;
+    QString m_modelPath;
 
     // Configuration
     static constexpr int SAMPLE_RATE {16000};

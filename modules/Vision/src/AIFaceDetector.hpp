@@ -1,15 +1,14 @@
 #pragma once
 
-#include <memory>
-#include <opencv2/objdetect.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/objdetect.hpp>
 #include <vector>
+#include <QDir>
+#include <QFile>
 #include <QImage>
 #include <QMutex>
 #include <QRect>
 #include <QStandardPaths>
-#include <QFile>
-#include <QDir>
 
 class AIFaceDetector
 {
@@ -18,7 +17,8 @@ public:
     {
         QRectF bbox;
         float confidence;
-        std::vector<QPointF> landmarks; // 5 key points: right eye, left eye, nose tip, right mouth, left mouth
+        std::vector<QPointF>
+            landmarks; // 5 key points: right eye, left eye, nose tip, right mouth, left mouth
     };
 
     explicit AIFaceDetector();
@@ -28,10 +28,11 @@ public:
     std::vector<FaceInfo> detectFaces(const QImage &image, float confidenceThreshold = 0.6f);
     bool isInitialized() const { return m_initialized; }
     QString getLastError() const { return m_lastError; }
+    QString getModelPath();
+    void setModelPath(const QString &modelPath);
 
 private:
     cv::Mat qImageToCvMat(const QImage &image);
-    QString findModelPath();
     void setInputSize(const cv::Size &inputSize);
 
     cv::Ptr<cv::FaceDetectorYN> m_detector;

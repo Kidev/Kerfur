@@ -42,32 +42,9 @@ bool WhisperEngine::initialize(const QString &modelPath)
     // Check if model file exists
     QFile modelFile {modelPath};
     if (!modelFile.exists()) {
-        // Try common locations
-        QStringList searchPaths = {"models/ggml-tiny.en.bin",
-                                   "../models/ggml-tiny.en.bin",
-                                   "../../models/ggml-tiny.en.bin",
-                                   QDir::homePath() +
-                                       "/.local/share/kerfur/models/ggml-tiny.en.bin",
-                                   "./ggml-tiny.en.bin",
-                                   "ggml-tiny.en.bin"};
-
-        QString foundPath;
-        for (const auto &path : searchPaths) {
-            if (QFile::exists(path)) {
-                qDebug() << "Found model at:" << path;
-                foundPath = path;
-                break;
-            }
-        }
-
-        if (foundPath.isEmpty()) {
-            m_lastError = "Could not find Whisper model. Please run 'make setup-models' or place "
-                          "ggml-tiny.en.bin in the models/ directory";
-            qWarning() << m_lastError;
-            return false;
-        }
-
-        return loadModel(foundPath);
+        qDebug() << "WhisperEngine model not found at " << modelPath;
+        m_lastError = QString("WhisperEngine model not found at %1").arg(modelPath);
+        return false;
     }
 
     return loadModel(modelPath);

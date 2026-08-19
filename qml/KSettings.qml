@@ -7,25 +7,19 @@ QtObject {
     id: root
 
     property bool allowEscapeShortcut: true
+    readonly property string appDataPath: StandardPaths.writableLocation(StandardPaths.AppDataLocation)
     property bool autoPaddingEnabled: true
     property real blurMultiplier: 1
     property real eyeMovementRange: 1.0
     property bool faceTrackingDebug: false
     property bool faceTrackingEnabled: false
+    property string facesGalleryPath: root.appDataPath + "/faces/"
     property Settings general: Settings {
         id: settingsGeneral
 
         property alias allowEscapeShortcut: root.allowEscapeShortcut
 
         category: "General"
-    }
-    property Settings speech: Settings {
-        id: settingsSpeech
-
-        property alias speechRecognitionEnabled: root.speechRecognitionEnabled
-        property alias speechRecognitionDebug: root.speechRecognitionDebug
-
-        category: "Speech"
     }
     property int glowBlendMode: 1
     property real glowBloom: 1.0
@@ -38,6 +32,15 @@ QtObject {
     property real maskSpreadAtMin: 0
     property real maskThresholdMax: 1.0
     property real maskThresholdMin: 0.25
+    property string modelsPath: root.appDataPath + "/models/"
+    property Settings paths: Settings {
+        id: settingsPaths
+
+        property alias facesGalleryPath: root.facesGalleryPath
+        property alias modelsPath: root.modelsPath
+
+        category: "Paths"
+    }
     property Settings shader: Settings {
         id: settingsShader
 
@@ -63,9 +66,17 @@ QtObject {
         category: "Shader"
     }
     property bool showControls: false
-    property real upDownAngle: 90
-    property bool speechRecognitionEnabled: false
+    property Settings speech: Settings {
+        id: settingsSpeech
+
+        property alias speechRecognitionDebug: root.speechRecognitionDebug
+        property alias speechRecognitionEnabled: root.speechRecognitionEnabled
+
+        category: "Speech"
+    }
     property bool speechRecognitionDebug: false
+    property bool speechRecognitionEnabled: false
+    property real upDownAngle: 90
 
     Behavior on leftRightAngle {
         enabled: false

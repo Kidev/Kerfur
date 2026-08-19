@@ -109,7 +109,7 @@ void FaceTracker::initializeCamera()
     uninitializeCamera();
 
     // Wait for camera to fully stop
-    QThread::msleep(500);
+    QThread::msleep(100);
 
     // Create a new camera instance to ensure clean state
     m_camera.setCameraDevice(m_preferredCamera);
@@ -494,6 +494,18 @@ void FaceTracker::setResolution(const QString &resolution)
     }
 
     emit currentResolutionChanged();
+}
+
+void FaceTracker::setModelPath(const QString &modelPath)
+{
+    if (m_enabled) {
+        setEnabled(false);
+    }
+    m_modelPath = modelPath;
+    if (!m_modelPath.isEmpty()) {
+        m_faceDetector->setModelPath(modelPath);
+        setEnabled(true);
+    }
 }
 
 void FaceTracker::setDetectionConfidence(qreal confidence)
