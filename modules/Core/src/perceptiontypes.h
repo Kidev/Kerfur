@@ -5,6 +5,7 @@
 #define KERFUR_PERCEPTIONTYPES_H
 
 #include <QList>
+#include <QMetaType>
 #include <QPointF>
 #include <QRectF>
 #include <QString>
