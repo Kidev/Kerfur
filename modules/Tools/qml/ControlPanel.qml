@@ -60,6 +60,14 @@ Rectangle {
     // top of the range in a way the analysis is not.
     readonly property var previewPresetLabels: ["480 - cheapest", "640 - small", "960 - default", "1280 - sharp", "1920 - maximum"]
     readonly property var previewPresetSides: [480, 640, 960, 1280, 1920]
+
+    // How often the camera is looked at. The whole chain runs at this rate, so
+    // it is the one control here that changes what Kerfur costs to leave on
+    // rather than how well it sees. Named in hertz because that is what it is,
+    // and annotated because six is not obviously enough until it is said that
+    // nothing being watched for happens faster than that.
+    readonly property var updateRateLabels: ["3 Hz - idling", "6 Hz - default", "10 Hz - responsive", "15 Hz - maximum"]
+    readonly property var updateRateValues: [3, 6, 10, 15]
     readonly property var blendModeNames: ["Additive", "Screen", "Replace", "Outer"]
 
     // The last utterance, while it is still worth showing over the head of the
@@ -872,6 +880,20 @@ Rectangle {
                 }
 
                 Caption {
+                    label: "Update rate"
+                    value: root.faceTracker ? (root.faceTracker.updateHz + " Hz, " + root.faceTracker.analysisMs + " ms per pass") : ""
+                }
+
+                Combo {
+                    id: updateRateCombo
+
+                    currentIndex: root.updateRateValues.indexOf(KSettings.visionUpdateHz)
+                    model: root.updateRateLabels
+
+                    onActivated: KSettings.visionUpdateHz = root.updateRateValues[updateRateCombo.currentIndex]
+                }
+
+                Caption {
                     label: "Preview detail"
                     value: root.faceTracker ? root.faceTracker.previewResolution : ""
                 }
@@ -887,7 +909,7 @@ Rectangle {
 
                 Caption {
                     label: "Analysis detail"
-                    value: root.faceTracker ? (root.faceTracker.analysisResolution + ", " + root.faceTracker.analysisMs + " ms") : ""
+                    value: root.faceTracker ? root.faceTracker.analysisResolution : ""
                 }
 
                 Combo {
@@ -902,7 +924,7 @@ Rectangle {
                 Text {
                     color: root.colorDim
                     font.pixelSize: 9
-                    text: "The preview is the picture on this panel; the analysis is what the models are shown. Neither is ever enlarged past what the camera delivers, so both are capped by the camera line above. A larger analysis frame is what lets a face across the room, or a hand at arm's length, survive the downscale, and its cost is the milliseconds beside it."
+                    text: "The update rate is how often all of this happens: one frame, one pass of every model, one picture. The preview is the picture on this panel; the analysis is what the models are shown. Neither is ever enlarged past what the camera delivers, so both are capped by the camera line above. A larger analysis frame is what lets a face across the room, or a hand at arm's length, survive the downscale, and its cost is the milliseconds beside the rate."
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }

@@ -21,6 +21,8 @@
 #include <QVideoFrame>
 #include <QVideoSink>
 
+#include <algorithm>
+
 namespace Kerfur {
 class FaceAnalysisWorker;
 }
@@ -46,8 +48,12 @@ class FaceTracker : public QObject
     Q_PROPERTY(QPointF faceCenter READ faceCenter NOTIFY faceCenterChanged)
     Q_PROPERTY(QRectF faceBox READ faceBox NOTIFY facesChanged)
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
+    /// The preview picture, as an image rather than as an encoded string. It
+    /// is handed straight to a CameraFrameView, which uploads it to a texture:
+    /// there is no JPEG and no base64 anywhere in this path, because both used
+    /// to be paid once per bound view per frame on the thread that draws the
+    /// face.
     Q_PROPERTY(QImage cameraFrame READ cameraFrame NOTIFY cameraFrameChanged)
-    Q_PROPERTY(QString cameraFrameBase64 READ cameraFrameBase64 NOTIFY cameraFrameChanged)
 
     /// Every face this pass, newest first by area. Each entry is a map of
     /// `box`, `landmarks`, `identity`, `identityConfidence`, `emotion`,
@@ -122,19 +128,29 @@ class FaceTracker : public QObject
     Q_PROPERTY(int analysisMaxSide READ analysisMaxSide WRITE setAnalysisMaxSide NOTIFY
                    analysisMaxSideChanged)
 
-    /// The longer side of the picture the panel is shown, and the size the JPEG
-    /// behind `cameraFrameBase64` is encoded at.
+    /// The longer side of the picture the panel is shown, which is the size
+    /// `cameraFrame` is scaled to.
     ///
     /// Separate from the analysis size on purpose: one is bounded by what the
     /// models can use and the other by what a person can see. They are also
     /// paid for differently -- the analysis is one inference chain per frame,
-    /// the preview is an encode and a base64 for every view bound to it -- so a
-    /// machine that wants a sharp picture and a cheap analysis, or the reverse,
-    /// can have either.
+    /// the preview is a resample and a texture upload -- so a machine that
+    /// wants a sharp picture and a cheap analysis, or the reverse, can have
+    /// either.
     Q_PROPERTY(int previewMaxSide READ previewMaxSide WRITE setPreviewMaxSide NOTIFY
                    previewMaxSideChanged)
 
-    /// The size the preview is actually being encoded at, which is the capture
+    /// How many times a second a frame is taken from the camera, analysed and
+    /// published. It is one number for both because they are one act: the
+    /// picture is held back until the pass measured against it lands, so that
+    /// an overlay is never drawn over a frame it was not measured on.
+    ///
+    /// This is the coarsest knob in the module. Every model in the chain runs
+    /// at this rate, and the camera format is chosen to cover it rather than to
+    /// be as fast as the device can manage.
+    Q_PROPERTY(int updateHz READ updateHz WRITE setUpdateHz NOTIFY updateHzChanged)
+
+    /// The size the preview is actually being drawn at, which is the capture
     /// size reduced to `previewMaxSide` and never enlarged past it. Published
     /// because a panel that names one resolution while showing a picture built
     /// from a quarter as many pixels is the reason this property exists.
@@ -168,7 +184,6 @@ public:
     QRectF faceBox() const;
     QString errorString() const { return m_errorString; }
     QImage cameraFrame() const { return m_cameraFrame; }
-    QString cameraFrameBase64() const;
 
     QVariantList faces() const { return m_faces; }
     QVariantList people() const { return m_people; }
@@ -196,6 +211,7 @@ public:
     QStringList availableResolutions() const;
     int analysisMaxSide() const { return m_analysisMaxSide; }
     int previewMaxSide() const { return m_previewMaxSide; }
+    int updateHz() const { return m_updateHz; }
     QString previewResolution() const;
 
     QStringList knownIdentities() const { return m_capabilities.enrolled; }
@@ -216,6 +232,7 @@ public slots:
     void setTrackingSmoothing(qreal smoothing);
     void setAnalysisMaxSide(int side);
     void setPreviewMaxSide(int side);
+    void setUpdateHz(int hertz);
 
 signals:
     void enabledChanged();
@@ -233,6 +250,7 @@ signals:
     void trackingSmoothingChanged();
     void analysisMaxSideChanged();
     void previewMaxSideChanged();
+    void updateHzChanged();
 
     /// To the worker thread. Not called directly: a direct call would run the
     /// models on whichever thread emitted.
@@ -285,6 +303,10 @@ private:
     QThread m_workerThread;
     Kerfur::FaceAnalysisWorker *m_worker{nullptr};
     bool m_analysisBusy{false};
+    /// Whether the worker has finished loading and started answering. Until it
+    /// has, the preview is published as it arrives rather than being held for a
+    /// pass that is still queued behind the model load.
+    bool m_analysisReady{false};
     quint64 m_sequence{0};
     quint64 m_peopleRevision{0};
 
@@ -292,14 +314,44 @@ private:
     qreal m_trackingSmoothing{0.7};
     int m_analysisMaxSide{defaultAnalysisMaxSide};
     int m_previewMaxSide{defaultPreviewMaxSide};
+    int m_updateHz{defaultUpdateHz};
+
+    /// The preview picture belonging to the pass that is still in flight, and
+    /// the sequence number that says which pass that is. Held rather than shown
+    /// so that the frame and the boxes measured on it reach the screen
+    /// together.
+    QImage m_pendingPreview;
+    quint64 m_pendingPreviewSequence{0};
 
     QTimer m_frameThrottleTimer;
     QTimer m_cameraRetryTimer;
 
-    /// The preview is redrawn at ten frames a second. It is a diagnostic view
-    /// in a control panel, not the face itself, and every frame past this costs
-    /// a JPEG encode and a base64 of it.
-    static constexpr int processingIntervalMs{100};
+    /// Frames a second, by default: taken from the camera, put through every
+    /// model and published. Six, because this is a robot's perception and not a
+    /// video call. A face does not change expression, a hand does not change
+    /// grip and a person does not cross a room inside a hundred and sixty
+    /// milliseconds, and every pass past the rate at which those things happen
+    /// is a whole inference chain spent to redraw the same answer.
+    static constexpr int defaultUpdateHz{6};
+
+    /// The bounds. One a second is the slowest rate at which the eyes still
+    /// look like they are following somebody rather than noticing them; past
+    /// fifteen the chain cannot keep up on any machine this runs on, and the
+    /// throttle would simply be replaced by the analysis latch.
+    static constexpr int minimumUpdateHz{1};
+    static constexpr int maximumUpdateHz{15};
+
+    /// The frame rate the capture format is chosen to cover. Well above the
+    /// update rate, so that a frame is always waiting rather than being waited
+    /// for, and far below the sixty a webcam will happily offer for nothing but
+    /// bus bandwidth and heat.
+    static constexpr float preferredCaptureFrameRate{30.0F};
+
+    /// Milliseconds between two passes at a given rate.
+    static constexpr int intervalForRate(int hertz)
+    {
+        return 1000 / std::clamp(hertz, minimumUpdateHz, maximumUpdateHz);
+    }
 
     /// The longer side the analysis image is reduced to. Large enough that an
     /// iris is still a dozen pixels across at conversational distance, small
@@ -327,12 +379,6 @@ private:
     /// never enlarged past the frame that arrived.
     static constexpr int minimumPreviewMaxSide{320};
     static constexpr int maximumPreviewMaxSide{1920};
-
-    /// The JPEG quality the preview is encoded at. Seventy five is the quality
-    /// of a picture meant to be looked past; the overlay is measured against
-    /// this image, and a compression edge that reads as a landmark is a bug
-    /// report about the analysis that the analysis did not cause.
-    static constexpr int previewJpegQuality{92};
 
     bool m_hasLastKnownPosition{false};
     bool m_isInitializing{false};

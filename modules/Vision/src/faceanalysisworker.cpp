@@ -46,14 +46,36 @@ constexpr float poseKeypointConfidence{0.4F};
 // the joint rather than at the base of the palm.
 constexpr double handReach{0.34};
 
-// The side of the hand box, as a fraction of the forearm. A hand is about two
-// thirds of a forearm long and rather narrower, and the box is square because
+// The side of the hand box, as a fraction of the forearm. Hand length is about
+// three quarters of forearm length, and the box has to hold a spread hand and
+// not just a fist, so it is a little more than that. The box is square because
 // the wrist and elbow say nothing about the rotation of the palm.
-constexpr double handSpan{0.62};
+constexpr double handSpan{0.80};
 
 // When the elbow is not confident, the hand is sized from the person instead.
 // A head is about an eighth of a standing adult and a hand is about a head.
 constexpr double handFallbackFraction{0.12};
+
+// What a hand measures against the other lengths of the same body.
+// Anthropometry, rounded: hand length is about half the width across the
+// shoulders, a third of the trunk, three times the distance between the pupils
+// and a little over the width across the ears.
+//
+// These exist because the forearm on its own is a bad ruler in exactly the
+// case that matters. An arm reaching towards the camera projects to almost no
+// length at all, and a box sized from it is a box far too small to hold the
+// hand at the end of it -- which is the hand nearest the lens, the largest one
+// in the frame, and the one most likely to be holding something.
+constexpr double handPerShoulderWidth{0.50};
+constexpr double handPerTorsoHeight{0.35};
+constexpr double handPerEyeSpan{3.0};
+constexpr double handPerEarSpan{1.30};
+
+// How far the forearm estimate may stray from the body's own scale before it
+// is pulled back. Wide, because both rulers foreshorten and neither is being
+// trusted to be exact -- this only refuses the answers that cannot be a hand.
+constexpr double handShrinkLimit{0.65};
+constexpr double handGrowthLimit{1.80};
 
 // How many hands get the landmark pass in one frame. Each costs a palm
 // detection and a landmark inference, about ten milliseconds together on a
@@ -78,6 +100,36 @@ constexpr double heldOverlap{0.18};
 // overlaps their hand constantly, and "kidev is holding a person" is the one
 // answer this stage must never give.
 constexpr QLatin1StringView personClass{"person"};
+
+// How much wider than the hand the crop handed to the object stage is. Wide
+// enough for a bottle held by the neck or a book held by one corner, tight
+// enough that the thing being held is most of the picture rather than a detail
+// in the corner of it.
+constexpr double objectCropSpan{3.5};
+
+// The floor and ceiling on that crop, in pixels of the analysed frame. The
+// floor buys context for a hand so small that a crop around it would be a
+// thumbnail; the ceiling stops a hand near the lens from asking for the whole
+// room back, which is the framing this stage exists to get away from.
+constexpr int minimumObjectRegion{128};
+constexpr double maximumObjectRegionFraction{0.6};
+
+// A detection this much of the crop is the crop. Whatever the network says
+// about a box that fills everything it was shown, it is describing the wall
+// behind the hand rather than the thing in it.
+constexpr double maximumObjectCover{0.85};
+
+// Hands the object stage runs on in one pass, and how far a label has to carry
+// a vote of `heldVotes` before it is published. Two out of three: one pass's
+// best class over a small crop flickers between the two nearest things it could
+// be, and this string is what a skill is written against.
+constexpr int maxObjectCrops{2};
+constexpr int heldVotesToSettle{2};
+
+// Passes a hold survives without being seen again. At the analysis cadence this
+// is a second or so, which is long enough to cover the stride and a turned
+// wrist and short enough that a mug set down is not still being held.
+constexpr quint64 heldExpiry{12};
 
 // How much of a face box must fall inside a person's head region before the
 // two are the same human. Measured against the face, not the region: the
@@ -151,6 +203,13 @@ double intersectionOverUnion(const cv::Rect2f &left, const cv::Rect2f &right)
     const float intersection{(left & right).area()};
     const float united{left.area() + right.area() - intersection};
     return united > 0.0F ? static_cast<double>(intersection / united) : 0.0;
+}
+
+/// Identifies one hand of one person across passes. Both halves are needed: a
+/// person has two hands, and two people have four between them.
+QString heldKey(const QString &identity, const QString &side)
+{
+    return identity + QLatin1Char('/') + side;
 }
 
 QStringList rosterOf(const IdentityRegistry &registry)
@@ -351,11 +410,17 @@ void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mir
     // hand is even closed; then the objects, because an object is only held if
     // there is a hand to hold it.
     attributePeople(result, mirrored);
-    refineHands(bgr, result);
+    const bool measured{refineHands(bgr, result)};
     attributeHeldObjects(bgr, result);
 
     const quint64 current{fingerprint(result.people)};
-    if (current != m_peopleFingerprint) {
+    // A measured hand is new geometry every pass, unlike the skeleton behind
+    // it: twenty-one points that moved, and a wrist joint that moved with them.
+    // Without this the landmarks would be published at the pose stride while
+    // the picture under them arrives at the frame rate, and a hand drawn two
+    // hundred milliseconds behind the hand in the image reads as a hand the
+    // models cannot find.
+    if (measured || current != m_peopleFingerprint) {
         m_peopleFingerprint = current;
         ++m_peopleRevision;
     }
@@ -445,10 +510,10 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
     }
 }
 
-void FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
+bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
 {
     if (!m_handLandmarker.isLoaded() || result.people.isEmpty()) {
-        return;
+        return false;
     }
 
     // Which hands get the expensive pass when more are in view than the budget
@@ -458,6 +523,7 @@ void FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
     // is looking at.
     struct Candidate
     {
+        AnalysedPerson *person;
         AnalysedHand *hand;
         int priority;
         double area;
@@ -469,13 +535,15 @@ void FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
         }
         for (AnalysedHand *hand : {&person.leftHand, &person.rightHand}) {
             if (hand->valid) {
-                candidates.append(
-                    Candidate{hand, person.priority, hand->box.width() * hand->box.height()});
+                candidates.append(Candidate{&person,
+                                            hand,
+                                            person.priority,
+                                            hand->box.width() * hand->box.height()});
             }
         }
     }
     if (candidates.isEmpty()) {
-        return;
+        return false;
     }
     std::sort(candidates.begin(),
               candidates.end(),
@@ -488,6 +556,7 @@ void FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
 
     const cv::Size frame{bgr.size()};
     int attempts{0};
+    bool measured{false};
     for (const Candidate &candidate : std::as_const(candidates)) {
         if (attempts >= maxRefinedHands) {
             break;
@@ -522,11 +591,28 @@ void FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
         hand.grip = pose->grip;
         hand.gesture = gestureName(pose->gesture);
         hand.tracked = true;
+        measured = true;
+
+        // And the same point back onto the skeleton, so that the forearm ends
+        // where the hand begins instead of a knuckle short of it. The two are
+        // the same joint seen by two models -- one that guessed it from a
+        // seventeen point body and one that measured it from a cropped hand --
+        // and the measurement is the better of the two. The keypoint's score is
+        // left alone: it is the pose stage's confidence in having found a wrist
+        // at all, which this does not change.
+        if (hand.wristKeypoint >= 0 && hand.wristKeypoint < candidate.person->keypoints.size()) {
+            candidate.person->keypoints[hand.wristKeypoint] = hand.wrist;
+        }
     }
+    return measured;
 }
 
 void FaceAnalysisWorker::attributeHeldObjects(const cv::Mat &bgr, AnalysisResult &result)
 {
+    if (!m_objects.isLoaded()) {
+        return;
+    }
+
     // A tracked hand that is open is not holding anything, and running an
     // eighty class detector to confirm that is waste. An untracked hand gets
     // the benefit of the doubt: without landmarks there is nothing to judge,
@@ -534,69 +620,150 @@ void FaceAnalysisWorker::attributeHeldObjects(const cv::Mat &bgr, AnalysisResult
     const auto couldHold = [](const AnalysedHand &hand) {
         return hand.valid && (!hand.tracked || hand.grip >= holdingGrip);
     };
-    const auto hasVisibleHand = [&couldHold](const AnalysedPerson &person) {
-        return person.known && (couldHold(person.leftHand) || couldHold(person.rightHand));
+
+    struct Candidate
+    {
+        AnalysedPerson *person;
+        const AnalysedHand *hand;
+        int priority;
+        double area;
     };
-    const bool anybody{std::any_of(result.people.cbegin(), result.people.cend(), hasVisibleHand)};
-
-    if (!m_objects.isLoaded() || !anybody) {
-        // Not merely skipped: forgotten. A stale mug that reappears the moment
-        // a hand comes back into view would be a memory of an object rather
-        // than a sighting of one.
-        //
-        // The frame size is forgotten with it, which is what makes the next
-        // qualifying pass run the detector at once instead of waiting out the
-        // stride. A hand appearing is exactly when the answer is wanted.
-        m_lastObjects.clear();
-        m_lastObjectFrame = cv::Size{};
-        return;
-    }
-
-    const cv::Size frame{bgr.size()};
-    if (m_lastObjectFrame != frame || (m_passes % objectStride) == 0) {
-        m_lastObjects.clear();
-        for (const ObjectDetection &detection : m_objects.detect(bgr)) {
-            if (detection.label.compare(QString{personClass}, Qt::CaseInsensitive) == 0) {
-                continue;
-            }
-            m_lastObjects.append(HeldObject{normalize(detection.box, frame),
-                                            detection.label,
-                                            detection.score,
-                                            QString{}});
-        }
-        m_lastObjectFrame = frame;
-    }
-
-    if (m_lastObjects.isEmpty()) {
-        return;
-    }
-
+    QList<Candidate> candidates;
     for (AnalysedPerson &person : result.people) {
-        if (!hasVisibleHand(person)) {
+        if (!person.known) {
             continue;
         }
         for (const AnalysedHand *hand : {&person.leftHand, &person.rightHand}) {
-            if (!couldHold(*hand)) {
+            if (couldHold(*hand)) {
+                candidates.append(Candidate{&person,
+                                            hand,
+                                            person.priority,
+                                            hand->box.width() * hand->box.height()});
                 continue;
             }
-            // The best single object per hand rather than every overlapping
-            // one. A hand covered by three boxes is a hand holding one thing
-            // that three classes disagree about, and reporting all three reads
-            // as somebody juggling.
-            const HeldObject *best{nullptr};
-            double bestCover{heldOverlap};
-            for (const HeldObject &object : std::as_const(m_lastObjects)) {
-                const double cover{handInsideObject(hand->box, object.box)};
-                if (cover > bestCover) {
-                    bestCover = cover;
-                    best = &object;
-                }
-            }
-            if (best != nullptr) {
-                person.held.append(HeldObject{best->box, best->label, best->score, hand->side});
-            }
+            // Not merely skipped: forgotten. A stale mug that reappears the
+            // moment a hand comes back into view would be a memory of an
+            // object rather than a sighting of one.
+            m_held.remove(heldKey(person.identity, hand->side));
         }
     }
+
+    // The same order the landmark stage spends its budget in, and for the same
+    // reason: rank first, then nearness. A room with four recognised people
+    // costs what a room with one costs, and what is dropped is what nobody is
+    // looking at.
+    std::sort(candidates.begin(),
+              candidates.end(),
+              [](const Candidate &left, const Candidate &right) {
+                  if (left.priority != right.priority) {
+                      return left.priority < right.priority;
+                  }
+                  return left.area > right.area;
+              });
+
+    const cv::Size frame{bgr.size()};
+    const bool detecting{(m_passes % objectStride) == 0};
+    int budget{maxObjectCrops};
+    for (const Candidate &candidate : std::as_const(candidates)) {
+        HeldTrack &track{m_held[heldKey(candidate.person->identity, candidate.hand->side)]};
+        if (detecting && budget > 0) {
+            --budget;
+            track.vote(bestHeldObject(bgr, *candidate.hand, frame), m_passes);
+        } else {
+            track.lastSeen = m_passes;
+        }
+        const std::optional<HeldObject> settled{track.settled(m_passes)};
+        if (settled) {
+            candidate.person->held.append(
+                HeldObject{settled->box, settled->label, settled->score, candidate.hand->side});
+        }
+    }
+
+    // Whoever left the room takes their mug with them.
+    for (auto entry{m_held.begin()}; entry != m_held.end();) {
+        entry = m_passes - entry->lastSeen > heldExpiry ? m_held.erase(entry) : std::next(entry);
+    }
+}
+
+std::optional<HeldObject> FaceAnalysisWorker::bestHeldObject(const cv::Mat &bgr,
+                                                             const AnalysedHand &hand,
+                                                             const cv::Size &frame)
+{
+    // The detector is shown the hand and its immediate surroundings rather than
+    // the whole room. It has one fixed input side, so every pixel spent on the
+    // far wall is a pixel not spent on the thing being held: a mug that is
+    // thirty pixels across in a 960 wide frame is thirteen by the time the
+    // network sees it, which is enough to notice that something is there and
+    // nowhere near enough to say what. In a crop it arrives at a hundred and
+    // fifty. That single change is the difference between "an object" and "a
+    // cup", and it is why this runs per hand instead of once per frame.
+    const cv::Rect region{objectRegionForHand(hand, frame)};
+    if (region.empty()) {
+        return std::nullopt;
+    }
+
+    const double regionArea{static_cast<double>(region.width) * region.height};
+    const QRectF handBox{hand.box};
+
+    std::optional<HeldObject> best;
+    double bestCover{heldOverlap};
+    for (const ObjectDetection &detection : m_objects.detect(bgr, region)) {
+        // The COCO class that is never a held object. A person standing behind
+        // another overlaps their hand constantly, and "kidev is holding a
+        // person" is the one answer this stage must never give.
+        if (detection.label.compare(QString{personClass}, Qt::CaseInsensitive) == 0) {
+            continue;
+        }
+        // Nor is the crop itself an object. A box that fills what the detector
+        // was shown is the detector describing the background it was given, and
+        // in a crop taken around a hand the background is furniture.
+        if (static_cast<double>(detection.box.area()) > regionArea * maximumObjectCover) {
+            continue;
+        }
+        const double cover{handInsideObject(handBox, normalize(detection.box, frame))};
+        if (cover > bestCover) {
+            bestCover = cover;
+            best = HeldObject{normalize(detection.box, frame),
+                              detection.label,
+                              detection.score,
+                              hand.side};
+        }
+    }
+    return best;
+}
+
+void FaceAnalysisWorker::HeldTrack::vote(const std::optional<HeldObject> &observed, quint64 pass)
+{
+    lastSeen = pass;
+    votes[static_cast<size_t>(cursor)] = observed ? observed->label : QString{};
+    cursor = (cursor + 1) % static_cast<int>(votes.size());
+    count = std::min(count + 1, static_cast<int>(votes.size()));
+    if (!observed) {
+        return;
+    }
+
+    // A label has to have been seen twice in the last three looks before the
+    // sighting carrying it is kept. One pass's best class over a small crop
+    // flickers between the two nearest things it could be -- a cup and a bowl,
+    // a phone and a remote -- and announcing the flicker is worse than
+    // announcing nothing: this string is what a skill is written against and
+    // what Kerfur says out loud.
+    int agreeing{0};
+    for (int index{0}; index < count; ++index) {
+        agreeing += votes[static_cast<size_t>(index)] == observed->label ? 1 : 0;
+    }
+    if (agreeing >= heldVotesToSettle) {
+        held = *observed;
+        heldAt = pass;
+    }
+}
+
+std::optional<HeldObject> FaceAnalysisWorker::HeldTrack::settled(quint64 pass) const
+{
+    if (held.label.isEmpty() || pass - heldAt > heldExpiry) {
+        return std::nullopt;
+    }
+    return held;
 }
 
 quint64 FaceAnalysisWorker::fingerprint(const QList<AnalysedPerson> &people)
@@ -750,6 +917,50 @@ QString FaceAnalysisWorker::voteIdentity(const cv::Rect2f &box,
     return leader;
 }
 
+double bodyHandScale(const AnalysedPerson &person, const QSize &frameSize, float minimumConfidence)
+{
+    const double width{static_cast<double>(frameSize.width() > 0 ? frameSize.width() : 1)};
+    const double height{static_cast<double>(frameSize.height() > 0 ? frameSize.height() : 1)};
+    const auto believed = [&person, minimumConfidence](Keypoint keypoint) {
+        const int index{static_cast<int>(keypoint)};
+        return index < person.keypoints.size() && index < person.keypointScores.size() &&
+               person.keypointScores.at(index) >= static_cast<double>(minimumConfidence);
+    };
+    // In pixels, like every other length here: a normalized distance on a 16:9
+    // frame is not a distance.
+    const auto span = [&person, width, height](Keypoint from, Keypoint to) {
+        const QPointF first{person.keypoints.at(static_cast<int>(from))};
+        const QPointF second{person.keypoints.at(static_cast<int>(to))};
+        return std::hypot((first.x() - second.x()) * width, (first.y() - second.y()) * height);
+    };
+
+    // The largest of whatever is visible, not the first. Every one of these
+    // shortens when the body turns and none of them lengthens, so the biggest
+    // reading is the one taken most nearly face on and the others are its
+    // foreshortened selves.
+    double scale{0.0};
+    if (believed(Keypoint::LeftShoulder) && believed(Keypoint::RightShoulder)) {
+        scale = std::max(scale,
+                         span(Keypoint::LeftShoulder, Keypoint::RightShoulder) *
+                             handPerShoulderWidth);
+        if (believed(Keypoint::LeftHip)) {
+            scale = std::max(scale,
+                             span(Keypoint::LeftShoulder, Keypoint::LeftHip) * handPerTorsoHeight);
+        }
+        if (believed(Keypoint::RightHip)) {
+            scale = std::max(scale,
+                             span(Keypoint::RightShoulder, Keypoint::RightHip) * handPerTorsoHeight);
+        }
+    }
+    if (believed(Keypoint::LeftEye) && believed(Keypoint::RightEye)) {
+        scale = std::max(scale, span(Keypoint::LeftEye, Keypoint::RightEye) * handPerEyeSpan);
+    }
+    if (believed(Keypoint::LeftEar) && believed(Keypoint::RightEar)) {
+        scale = std::max(scale, span(Keypoint::LeftEar, Keypoint::RightEar) * handPerEarSpan);
+    }
+    return scale;
+}
+
 AnalysedHand handFromKeypoints(const AnalysedPerson &person,
                                Keypoint wrist,
                                Keypoint elbow,
@@ -772,6 +983,7 @@ AnalysedHand handFromKeypoints(const AnalysedPerson &person,
 
     hand.wrist = person.keypoints.at(wristIndex);
     hand.confidence = wristScore;
+    hand.wristKeypoint = wristIndex;
 
     // Lengths are measured in pixels and only the result is normalized. A
     // normalized distance on a 16:9 frame is not a distance: the same forearm
@@ -799,11 +1011,23 @@ AnalysedHand handFromKeypoints(const AnalysedPerson &person,
             span = forearm * handSpan;
         }
     }
+
+    // The rest of the body, as a second opinion on how big a hand is. It is
+    // used two ways: as the whole answer when there is no forearm to measure,
+    // and as bounds on the forearm answer when there is, because a foreshortened
+    // arm reports a hand a quarter of its true size and the palm detector is
+    // then searching a crop the hand does not fit in.
+    const double bodyScale{bodyHandScale(person, frameSize, minimumConfidence)};
+    if (span > 0.0 && bodyScale > 0.0) {
+        span = std::clamp(span, bodyScale * handShrinkLimit, bodyScale * handGrowthLimit);
+    } else if (span <= 0.0) {
+        span = bodyScale;
+    }
     if (span <= 0.0) {
-        // No elbow, or an elbow on top of the wrist because the arm points at
-        // the camera. The person's own height is the only scale left, and it is
-        // a better one than a constant: it shrinks with distance the way a hand
-        // does.
+        // No elbow, no torso and no head: everything but the wrist is either
+        // out of frame or unbelieved. The person's own height is the only
+        // scale left, and it is a better one than a constant because it
+        // shrinks with distance the way a hand does.
         span = person.box.height() * height * handFallbackFraction;
     }
     if (span <= 0.0) {
@@ -815,6 +1039,38 @@ AnalysedHand handFromKeypoints(const AnalysedPerson &person,
     hand.box = QRectF{centre.x() - halfX, centre.y() - halfY, halfX * 2.0, halfY * 2.0};
     hand.valid = true;
     return hand;
+}
+
+cv::Rect objectRegionForHand(const AnalysedHand &hand, const cv::Size &frameSize)
+{
+    if (!hand.valid || frameSize.width <= 0 || frameSize.height <= 0) {
+        return {};
+    }
+
+    const double frameWidth{static_cast<double>(frameSize.width)};
+    const double frameHeight{static_cast<double>(frameSize.height)};
+    const double ceiling{std::min(frameWidth, frameHeight) * maximumObjectRegionFraction};
+    const double floor{std::min(static_cast<double>(minimumObjectRegion), ceiling)};
+    const double side{
+        std::clamp(std::max(hand.box.width() * frameWidth, hand.box.height() * frameHeight) *
+                       objectCropSpan,
+                   floor,
+                   ceiling)};
+    if (side < 2.0) {
+        return {};
+    }
+
+    // Slid back inside the frame rather than cut off at it. A hand at the edge
+    // of the picture is the common case -- an arm comes into shot before its
+    // owner does -- and a crop that loses its right half there hands the
+    // network a letterboxed sliver of what it was trained on.
+    const double centreX{(hand.box.x() + hand.box.width() / 2.0) * frameWidth};
+    const double centreY{(hand.box.y() + hand.box.height() / 2.0) * frameHeight};
+    const double left{std::clamp(centreX - side / 2.0, 0.0, std::max(frameWidth - side, 0.0))};
+    const double top{std::clamp(centreY - side / 2.0, 0.0, std::max(frameHeight - side, 0.0))};
+
+    return cv::Rect{cvRound(left), cvRound(top), cvRound(side), cvRound(side)} &
+           cv::Rect{0, 0, frameSize.width, frameSize.height};
 }
 
 double handInsideObject(const QRectF &hand, const QRectF &object)

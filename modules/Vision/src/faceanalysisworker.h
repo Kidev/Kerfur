@@ -12,12 +12,14 @@
 #include "objectdetector.h"
 #include "posedetector.h"
 
+#include <QHash>
 #include <QImage>
 #include <QObject>
 
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <optional>
 
 namespace Kerfur {
 
@@ -56,7 +58,12 @@ public:
     /// held mug does not become a held phone between frames. It also only runs
     /// at all when somebody recognised has a hand in view, so this stride is
     /// the cadence of the rarer case rather than of every frame.
-    static constexpr int objectStride{4};
+    static constexpr int objectStride{2};
+
+    /// Looks kept per hand before a held object's name is considered settled.
+    /// Short, because a hold is an event with a beginning: a vote long enough
+    /// to be certain is a vote that names the mug after it has been put down.
+    static constexpr int heldVotes{3};
 
 public slots:
     /// Loads every model the catalog has a file for and enrols the gallery.
@@ -77,6 +84,31 @@ signals:
     void resultReady(const Kerfur::AnalysisResult &result);
 
 private:
+    /// What one hand has been seen holding, and for how long it may be believed.
+    ///
+    /// The votes are labels rather than objects: what flickers between passes is
+    /// the name, not the geometry, and a majority of names is the cheapest thing
+    /// that turns "cup, bowl, cup" into "cup".
+    struct HeldTrack
+    {
+        std::array<QString, heldVotes> votes;
+        int cursor{0};
+        int count{0};
+        /// The most recent sighting whose name the vote agreed with, and the
+        /// pass it was seen on. A sighting the vote does not back is counted
+        /// and then dropped: it is evidence, not an answer.
+        HeldObject held;
+        quint64 heldAt{0};
+        /// The last pass this hand was in view at all, which is what decides
+        /// when the track itself is forgotten.
+        quint64 lastSeen{0};
+
+        void vote(const std::optional<HeldObject> &observed, quint64 pass);
+        /// The remembered object, while the sighting behind it is recent enough
+        /// to still be true.
+        std::optional<HeldObject> settled(quint64 pass) const;
+    };
+
     /// One face followed across frames, purely so that its name can be voted on
     /// rather than recomputed from scratch every pass.
     struct FaceTrack
@@ -103,13 +135,29 @@ private:
     void attributePeople(AnalysisResult &result, bool mirrored) const;
 
     /// Replaces the forearm estimate with measured landmarks, for as many
-    /// hands as the per pass budget allows, highest rank and nearest first.
-    void refineHands(const cv::Mat &bgr, AnalysisResult &result);
+    /// hands as the per pass budget allows, highest rank and nearest first, and
+    /// moves the skeleton's wrist joint onto the palm base it measured.
+    ///
+    /// True when at least one hand was measured. The caller publishes a new
+    /// revision when it was: the landmarks move every pass, and the pose
+    /// stride's revision alone would draw them at half the rate of the picture
+    /// they are supposed to sit on top of.
+    bool refineHands(const cv::Mat &bgr, AnalysisResult &result);
 
-    /// Runs the COCO stage and hangs whatever it found on the hand it overlaps.
-    /// Does nothing, and does not run the network at all, when no recognised
-    /// person has a hand in view.
+    /// Runs the COCO stage over a crop around each hand that could be holding
+    /// something, and hangs whatever it found on that hand. Does nothing, and
+    /// does not run the network at all, when no recognised person has a hand in
+    /// view.
     void attributeHeldObjects(const cv::Mat &bgr, AnalysisResult &result);
+
+    /// The one object in a crop around `hand` that the hand is actually inside,
+    /// in frame coordinates, or nothing. The best single object per hand rather
+    /// than every overlapping one: a hand covered by three boxes is a hand
+    /// holding one thing that three classes disagree about, and reporting all
+    /// three reads as somebody juggling.
+    std::optional<HeldObject> bestHeldObject(const cv::Mat &bgr,
+                                             const AnalysedHand &hand,
+                                             const cv::Size &frame);
 
     /// A number that changes whenever anything a consumer draws about the
     /// people changed. The pose stage is on a stride and the previous skeleton
@@ -135,11 +183,12 @@ private:
     QList<AnalysedPerson> m_lastPeople;
     cv::Size m_lastPoseFrame;
 
-    /// The COCO stage's last answer, normalized, held between strides. The
-    /// objects are cached and the association is not: a mug stays a mug for a
-    /// second, but the hand around it moves every frame.
-    QList<HeldObject> m_lastObjects;
-    cv::Size m_lastObjectFrame;
+    /// What one hand of one person has been seen holding, over the last few
+    /// looks. Keyed by name and side, because the association is what is being
+    /// remembered: the object stage runs on a stride and its box is stale
+    /// between passes, but the alternative is a label that flickers between the
+    /// two nearest classes at the rate the network is run.
+    QHash<QString, HeldTrack> m_held;
 
     quint64 m_passes{0};
     quint64 m_peopleRevision{0};
@@ -159,7 +208,17 @@ cv::Rect headRegionFromKeypoints(const AnalysedPerson &person,
                                  const cv::Size &frameSize,
                                  float minimumConfidence);
 
-/// The hand beyond one wrist, extrapolated along the forearm.
+/// How big a hand on this body should be, in pixels of `frameSize`, judged from
+/// the parts of it that are not the arm. Zero when nothing usable is visible.
+///
+/// The shoulders, the trunk, the eyes and the ears, each scaled by what a hand
+/// measures against it. The largest reading wins rather than the first: every
+/// one of these lengths shortens as the body turns away and none of them grows,
+/// so the biggest is the one seen most nearly face on.
+double bodyHandScale(const AnalysedPerson &person, const QSize &frameSize, float minimumConfidence);
+
+/// The hand beyond one wrist, extrapolated along the forearm and sized by
+/// `bodyHandScale` where the forearm alone would be misleading.
 ///
 /// `wrist` and `elbow` are COCO keypoint indices and `side` is the subject's
 /// own. Returns an invalid hand when the wrist keypoint is below
@@ -174,6 +233,15 @@ AnalysedHand handFromKeypoints(const AnalysedPerson &person,
                                const QString &side,
                                const QSize &frameSize,
                                float minimumConfidence);
+
+/// The crop the object stage is shown for one hand, in pixels of a frame of
+/// `frameSize`. Empty when the hand is too small, or the frame too small, for a
+/// crop to be worth taking.
+///
+/// Square, centred on the hand, and a few hand widths across: the detector has
+/// one fixed input side, so a crop is the only way a held object arrives at it
+/// large enough to be named rather than merely noticed.
+cv::Rect objectRegionForHand(const AnalysedHand &hand, const cv::Size &frameSize);
 
 /// How much of `hand` lies inside `object`, as a fraction of the hand's area.
 ///
