@@ -13,6 +13,8 @@ qt_add_qml_module(
             src/queuestatssource.h
             src/modeldirectory.cpp
             src/modeldirectory.h
+            src/identitydirectory.cpp
+            src/identitydirectory.h
             src/settingspath.cpp
             src/settingspath.h
             src/boundedqueue.h

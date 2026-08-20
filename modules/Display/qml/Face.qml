@@ -24,6 +24,7 @@ Item {
     readonly property int doubleBlinkDuration: 100
     readonly property real eyeMovementRange: KSettings.eyeMovementRange
     readonly property alias faceTracker: faceTracker
+    readonly property alias speechRecognizer: speechRecognizer
 
     // Face tracking properties
     readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.faceDetected

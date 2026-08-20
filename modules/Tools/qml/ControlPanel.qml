@@ -10,6 +10,11 @@ Rectangle {
 
     required property FaceTracker faceTracker
 
+    // Passed in rather than declared here. Two SpeechRecognizer instances are
+    // two microphones, two whisper contexts and two transcription loops
+    // competing for the same words, which is what the second one did.
+    required property SpeechRecognizer speechRecognizer
+
     color: "#333333"
     opacity: 0.7
     visible: KSettings.showControls
@@ -236,7 +241,7 @@ Rectangle {
                         verticalAlignment: Text.AlignVCenter
                     }
 
-                    onClicked: speechRecognizer.refreshDevices()
+                    onClicked: root.speechRecognizer.refreshDevices()
                 }
             }
 
@@ -244,10 +249,10 @@ Rectangle {
                 id: audioDeviceCombo
 
                 width: parent.width - 20
-                model: speechRecognizer.availableDevices
+                model: root.speechRecognizer.availableDevices
                 currentIndex: {
-                    if (speechRecognizer && speechRecognizer.availableDevices) {
-                        return speechRecognizer.availableDevices.indexOf(speechRecognizer.currentDevice);
+                    if (root.speechRecognizer && root.speechRecognizer.availableDevices) {
+                        return root.speechRecognizer.availableDevices.indexOf(root.speechRecognizer.currentDevice);
                     }
                     return -1;
                 }
@@ -306,8 +311,8 @@ Rectangle {
                 }
 
                 onCurrentTextChanged: {
-                    if (speechRecognizer && currentText !== speechRecognizer.currentDevice && currentText !== "") {
-                        speechRecognizer.setDevice(currentText);
+                    if (root.speechRecognizer && currentText !== root.speechRecognizer.currentDevice && currentText !== "") {
+                        root.speechRecognizer.setDevice(currentText);
                     }
                 }
             }
@@ -319,15 +324,9 @@ Rectangle {
             }
 
             SpeechDisplay {
-                speechRecognizer: speechRecognizer
+                speechRecognizer: root.speechRecognizer
                 width: parent.width - 20
                 height: 120
-            }
-
-            // Create the speech recognizer instance
-            SpeechRecognizer {
-                id: speechRecognizer
-                enabled: KSettings.speechRecognitionEnabled
             }
 
             // Visual Effects Section

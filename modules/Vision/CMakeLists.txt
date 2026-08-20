@@ -5,27 +5,40 @@ set(VISION_MODULE Vision)
 
 qt_add_library(${VISION_MODULE})
 
-# The CPU perception graph. Built wherever the backend is `cpu`, which is every
-# platform that is not the Pi, plus the Pi itself when its accelerator is not
-# present. Model rationale is in
+# The perception stages: the model wrappers themselves. Always built, because
+# the camera view in the control panel runs them directly and is not part of the
+# headless pipeline below. Model rationale is in
 # docs/superpowers/specs/2026-08-19-cpu-perception-backends.md.
+set(
+    VISION_STAGE_SOURCES
+    src/visiontypes.h
+    src/visiontypes.cpp
+    src/visionconfig.h
+    src/modelcatalog.h
+    src/modelcatalog.cpp
+    src/posedetector.h
+    src/posedetector.cpp
+    src/objectdetector.h
+    src/objectdetector.cpp
+    src/facepipeline.h
+    src/facepipeline.cpp
+    src/identitystore.h
+    src/identitystore.cpp
+    src/headpose.h
+    src/headpose.cpp
+    src/faceanalysis.h
+    src/faceanalysis.cpp
+    src/faceanalysisworker.h
+    src/faceanalysisworker.cpp
+)
+
+# The headless graph that feeds WorldModel, on its own capture thread. Built
+# wherever the backend is `cpu`, which is every platform that is not the Pi,
+# plus the Pi itself when its accelerator is not present.
 set(VISION_BACKEND_SOURCES "")
 if (KERFUR_PERCEPTION_BACKEND STREQUAL "cpu")
     set(
         VISION_BACKEND_SOURCES
-        src/visiontypes.h
-        src/visiontypes.cpp
-        src/visionconfig.h
-        src/modelcatalog.h
-        src/modelcatalog.cpp
-        src/posedetector.h
-        src/posedetector.cpp
-        src/objectdetector.h
-        src/objectdetector.cpp
-        src/facepipeline.h
-        src/facepipeline.cpp
-        src/identitystore.h
-        src/identitystore.cpp
         src/persontracker.h
         src/persontracker.cpp
         src/orientationresolver.h
@@ -41,10 +54,10 @@ if (KERFUR_PERCEPTION_BACKEND STREQUAL "cpu")
     )
 endif ()
 
-# FaceTracker and AIFaceDetector are the stack this backend replaces. They stay
-# until the QML rewiring in P1 tasks 11 and 12 lands, because Face.qml and
-# ControlPanel.qml still instantiate them. Only one of the two stacks may be
-# enabled at a time: both open a camera.
+# FaceTracker is the camera the control panel and Face.qml still drive. It runs
+# the stages above on its own worker thread; the producer below runs the same
+# stages headless. Only one of the two may be enabled at a time: both open a
+# camera.
 qt_add_qml_module(
     ${VISION_MODULE}
     URI "Vision"
@@ -52,8 +65,7 @@ qt_add_qml_module(
     QML_FILES qml/CameraFeedDisplay.qml
     SOURCES src/FaceTracker.cpp
             src/FaceTracker.hpp
-            src/AIFaceDetector.cpp
-            src/AIFaceDetector.hpp
+            ${VISION_STAGE_SOURCES}
             ${VISION_BACKEND_SOURCES}
 )
 
