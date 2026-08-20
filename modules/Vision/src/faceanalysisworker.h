@@ -97,7 +97,10 @@ private:
 
     /// Copies each face's name onto the person whose head region contains it,
     /// then locates the hands of whoever ended up with one.
-    void attributePeople(AnalysisResult &result) const;
+    ///
+    /// `mirrored` says whether the frame is a reflection, and it decides which
+    /// of the pose model's two arms is the subject's left one.
+    void attributePeople(AnalysisResult &result, bool mirrored) const;
 
     /// Replaces the forearm estimate with measured landmarks, for as many
     /// hands as the per pass budget allows, highest rank and nearest first.

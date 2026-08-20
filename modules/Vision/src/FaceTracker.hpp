@@ -122,6 +122,24 @@ class FaceTracker : public QObject
     Q_PROPERTY(int analysisMaxSide READ analysisMaxSide WRITE setAnalysisMaxSide NOTIFY
                    analysisMaxSideChanged)
 
+    /// The longer side of the picture the panel is shown, and the size the JPEG
+    /// behind `cameraFrameBase64` is encoded at.
+    ///
+    /// Separate from the analysis size on purpose: one is bounded by what the
+    /// models can use and the other by what a person can see. They are also
+    /// paid for differently -- the analysis is one inference chain per frame,
+    /// the preview is an encode and a base64 for every view bound to it -- so a
+    /// machine that wants a sharp picture and a cheap analysis, or the reverse,
+    /// can have either.
+    Q_PROPERTY(int previewMaxSide READ previewMaxSide WRITE setPreviewMaxSide NOTIFY
+                   previewMaxSideChanged)
+
+    /// The size the preview is actually being encoded at, which is the capture
+    /// size reduced to `previewMaxSide` and never enlarged past it. Published
+    /// because a panel that names one resolution while showing a picture built
+    /// from a quarter as many pixels is the reason this property exists.
+    Q_PROPERTY(QString previewResolution READ previewResolution NOTIFY cameraFrameChanged)
+
     Q_PROPERTY(QStringList knownIdentities READ knownIdentities NOTIFY capabilitiesChanged)
     Q_PROPERTY(QString galleryDirectory READ galleryDirectory NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool identityReady READ identityReady NOTIFY capabilitiesChanged)
@@ -177,6 +195,8 @@ public:
     int analysisMs() const { return static_cast<int>(m_analysisMs); }
     QStringList availableResolutions() const;
     int analysisMaxSide() const { return m_analysisMaxSide; }
+    int previewMaxSide() const { return m_previewMaxSide; }
+    QString previewResolution() const;
 
     QStringList knownIdentities() const { return m_capabilities.enrolled; }
     QString galleryDirectory() const { return m_capabilities.galleryDirectory; }
@@ -195,6 +215,7 @@ public slots:
     void setDetectionConfidence(qreal confidence);
     void setTrackingSmoothing(qreal smoothing);
     void setAnalysisMaxSide(int side);
+    void setPreviewMaxSide(int side);
 
 signals:
     void enabledChanged();
@@ -211,6 +232,7 @@ signals:
     void detectionConfidenceChanged();
     void trackingSmoothingChanged();
     void analysisMaxSideChanged();
+    void previewMaxSideChanged();
 
     /// To the worker thread. Not called directly: a direct call would run the
     /// models on whichever thread emitted.
@@ -269,6 +291,7 @@ private:
     qreal m_detectionConfidence{0.6};
     qreal m_trackingSmoothing{0.7};
     int m_analysisMaxSide{defaultAnalysisMaxSide};
+    int m_previewMaxSide{defaultPreviewMaxSide};
 
     QTimer m_frameThrottleTimer;
     QTimer m_cameraRetryTimer;
@@ -292,10 +315,24 @@ private:
     static constexpr int minimumAnalysisMaxSide{320};
     static constexpr int maximumAnalysisMaxSide{1920};
 
-    /// The longer side of the preview. Independent of the analysis size: this
-    /// one is bounded by what the panel can show, that one by what the models
-    /// can see.
-    static constexpr int previewMaxSide{640};
+    /// The longer side of the preview, by default. Large enough that the popup,
+    /// which is most of the screen, is looking at real pixels rather than at a
+    /// 640 wide picture stretched over 1200: that gap is what made the preview
+    /// look like a camera fault rather than a preview setting.
+    static constexpr int defaultPreviewMaxSide{960};
+
+    /// The bounds. The floor is a picture still worth showing at the size the
+    /// panel shows it; the ceiling is the largest format any camera here
+    /// offers, and nothing above it can do anything, because the preview is
+    /// never enlarged past the frame that arrived.
+    static constexpr int minimumPreviewMaxSide{320};
+    static constexpr int maximumPreviewMaxSide{1920};
+
+    /// The JPEG quality the preview is encoded at. Seventy five is the quality
+    /// of a picture meant to be looked past; the overlay is measured against
+    /// this image, and a compression edge that reads as a landmark is a bug
+    /// report about the analysis that the analysis did not cause.
+    static constexpr int previewJpegQuality{92};
 
     bool m_hasLastKnownPosition{false};
     bool m_isInitializing{false};

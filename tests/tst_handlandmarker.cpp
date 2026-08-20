@@ -35,6 +35,63 @@ std::array<cv::Point2f, handPointCount> straightHand(float reach,
     return hand;
 }
 
+/// Which fingers are out, for a hand the tests are about to build.
+struct HandSpec
+{
+    bool index{false};
+    bool middle{false};
+    bool ring{false};
+    bool pinky{false};
+    bool thumbOut{false};
+};
+
+/// A hand whose fingers point along `up`, built from that direction and the one
+/// across the palm rather than from absolute coordinates.
+///
+/// That is the whole point of the helper: the same specification turned through
+/// any angle is the same hand, so a test can ask what a shape means when the
+/// hand is upright, on its side, or upside down without writing three tables of
+/// numbers and getting one of them subtly wrong.
+std::array<cv::Point2f, handPointCount> posedHand(cv::Point2f up,
+                                                  HandSpec spec,
+                                                  float scale = 100.0F,
+                                                  cv::Point2f origin = {0.0F, 0.0F})
+{
+    const float length{std::hypot(up.x, up.y)};
+    const cv::Point2f along{up.x / length, up.y / length};
+    const cv::Point2f across{-along.y, along.x};
+
+    std::array<cv::Point2f, handPointCount> hand{};
+    const auto place = [&](int index, float alongBy, float acrossBy) {
+        hand[static_cast<size_t>(index)] =
+            cv::Point2f{origin.x + (along.x * alongBy + across.x * acrossBy) * scale,
+                        origin.y + (along.y * alongBy + across.y * acrossBy) * scale};
+    };
+
+    // Measured hands put an extended tip about 1.75 knuckle distances from the
+    // wrist and a curled one about 0.78, which are the two bands gripStrength
+    // was calibrated against.
+    constexpr float outReach{1.75F};
+    constexpr float inReach{0.78F};
+    const int knuckles[]{IndexMcp, MiddleMcp, RingMcp, PinkyMcp};
+    const int tips[]{IndexTip, MiddleTip, RingTip, PinkyTip};
+    const bool out[]{spec.index, spec.middle, spec.ring, spec.pinky};
+    for (int finger{0}; finger < 4; ++finger) {
+        const auto offset{static_cast<float>(finger - 2) * 0.2F + 0.1F};
+        const float reach{out[finger] ? outReach : inReach};
+        place(knuckles[finger], 1.0F, offset);
+        place(tips[finger], reach, offset * reach);
+    }
+
+    place(HandWrist, 0.0F, 0.0F);
+    place(ThumbCmc, 0.2F, -0.3F);
+    place(ThumbMcp, 0.4F, -0.6F);
+    // Out to the side of the palm, or folded back across it.
+    place(ThumbIp, spec.thumbOut ? 0.5F : 0.55F, spec.thumbOut ? -0.9F : -0.3F);
+    place(ThumbTip, spec.thumbOut ? 0.6F : 0.7F, spec.thumbOut ? -1.1F : 0.0F);
+    return hand;
+}
+
 } // namespace
 
 class TestHandLandmarker : public QObject
@@ -51,6 +108,15 @@ private slots:
     void gripIgnoresAFoldedThumb();
     void gripSurvivesADegenerateHand();
     void decodeRejectsMalformedOutputs();
+    void readsAnOpenPalmAndAFist();
+    void readsAThumbUpWhicheverWayTheHandIsTurned();
+    void readsAThumbDown();
+    void refusesAThumbHeldSideways();
+    void readsAPointAndAVictory();
+    void readsTheRing();
+    void refusesAHandCaughtBetweenShapes();
+    void gestureSurvivesScaleAndPosition();
+    void namesEveryShapeItReports();
 };
 
 /// The first and last rows of upstream's 2016 entry literal table. The
@@ -159,6 +225,107 @@ void TestHandLandmarker::decodeRejectsMalformedOutputs()
     const cv::Mat boxes{3, boxSizes, CV_32F, cv::Scalar{0.0}};
     const cv::Mat scores{3, scoreSizes, CV_32F, cv::Scalar{0.0}};
     QVERIFY(decodePalms({boxes, scores}, cv::Size{640, 480}, cv::Point2f{}, 0.9F, 0.3F).isEmpty());
+}
+
+void TestHandLandmarker::readsAnOpenPalmAndAFist()
+{
+    const cv::Point2f up{0.0F, -1.0F};
+    QCOMPARE(handGesture(posedHand(up, HandSpec{true, true, true, true, true})),
+             HandGesture::OpenPalm);
+    // A flat hand with the thumb tucked in is still a flat hand.
+    QCOMPARE(handGesture(posedHand(up, HandSpec{true, true, true, true, false})),
+             HandGesture::OpenPalm);
+    QCOMPARE(handGesture(posedHand(up, HandSpec{})), HandGesture::Fist);
+}
+
+/// The gesture that has to survive the hand being sideways, because that is how
+/// it is actually made: the fingers curl across the frame and the thumb, not
+/// the hand, is what points up.
+void TestHandLandmarker::readsAThumbUpWhicheverWayTheHandIsTurned()
+{
+    const HandSpec fistWithThumb{false, false, false, false, true};
+    // Fingers to the right, thumb up.
+    QCOMPARE(handGesture(posedHand(cv::Point2f{1.0F, 0.0F}, fistWithThumb)), HandGesture::ThumbUp);
+    // The same hand rolled a little further, as a real one never sits square.
+    QCOMPARE(handGesture(posedHand(cv::Point2f{1.0F, -0.4F}, fistWithThumb)), HandGesture::ThumbUp);
+}
+
+void TestHandLandmarker::readsAThumbDown()
+{
+    const HandSpec fistWithThumb{false, false, false, false, true};
+    QCOMPARE(handGesture(posedHand(cv::Point2f{-1.0F, 0.0F}, fistWithThumb)),
+             HandGesture::ThumbDown);
+}
+
+/// A thumb held out to the side is neither approval nor its opposite, and
+/// reporting one of the two because it is nearer would be a coin toss made at
+/// the moment somebody is waiting to see whether Kerfur agreed.
+void TestHandLandmarker::refusesAThumbHeldSideways()
+{
+    const HandSpec fistWithThumb{false, false, false, false, true};
+    QCOMPARE(handGesture(posedHand(cv::Point2f{0.0F, -1.0F}, fistWithThumb)), HandGesture::Fist);
+}
+
+void TestHandLandmarker::readsAPointAndAVictory()
+{
+    const cv::Point2f up{0.0F, -1.0F};
+    QCOMPARE(handGesture(posedHand(up, HandSpec{true, false, false, false, false})),
+             HandGesture::Point);
+    QCOMPARE(handGesture(posedHand(up, HandSpec{true, true, false, false, false})),
+             HandGesture::Victory);
+    // Index and pinky out is a different shape entirely, and an unnamed one.
+    QCOMPARE(handGesture(posedHand(up, HandSpec{true, false, false, true, false})),
+             HandGesture::None);
+}
+
+/// The one shape whose index finger is neither out nor curled, but drawn round
+/// to meet the thumb. It is recognised by the two tips touching while the other
+/// three fingers stand clear, which is what a person looking at it sees.
+void TestHandLandmarker::readsTheRing()
+{
+    std::array<cv::Point2f, handPointCount> hand{
+        posedHand(cv::Point2f{0.0F, -1.0F}, HandSpec{false, true, true, true, true})};
+    hand[IndexTip] = hand[ThumbTip] + cv::Point2f{4.0F, 4.0F};
+    QCOMPARE(handGesture(hand), HandGesture::Ok);
+}
+
+/// Halfway between two shapes is not a third shape. The gesture is about to be
+/// acted on, and a wrong answer costs more than no answer.
+void TestHandLandmarker::refusesAHandCaughtBetweenShapes()
+{
+    std::array<cv::Point2f, handPointCount> hand{
+        posedHand(cv::Point2f{0.0F, -1.0F}, HandSpec{true, true, true, true, true})};
+    // The ring finger halfway in, between the two bands.
+    hand[RingTip] = hand[RingMcp] * 1.25F;
+    QCOMPARE(handGesture(hand), HandGesture::None);
+}
+
+void TestHandLandmarker::gestureSurvivesScaleAndPosition()
+{
+    const HandSpec victory{true, true, false, false, false};
+    const cv::Point2f up{0.0F, -1.0F};
+    QCOMPARE(handGesture(posedHand(up, victory, 12.0F, cv::Point2f{5.0F, 900.0F})),
+             HandGesture::Victory);
+    QCOMPARE(handGesture(posedHand(up, victory, 400.0F, cv::Point2f{-70.0F, 30.0F})),
+             HandGesture::Victory);
+}
+
+/// Every reported shape has to have a name, because the name is what reaches
+/// the panel and, eventually, a skill. Only `None` is allowed to be empty.
+void TestHandLandmarker::namesEveryShapeItReports()
+{
+    const HandGesture shapes[]{HandGesture::OpenPalm,
+                               HandGesture::Fist,
+                               HandGesture::ThumbUp,
+                               HandGesture::ThumbDown,
+                               HandGesture::Point,
+                               HandGesture::Victory,
+                               HandGesture::Ok};
+    for (const HandGesture shape : shapes) {
+        QVERIFY2(!gestureName(shape).isEmpty(),
+                 qPrintable(QString::number(static_cast<int>(shape))));
+    }
+    QVERIFY(gestureName(HandGesture::None).isEmpty());
 }
 
 QTEST_APPLESS_MAIN(TestHandLandmarker)

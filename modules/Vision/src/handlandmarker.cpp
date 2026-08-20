@@ -148,6 +148,59 @@ cv::Rect squaredRegion(const cv::Rect &region, float growth, const cv::Size &bou
     return grown & cv::Rect{0, 0, bounds.width, bounds.height};
 }
 
+/// The four fingers every shape rule counts, in the order they are counted.
+/// The thumb is not among them: it moves across the palm rather than away from
+/// the wrist, so it is measured its own way and asked its own questions.
+constexpr std::array<HandPoint, 4> fingerTips{IndexTip, MiddleTip, RingTip, PinkyTip};
+
+/// A fingertip's own knuckle. The landmark order runs base to tip within each
+/// digit, so this is arithmetic rather than a table, but the table is written
+/// out because a reader should not have to trust that.
+constexpr HandPoint knuckleFor(HandPoint tip)
+{
+    switch (tip) {
+    case ThumbTip:
+        return ThumbMcp;
+    case IndexTip:
+        return IndexMcp;
+    case MiddleTip:
+        return MiddleMcp;
+    case RingTip:
+        return RingMcp;
+    case PinkyTip:
+        return PinkyMcp;
+    default:
+        break;
+    }
+    return handPointCount;
+}
+
+double distance(const cv::Point2f &from, const cv::Point2f &to)
+{
+    return std::hypot(static_cast<double>(from.x - to.x), static_cast<double>(from.y - to.y));
+}
+
+/// Where a finger stops being ambiguous. The two bands are the ones gripStrength
+/// was calibrated against -- open fingers at 1.53 and above, curled ones at 0.80
+/// and below -- pulled in far enough that a finger between the two is refused
+/// rather than rounded to whichever it is nearer.
+constexpr double extendedRatio{1.35};
+constexpr double curledRatio{1.15};
+
+/// How much further from the pinky knuckle an extended thumb sits than its own
+/// knuckle does. A thumb folded across the palm comes in around 0.5 and one held
+/// clear around 1.5, so the line is drawn where nothing lands.
+constexpr double thumbOutRatio{1.15};
+
+/// How close the thumb and index tips have to be, as a fraction of the palm's
+/// length, to count as touching.
+constexpr double okTouchFraction{0.4};
+
+/// How much of the thumb's length has to point up or down for it to be a thumb
+/// up or a thumb down: this is the cosine of about 57 degrees off vertical, so a
+/// thumb held out sideways is a fist with an opinion and reads as neither.
+constexpr double thumbVerticalFraction{0.55};
+
 } // namespace
 
 const std::vector<cv::Point2f> &palmAnchors()
@@ -269,12 +322,33 @@ QList<PalmDetection> decodePalms(const std::vector<cv::Mat> &outputs,
     return detections;
 }
 
+double fingerExtension(const std::array<cv::Point2f, handPointCount> &landmarks, HandPoint tip)
+{
+    const HandPoint knuckle{knuckleFor(tip)};
+    if (knuckle == handPointCount) {
+        return 0.0;
+    }
+
+    const cv::Point2f wrist{landmarks[HandWrist]};
+    const double knuckleDistance{distance(landmarks[static_cast<size_t>(knuckle)], wrist)};
+    if (knuckleDistance < 1e-3) {
+        return 0.0;
+    }
+    return distance(landmarks[static_cast<size_t>(tip)], wrist) / knuckleDistance;
+}
+
+bool thumbIsOut(const std::array<cv::Point2f, handPointCount> &landmarks)
+{
+    const cv::Point2f across{landmarks[PinkyMcp]};
+    const double folded{distance(landmarks[ThumbMcp], across)};
+    if (folded < 1e-3) {
+        return false;
+    }
+    return distance(landmarks[ThumbTip], across) / folded > thumbOutRatio;
+}
+
 double gripStrength(const std::array<cv::Point2f, handPointCount> &landmarks)
 {
-    constexpr std::array<std::pair<int, int>, 4> fingers{{{IndexTip, IndexMcp},
-                                                         {MiddleTip, MiddleMcp},
-                                                         {RingTip, RingMcp},
-                                                         {PinkyTip, PinkyMcp}}};
     // Measured, not guessed. Across open hands the four ratios land between
     // 1.53 and 1.86, and across a closed fist between 0.74 and 0.80, so the
     // ends of the scale are put just inside those bands: a splayed hand reads
@@ -284,24 +358,111 @@ double gripStrength(const std::array<cv::Point2f, handPointCount> &landmarks)
     constexpr double openRatio{1.65};
     constexpr double closedRatio{0.85};
 
-    const cv::Point2f wrist{landmarks[HandWrist]};
     double total{0.0};
     int counted{0};
-    for (const auto &[tip, knuckle] : fingers) {
-        const cv::Point2f knuckleOffset{landmarks[static_cast<size_t>(knuckle)] - wrist};
-        const double knuckleDistance{std::hypot(static_cast<double>(knuckleOffset.x),
-                                                static_cast<double>(knuckleOffset.y))};
-        if (knuckleDistance < 1e-3) {
+    for (const HandPoint tip : fingerTips) {
+        const double ratio{fingerExtension(landmarks, tip)};
+        if (ratio <= 0.0) {
             continue;
         }
-        const cv::Point2f tipOffset{landmarks[static_cast<size_t>(tip)] - wrist};
-        const double ratio{std::hypot(static_cast<double>(tipOffset.x),
-                                      static_cast<double>(tipOffset.y))
-                           / knuckleDistance};
         total += std::clamp((openRatio - ratio) / (openRatio - closedRatio), 0.0, 1.0);
         ++counted;
     }
     return counted > 0 ? total / counted : 0.0;
+}
+
+QString gestureName(HandGesture gesture)
+{
+    switch (gesture) {
+    case HandGesture::OpenPalm:
+        return QStringLiteral("open palm");
+    case HandGesture::Fist:
+        return QStringLiteral("fist");
+    case HandGesture::ThumbUp:
+        return QStringLiteral("thumbs up");
+    case HandGesture::ThumbDown:
+        return QStringLiteral("thumbs down");
+    case HandGesture::Point:
+        return QStringLiteral("pointing");
+    case HandGesture::Victory:
+        return QStringLiteral("victory");
+    case HandGesture::Ok:
+        return QStringLiteral("ok");
+    case HandGesture::None:
+        break;
+    }
+    return {};
+}
+
+HandGesture handGesture(const std::array<cv::Point2f, handPointCount> &landmarks)
+{
+    // The palm, as the length everything else is measured against. A hand this
+    // small in the frame has landmarks that are mostly quantisation, and the
+    // rules below would be reading noise.
+    const double palm{distance(landmarks[MiddleMcp], landmarks[HandWrist])};
+    if (palm < 1e-3) {
+        return HandGesture::None;
+    }
+
+    // The ring first, because it is the one shape whose index finger is neither
+    // out nor curled but drawn round to meet the thumb, and the strict test
+    // below would throw the whole hand away for it. What makes it an O is the
+    // two tips touching while the other three fingers stand clear, and that is
+    // what is asked.
+    const bool touching{distance(landmarks[ThumbTip], landmarks[IndexTip]) < palm * okTouchFraction};
+    const bool trailingOut{fingerExtension(landmarks, MiddleTip) >= extendedRatio
+                           && fingerExtension(landmarks, RingTip) >= extendedRatio
+                           && fingerExtension(landmarks, PinkyTip) >= extendedRatio};
+    if (touching && trailingOut) {
+        return HandGesture::Ok;
+    }
+
+    // Every finger has to be decidedly one thing or the other. A hand caught
+    // halfway between two shapes is not a third shape, and reporting one is
+    // worse than reporting nothing: the gesture is about to be acted on.
+    std::array<bool, fingerTips.size()> out{};
+    for (size_t index{0}; index < fingerTips.size(); ++index) {
+        const double ratio{fingerExtension(landmarks, fingerTips[index])};
+        if (ratio >= extendedRatio) {
+            out[index] = true;
+        } else if (ratio > curledRatio) {
+            return HandGesture::None;
+        }
+    }
+    const int raised{static_cast<int>(std::count(out.cbegin(), out.cend(), true))};
+
+    if (raised == static_cast<int>(fingerTips.size())) {
+        return HandGesture::OpenPalm;
+    }
+    if (raised == 0) {
+        if (!thumbIsOut(landmarks)) {
+            return HandGesture::Fist;
+        }
+        // Which way the thumb points, and only here. The frame is a mirror, so
+        // left and right are not the subject's; up and down survive a
+        // reflection, which is the whole reason this pair is in the set and a
+        // sideways thumb is not.
+        const cv::Point2f thumb{landmarks[ThumbTip] - landmarks[ThumbMcp]};
+        const double length{std::hypot(static_cast<double>(thumb.x), static_cast<double>(thumb.y))};
+        if (length < 1e-3) {
+            return HandGesture::Fist;
+        }
+        const double vertical{static_cast<double>(thumb.y) / length};
+        if (vertical <= -thumbVerticalFraction) {
+            return HandGesture::ThumbUp;
+        }
+        if (vertical >= thumbVerticalFraction) {
+            return HandGesture::ThumbDown;
+        }
+        return HandGesture::Fist;
+    }
+    if (raised == 1 && out[0]) {
+        return HandGesture::Point;
+    }
+    if (raised == 2 && out[0] && out[1]) {
+        return HandGesture::Victory;
+    }
+    return HandGesture::None;
 }
 
 bool HandLandmarker::load(const QString &palmModelPath, const QString &landmarkModelPath)
@@ -499,6 +660,7 @@ std::optional<HandPose> HandLandmarker::landmarksFor(const cv::Mat &bgrRoi, cons
                           boxCentre.y - height * handBoxEnlarge / 2.0F, width * handBoxEnlarge,
                           height * handBoxEnlarge};
     pose.grip = gripStrength(pose.landmarks);
+    pose.gesture = handGesture(pose.landmarks);
     return pose;
 }
 

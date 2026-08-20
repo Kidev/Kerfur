@@ -116,6 +116,10 @@ struct AnalysedHand
     /// Zero for a flat open hand, one for a closed fist. Zero when untracked,
     /// which is why `tracked` has to be consulted before believing it.
     double grip{0.0};
+    /// The shape the hand is making, when it is one of the named ones and the
+    /// landmarks are unambiguous about which. Empty otherwise, and empty for
+    /// every untracked hand: a forearm direction says nothing about fingers.
+    QString gesture;
     /// True when the landmark model produced this hand, false when it is the
     /// forearm extrapolation.
     bool tracked{false};

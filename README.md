@@ -59,6 +59,8 @@ Without them the face still runs; it simply has nothing to look at. Any stage wh
 
 **How much of the frame the models get to see** is the one knob worth turning when detection is unreliable. The camera frame is reduced before any model runs -- to 960 pixels on the longer side by default -- and everything downstream sees only what survives that. A face across the room or a hand at arm's length is a few dozen pixels wide by then, which is where the detail goes. *Vision > Analysis detail* in the control panel raises it as far as 1920; the cost is superlinear and is printed next to the setting, in milliseconds per pass, so the trade is made against a number rather than a feeling. It is never enlarged past what the camera actually delivers, so if the panel reports a small camera resolution that is the thing to fix first.
 
+**The picture on the panel is a separate setting.** *Vision > Preview detail* is what a person looks at; *Analysis detail* is what the models are shown, and the two are paid for differently -- the analysis is one inference chain per frame, the preview is a JPEG encode and a base64 of it for every view bound to it. The preview is capped at 960 pixels on the longer side by default and, like the analysis frame, is never enlarged past what arrives. The panel prints the size it is actually encoding at, beside the size the camera is actually delivering, because a preview that names one resolution while showing a picture built from a quarter as many pixels is indistinguishable from a broken camera.
+
 ### Knowing people
 `identities/` is the gallery of people Kerfur recognises, and `identities/ids.json` is what declares them:
 
@@ -87,14 +89,20 @@ The directory is deliberately not committed: a face and a voice are personal dat
 
 A voice needs about two seconds of continuous speech before Kerfur will put a name to it. Below that the measurement says more about the room than about the speaker, so it says nothing instead.
 
+**Where a sentence appears** is the answer to who said it. When a voice is recognised and that person's face is in shot at the same time, the camera preview draws the sentence over their head, bordered in the colour their face box already carries. The two halves are matched by name, which is sound because one manifest enrols both galleries: a face and a voice belong to one person because it says so, not because two files happen to share a stem. When the speaker is recognised but not in shot, nothing is drawn -- the transcript is in the hearing panel either way, and a caption floating over a stranger, or over nobody, would be a claim rather than an observation.
+
 ### Hands and what is in them
 For a person the gallery recognises, Kerfur first locates their hands from the pose keypoints -- a hand sits about a third of a forearm past the wrist, along the forearm. That estimate is a region to look in, not a measurement, and it is where the hand pipeline starts rather than where it stops.
 
 That region then goes to MediaPipe's two model hand pipeline: a palm detector, and a landmark model that returns twenty-one points. Both are the ONNX exports from OpenCV Zoo, so they run on the `cv::dnn` already linked rather than pulling in MediaPipe's own Bazel build, and both are pinned by sha256 in `assets/models.json` like every other stage. Upstream runs the palm detector across the whole frame; Kerfur gives it the region the skeleton already found, which is both cheaper and the only way to keep the identity rule below honest.
 
+**Left and right are the subject's own.** The pose model labels the arms of the person it can see, and what it can see is a mirror, so the arm it calls left is the one on the subject's right. Kerfur undoes that where the hands are named rather than where they are drawn: a hand reported as `left` is the one that person would raise if asked to raise their left, whichever side of the mirrored preview it appears on. That is the only version of the answer a skill can be written against.
+
 From the twenty-one points comes a *grip*: zero for a flat open hand, one for a closed fist, measured as how far each fingertip sits from the wrist relative to its own knuckle so that it survives distance and rotation. Measured open hands read below 0.07 and a fist saturates at 1.0. A hand that is plainly open is not holding anything, so the COCO object detector is not run on it.
 
 For hands that pass, an object is reported as *held* only when it actually overlaps the hand; something lying on the desk in front of somebody is a thing in the room, not a thing in their hand. Grip is the cheap filter and the overlap is the arbiter, because grip can tell a fist from an open palm but cannot tell a fist from a fist around a mug.
+
+The same twenty-one points are read for a *gesture*: an open palm, a fist, a thumb up or down, a point, a victory, or a thumb and finger ring. Every rule is a ratio between two lengths of the same hand, so the answer does not change with how near the person is or which way the hand is turned, and the set is chosen to survive reflection -- a thumb pointing up still points up in a mirror, which is not true of anything that depends on which hand is which. A hand caught between two shapes is reported as no shape at all rather than as the nearer of the two: the gesture is the sort of thing that gets acted on, and a wrong answer costs more there than no answer.
 
 The camera preview draws the twenty-one points as a hand skeleton, over the body one, with the fingertips and the wrist marked larger than the knuckles. Both models are optional. Without them the forearm estimate stands on its own exactly as before, and the overlay says so -- a dimmed box with nothing inside it -- rather than drawing a guess as though it were a measurement. Two hands per frame get the landmark pass, chosen by rank and then by nearness -- the same order the eyes follow -- so a room with four recognised people costs what a room with one costs.
 
