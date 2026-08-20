@@ -110,6 +110,15 @@ struct AnalysedHand
     QString side;
     bool valid{false};
 
+    /// Which of the seventeen COCO keypoints this hand was extrapolated from,
+    /// or -1 when there was none. Carried so that a measured palm base can be
+    /// written back over the pose stage's wrist joint: the two are the same
+    /// anatomical point, one guessed and one seen, and a skeleton that draws
+    /// both ends its forearm a finger's width away from the hand hanging off
+    /// it. Not published to QML; it is an index into a list the view already
+    /// has, and the substitution has happened by the time the view sees it.
+    int wristKeypoint{-1};
+
     /// The twenty-one MediaPipe points, normalized. Empty when only the
     /// skeleton estimate is available, which is what `tracked` reports.
     QList<QPointF> landmarks;

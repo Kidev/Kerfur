@@ -140,6 +140,24 @@ QList<ObjectDetection> ObjectDetector::detect(const cv::Mat &bgr)
     }
 }
 
+QList<ObjectDetection> ObjectDetector::detect(const cv::Mat &bgr, const cv::Rect &region)
+{
+    if (!m_loaded || bgr.empty()) {
+        return {};
+    }
+    const cv::Rect roi{region & cv::Rect{0, 0, bgr.cols, bgr.rows}};
+    if (roi.width < 2 || roi.height < 2) {
+        return {};
+    }
+
+    QList<ObjectDetection> found{detect(bgr(roi))};
+    for (ObjectDetection &detection : found) {
+        detection.box.x += static_cast<float>(roi.x);
+        detection.box.y += static_cast<float>(roi.y);
+    }
+    return found;
+}
+
 QList<ObjectDetection> decodeNanoDet(const std::vector<cv::Mat> &outputs,
                                      const cv::Size &sourceSize,
                                      float confidenceThreshold,

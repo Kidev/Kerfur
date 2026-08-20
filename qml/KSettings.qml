@@ -42,12 +42,13 @@ QtObject {
 
         property alias analysisMaxSide: root.analysisMaxSide
         property alias previewMaxSide: root.previewMaxSide
+        property alias visionUpdateHz: root.visionUpdateHz
 
         category: "Perception"
     }
-    /// The longer side the preview picture is reduced to before it is encoded
-    /// for the panel. Separate from the analysis size: this one is what a
-    /// person looks at, that one is what the models are shown.
+    /// The longer side the preview picture is reduced to before it is shown in
+    /// the panel. Separate from the analysis size: this one is what a person
+    /// looks at, that one is what the models are shown.
     property int previewMaxSide: 960
     property Settings paths: Settings {
         id: settingsPaths
@@ -93,6 +94,12 @@ QtObject {
     property bool speechRecognitionDebug: false
     property bool speechRecognitionEnabled: false
     property real upDownAngle: 90
+    /// How many times a second the camera is looked at: one frame taken, one
+    /// pass of every vision model run on it, one picture published. Persisted
+    /// for the same reason the two sizes are -- it is a property of the machine
+    /// and not of the session -- and it is the setting that decides what Kerfur
+    /// costs to keep running.
+    property int visionUpdateHz: 6
 
     Behavior on leftRightAngle {
         enabled: false
