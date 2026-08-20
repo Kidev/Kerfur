@@ -310,6 +310,7 @@ Item {
     FaceTracker {
         id: faceTracker
 
+        analysisMaxSide: KSettings.analysisMaxSide
         enabled: KSettings.faceTrackingEnabled
 
         onEnabledChanged: {

@@ -14,22 +14,27 @@ using namespace Kerfur;
 
 namespace {
 
+/// One file of the fixture. Void so that it can say which path it failed on:
+/// a gallery built from a file that was never written fails later, somewhere
+/// else, as an identity the registry simply did not find.
+void writeFile(const QString &path, const QByteArray &contents)
+{
+    QDir{}.mkpath(QFileInfo{path}.absolutePath());
+    QFile file{path};
+    QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(path));
+    QCOMPARE(file.write(contents), static_cast<qint64>(contents.size()));
+}
+
 /// A gallery on disk: the manifest, plus empty files wherever it points, so
 /// that the existence checks in the registry have something to find.
 QString buildGallery(QTemporaryDir &root, const QString &manifest, const QStringList &files)
 {
     const QDir directory{root.path()};
     for (const QString &relative : files) {
-        const QString path{directory.absoluteFilePath(relative)};
-        QDir{}.mkpath(QFileInfo{path}.absolutePath());
-        QFile file{path};
-        file.open(QIODevice::WriteOnly);
-        file.write("x");
+        writeFile(directory.absoluteFilePath(relative), QByteArrayLiteral("x"));
     }
     if (!manifest.isNull()) {
-        QFile file{directory.absoluteFilePath(QStringLiteral("ids.json"))};
-        file.open(QIODevice::WriteOnly);
-        file.write(manifest.toUtf8());
+        writeFile(directory.absoluteFilePath(QStringLiteral("ids.json")), manifest.toUtf8());
     }
     return directory.absolutePath();
 }
@@ -125,10 +130,7 @@ void TestIdentityRegistry::keepsAnAbsolutePath()
     QTemporaryDir root;
     QTemporaryDir elsewhere;
     const QString shared{QDir{elsewhere.path()}.absoluteFilePath(QStringLiteral("ada.png"))};
-    QFile file{shared};
-    QVERIFY(file.open(QIODevice::WriteOnly));
-    file.write("x");
-    file.close();
+    writeFile(shared, QByteArrayLiteral("x"));
 
     const QString directory{
         buildGallery(root,

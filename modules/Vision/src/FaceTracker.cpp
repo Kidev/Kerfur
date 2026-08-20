@@ -35,6 +35,24 @@ const QVariantList &cocoSkeleton()
     return edges;
 }
 
+/// The MediaPipe hand bones, as index pairs into the twenty-one points. The
+/// palm first, then the five digits from the thumb outwards, so that a hand
+/// which only half decoded still reads as a hand rather than as a spray of
+/// segments.
+const QVariantList &mediapipeHand()
+{
+    static const QVariantList edges{
+        QVariantList{0, 1},   QVariantList{0, 5},   QVariantList{5, 9},
+        QVariantList{9, 13},  QVariantList{13, 17}, QVariantList{0, 17},
+        QVariantList{1, 2},   QVariantList{2, 3},   QVariantList{3, 4},
+        QVariantList{5, 6},   QVariantList{6, 7},   QVariantList{7, 8},
+        QVariantList{9, 10},  QVariantList{10, 11}, QVariantList{11, 12},
+        QVariantList{13, 14}, QVariantList{14, 15}, QVariantList{15, 16},
+        QVariantList{17, 18}, QVariantList{18, 19}, QVariantList{19, 20},
+    };
+    return edges;
+}
+
 QVariantList landmarksToVariant(const QList<QPointF> &landmarks)
 {
     QVariantList list;
@@ -438,8 +456,14 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
         return;
     }
 
+    // Reduced, never enlarged. Asking for a longer side than the camera
+    // delivers would interpolate pixels that were never measured: it costs a
+    // full resample and a bigger buffer through every stage, and gives the
+    // models nothing they did not already have.
     QSize analysisSize{image.size()};
-    analysisSize.scale(analysisMaxSide, analysisMaxSide, Qt::KeepAspectRatio);
+    if (std::max(image.width(), image.height()) > m_analysisMaxSide) {
+        analysisSize.scale(m_analysisMaxSide, m_analysisMaxSide, Qt::KeepAspectRatio);
+    }
     const QImage analysisImage{analysisSize == image.size()
                                    ? image
                                    : image.scaled(analysisSize,
@@ -647,6 +671,11 @@ QVariantList FaceTracker::skeletonEdges()
     return cocoSkeleton();
 }
 
+QVariantList FaceTracker::handEdges()
+{
+    return mediapipeHand();
+}
+
 QString FaceTracker::cameraFrameBase64() const
 {
     if (m_cameraFrame.isNull()) {
@@ -747,6 +776,16 @@ void FaceTracker::setTrackingSmoothing(qreal smoothing)
     }
     m_trackingSmoothing = bounded;
     emit trackingSmoothingChanged();
+}
+
+void FaceTracker::setAnalysisMaxSide(int side)
+{
+    const int bounded{std::clamp(side, minimumAnalysisMaxSide, maximumAnalysisMaxSide)};
+    if (m_analysisMaxSide == bounded) {
+        return;
+    }
+    m_analysisMaxSide = bounded;
+    emit analysisMaxSideChanged();
 }
 
 void FaceTracker::setFaceDetected(bool detected)
