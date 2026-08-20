@@ -67,6 +67,8 @@ qt_add_qml_module(
     QML_FILES qml/CameraFeedDisplay.qml
     SOURCES src/FaceTracker.cpp
             src/FaceTracker.hpp
+            src/cameraframeview.cpp
+            src/cameraframeview.h
             ${VISION_STAGE_SOURCES}
             ${VISION_BACKEND_SOURCES}
 )
@@ -85,9 +87,11 @@ find_package(
 # include directory below and names QImage in its interface, so anything that
 # includes it needs Gui too. It used to arrive by accident through Multimedia,
 # which is PRIVATE, so the module compiled and its consumers did not.
+# Qt6::Quick for the same reason Qt6::Gui is PUBLIC: cameraframeview.h sits in
+# the PUBLIC include directory below and names QQuickItem in its interface.
 target_link_libraries(
     ${VISION_MODULE}
-    PUBLIC Core Qt6::Gui
+    PUBLIC Core Qt6::Gui Qt6::Quick
     PRIVATE ${OpenCV_LIBS} Qt6::Multimedia
 )
 

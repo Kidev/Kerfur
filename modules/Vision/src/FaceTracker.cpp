@@ -5,7 +5,6 @@
 
 #include "faceanalysisworker.h"
 
-#include <QBuffer>
 #include <QCameraFormat>
 #include <QDebug>
 #include <QLoggingCategory>
@@ -180,7 +179,7 @@ FaceTracker::FaceTracker(QObject *parent)
     Kerfur::ensureFaceAnalysisMetaTypesRegistered();
 
     m_frameThrottleTimer.setSingleShot(true);
-    m_frameThrottleTimer.setInterval(processingIntervalMs);
+    m_frameThrottleTimer.setInterval(intervalForRate(m_updateHz));
 
     m_cameraRetryTimer.setSingleShot(true);
     m_cameraRetryTimer.setInterval(2000);
@@ -271,11 +270,25 @@ void FaceTracker::selectCameraFormat()
     }
 
     // Exact first, then the smallest mode that still covers the request, then
-    // simply the largest there is. Ties are broken on frame rate, because two
-    // modes of the same size differ only in how fast and in which pixel format
-    // they arrive, and the faster one is always the better preview.
+    // simply the largest there is. Ties are broken on frame rate, and the rule
+    // is the slowest mode that still comfortably covers the cadence -- not the
+    // fastest available.
+    //
+    // Faster is not better here. Nothing downstream consumes more than
+    // `m_updateHz` frames a second; a sixty hertz mode means the driver
+    // decoding sixty frames, the backend converting sixty frames and this class
+    // discarding fifty of them, at twice the bus bandwidth and twice the power
+    // of the thirty hertz mode that produces exactly the same preview.
     const auto better = [](const QCameraFormat &candidate, const QCameraFormat &incumbent) {
-        return candidate.maxFrameRate() > incumbent.maxFrameRate();
+        const bool candidateCovers{candidate.maxFrameRate() >= preferredCaptureFrameRate};
+        const bool incumbentCovers{incumbent.maxFrameRate() >= preferredCaptureFrameRate};
+        if (candidateCovers != incumbentCovers) {
+            return candidateCovers;
+        }
+        // Both cover it: the slower one. Neither does: the faster one, which is
+        // the closest either can get to the cadence being asked for.
+        return candidateCovers ? candidate.maxFrameRate() < incumbent.maxFrameRate()
+                               : candidate.maxFrameRate() > incumbent.maxFrameRate();
     };
 
     QCameraFormat exact;
@@ -402,6 +415,7 @@ void FaceTracker::uninitializeCamera()
     }
 
     setFaceDetected(false);
+    m_pendingPreview = QImage{};
     setCameraFrame(QImage{});
     setCaptureResolution(QSize{});
 
@@ -427,6 +441,22 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     if (m_frameThrottleTimer.isActive()) {
         return;
     }
+
+    // One pass at a time, and the throttle is not restarted for a frame that
+    // cannot start one. Queueing a second pass while the first is still running
+    // would build a backlog of images that are already out of date by the time
+    // a model reaches them, which is the failure that turns a slow preview into
+    // an unbounded one; skipping the throttle restart means the next frame to
+    // arrive after the pass finishes is used, rather than the one after that.
+    //
+    // While the models are still loading there is no pass to wait for and the
+    // first request sits queued behind the load, so frames are shown as they
+    // arrive instead. Loading four networks and a gallery takes seconds, and a
+    // panel that shows nothing at all for those seconds looks like a camera
+    // that failed rather than like a robot waking up.
+    if (m_analysisBusy && m_analysisReady) {
+        return;
+    }
     m_frameThrottleTimer.start();
 
     const QImage captured{frame.toImage()};
@@ -447,19 +477,19 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
 
     // Reduced, never enlarged, exactly like the analysis image below. A preview
     // scaled up past the frame that arrived is a blurrier picture of the same
-    // pixels and a bigger JPEG to encode for it.
+    // pixels for the texture upload to carry.
     QSize previewSize{image.size()};
     if (std::max(image.width(), image.height()) > m_previewMaxSide) {
         previewSize.scale(m_previewMaxSide, m_previewMaxSide, Qt::KeepAspectRatio);
     }
-    setCameraFrame(previewSize == image.size()
-                       ? image
-                       : image.scaled(previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    const QImage preview{
+        previewSize == image.size()
+            ? image
+            : image.scaled(previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation)};
 
-    // One pass at a time. Queueing a second while the first is still running
-    // would build a backlog of images that are already out of date by the time
-    // a model reaches them, which is the failure that turns a slow preview into
-    // an unbounded one.
+    if (!m_analysisReady || m_worker == nullptr) {
+        setCameraFrame(preview);
+    }
     if (m_analysisBusy || m_worker == nullptr) {
         return;
     }
@@ -478,13 +508,23 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
                                                   Qt::KeepAspectRatio,
                                                   Qt::SmoothTransformation)};
 
+    // The picture is held back until the pass measured against it comes home.
+    // Showing it now would be a hundred milliseconds ahead of every box drawn
+    // on it, and an overlay that trails the picture underneath it reads as a
+    // model that cannot find a hand rather than as a frame out of order.
+    const quint64 sequence{++m_sequence};
+    m_pendingPreview = preview;
+    m_pendingPreviewSequence = sequence;
     m_analysisBusy = true;
-    emit analysisRequested(analysisImage, ++m_sequence, true);
+    emit analysisRequested(analysisImage, sequence, true);
 }
 
 void FaceTracker::applyCapabilities(const Kerfur::AnalysisCapabilities &capabilities)
 {
     m_capabilities = capabilities;
+    // Whatever loaded and whatever did not, the worker is now answering, so
+    // from here a picture waits for the pass measured on it.
+    m_analysisReady = true;
     emit capabilitiesChanged();
 
     if (!capabilities.problem.isEmpty()) {
@@ -511,6 +551,13 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
 
     if (!m_enabled) {
         return;
+    }
+
+    // The picture this pass was measured against, now that the measurements
+    // are here to be drawn on it.
+    if (result.sequence == m_pendingPreviewSequence && !m_pendingPreview.isNull()) {
+        setCameraFrame(m_pendingPreview);
+        m_pendingPreview = QImage{};
     }
 
     if (m_peopleRevision != result.peopleRevision) {
@@ -684,22 +731,6 @@ QVariantList FaceTracker::handEdges()
     return mediapipeHand();
 }
 
-QString FaceTracker::cameraFrameBase64() const
-{
-    if (m_cameraFrame.isNull()) {
-        return QString{};
-    }
-
-    QByteArray encoded;
-    QBuffer buffer{&encoded};
-    buffer.open(QIODevice::WriteOnly);
-    if (!m_cameraFrame.save(&buffer, "JPEG", previewJpegQuality)) {
-        return QString{};
-    }
-
-    return QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(encoded.toBase64());
-}
-
 QStringList FaceTracker::availableResolutions() const
 {
     if (m_preferredCamera.isNull()) {
@@ -755,6 +786,17 @@ void FaceTracker::setPreviewMaxSide(int side)
     }
     m_previewMaxSide = bounded;
     emit previewMaxSideChanged();
+}
+
+void FaceTracker::setUpdateHz(int hertz)
+{
+    const int bounded{std::clamp(hertz, minimumUpdateHz, maximumUpdateHz)};
+    if (m_updateHz == bounded) {
+        return;
+    }
+    m_updateHz = bounded;
+    m_frameThrottleTimer.setInterval(intervalForRate(m_updateHz));
+    emit updateHzChanged();
 }
 
 void FaceTracker::setResolution(const QString &resolution)

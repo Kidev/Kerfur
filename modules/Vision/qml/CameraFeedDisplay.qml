@@ -42,7 +42,7 @@ Rectangle {
     component PerceptionOverlay: Item {
         id: overlay
 
-        required property Image image
+        required property CameraFrameView view
         required property var tracker
         property real dotSize: 5
         property real lineWidth: 2
@@ -57,16 +57,20 @@ Rectangle {
         property string speechText: ""
         property bool speechShown: false
 
-        readonly property real originX: (image.width - image.paintedWidth) / 2
-        readonly property real originY: (image.height - image.paintedHeight) / 2
-        readonly property bool live: image.status === Image.Ready && image.paintedWidth > 0
-                                     && tracker && tracker.enabled
+        // The one piece of coordinate handling in this file: everything the
+        // analysis reports is normalized to the frame it was measured in, so an
+        // overlay only needs to know where that frame was painted. The view
+        // publishes that rectangle rather than the overlay deriving it, because
+        // the view is the thing that decided it.
+        readonly property rect painted: view.paintedRect
+        readonly property bool live: view.hasFrame && painted.width > 0 && tracker
+                                     && tracker.enabled
 
         function px(nx) {
-            return originX + nx * image.paintedWidth;
+            return painted.x + nx * painted.width;
         }
         function py(ny) {
-            return originY + ny * image.paintedHeight;
+            return painted.y + ny * painted.height;
         }
 
         // The bones, flattened into one segment list so that a single Repeater
@@ -204,7 +208,7 @@ Rectangle {
             return out;
         }
 
-        anchors.fill: image
+        anchors.fill: view
         visible: live
 
         // The bottom layer, under the skeletons and under the object boxes: a
@@ -549,24 +553,20 @@ Rectangle {
     border.width: 1
     color: "#15171a"
 
-    Image {
-        id: cameraImage
+    CameraFrameView {
+        id: cameraView
 
         anchors.fill: parent
         anchors.margins: 2
-        asynchronous: true
-        cache: false
-        fillMode: Image.PreserveAspectFit
-        smooth: true
-        source: root.faceTracker && root.faceTracker.enabled ? root.faceTracker.cameraFrameBase64 : ""
+        frame: root.faceTracker.cameraFrame
 
         PerceptionOverlay {
-            image: cameraImage
             showLabels: false
             speechShown: root.speechShown
             speechSpeaker: root.speechSpeaker
             speechText: root.speechText
             tracker: root.faceTracker
+            view: cameraView
         }
 
         MouseArea {
@@ -574,8 +574,17 @@ Rectangle {
 
             acceptedButtons: Qt.LeftButton
             anchors.fill: parent
-            enabled: root.faceTracker && root.faceTracker.enabled && cameraImage.status === Image.Ready
+            // On whether there is a picture, which changes when the camera
+            // starts and when it stops. It used to be on an Image's load
+            // status, which cycled several times a second, so the click that
+            // opens the popup landed on a disabled target as often as not.
+            enabled: root.faceTracker && root.faceTracker.enabled && cameraView.hasFrame
             hoverEnabled: true
+            // The panel is a Flickable and this is a click inside it. Without
+            // this the press is handed to the flick as soon as the pointer
+            // moves a few pixels, which is the other half of why the popup
+            // sometimes refused to open.
+            preventStealing: true
 
             onClicked: mouse => {
                 mouse.accepted = true;
@@ -605,12 +614,17 @@ Rectangle {
     // The primary face, named under the feed, so the panel says who it is
     // without the popup having to be opened.
     Text {
+        // Four states and no fifth. This line used to report the preview
+        // image's load status as well, which cycled between loading and ready
+        // several times a second and made the panel look like it was fighting
+        // the camera. There is no load any more: either a frame has arrived or
+        // one has not.
         function statusColor() {
             if (!root.faceTracker || !root.faceTracker.enabled)
                 return "gray";
             if (root.faceTracker.errorString !== "")
                 return "red";
-            if (cameraImage.status !== Image.Ready)
+            if (!cameraView.hasFrame)
                 return "orange";
             if (root.faceTracker.faceDetected)
                 return root.identityColor(root.faceTracker.faces[0]);
@@ -624,11 +638,7 @@ Rectangle {
                 return "Disabled";
             if (root.faceTracker.errorString !== "")
                 return "Error: " + root.faceTracker.errorString;
-            if (cameraImage.status === Image.Loading)
-                return "Loading...";
-            if (cameraImage.status === Image.Error)
-                return "Image Error";
-            if (cameraImage.status !== Image.Ready)
+            if (!cameraView.hasFrame)
                 return "No Signal";
             if (!root.faceTracker.faceDetected)
                 return "Searching...";
@@ -719,26 +729,22 @@ Rectangle {
                 height: parent.height - controlsPanel.height - parent.spacing * 2 - 42
                 width: parent.width
 
-                Image {
-                    id: popupImage
+                CameraFrameView {
+                    id: popupView
 
                     anchors.fill: parent
                     anchors.margins: 1
-                    asynchronous: true
-                    cache: false
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
-                    source: root.faceTracker && root.faceTracker.enabled ? root.faceTracker.cameraFrameBase64 : ""
+                    frame: root.faceTracker.cameraFrame
 
                     PerceptionOverlay {
                         dotSize: 8
-                        image: popupImage
                         labelSize: 12
                         lineWidth: 3
                         speechShown: root.speechShown
                         speechSpeaker: root.speechSpeaker
                         speechText: root.speechText
                         tracker: root.faceTracker
+                        view: popupView
                     }
                 }
             }

@@ -30,6 +30,15 @@ public:
 
     QList<ObjectDetection> detect(const cv::Mat &bgr);
 
+    /// The same, over a crop of `bgr`, with the boxes given back in the
+    /// coordinates of the whole frame.
+    ///
+    /// The network has one fixed input side, so what a crop buys is resolution
+    /// where it matters: an object held in a hand is a handful of pixels once a
+    /// whole room has been squeezed into 416 by 416, and a handful of pixels is
+    /// enough to detect something and nowhere near enough to classify it.
+    QList<ObjectDetection> detect(const cv::Mat &bgr, const cv::Rect &region);
+
     void setConfidenceThreshold(float threshold) { m_confidenceThreshold = threshold; }
     void setNmsThreshold(float threshold) { m_nmsThreshold = threshold; }
 

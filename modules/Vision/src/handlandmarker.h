@@ -125,7 +125,13 @@ public:
     static constexpr int palmInputSide{192};
     static constexpr int handInputSide{224};
     /// How much the proposed region is grown before the palm search.
-    static constexpr float regionGrowth{2.2F};
+    ///
+    /// The proposal already holds a whole spread hand, so this is margin for it
+    /// being in slightly the wrong place rather than for it being too small.
+    /// Growing it further would be worse, not safer: the crop is letterboxed
+    /// into 192 pixels, and every bit of forearm and wall added to it is taken
+    /// off the palm the detector is looking for.
+    static constexpr float regionGrowth{1.9F};
     /// Below this many pixels a side the crop carries no palm worth finding.
     static constexpr int minimumRegionSide{24};
 

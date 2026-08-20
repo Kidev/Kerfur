@@ -313,6 +313,7 @@ Item {
         analysisMaxSide: KSettings.analysisMaxSide
         enabled: KSettings.faceTrackingEnabled
         previewMaxSide: KSettings.previewMaxSide
+        updateHz: KSettings.visionUpdateHz
 
         onEnabledChanged: {
             if (!enabled) {
@@ -347,8 +348,14 @@ Item {
                 const clampedLeftRight = Math.max(0, Math.min(180, newLeftRight));
                 const clampedUpDown = Math.max(0, Math.min(180, newUpDown));
 
-                // Apply additional smoothing for more natural movement
-                const smoothingFactor = 0.15; // Additional smoothing on top of tracker smoothing
+                // Additional smoothing on top of the tracker's own, and it has
+                // to be worked out from the rate rather than written down: this
+                // runs once per analysis pass, so a fixed step means the eyes
+                // reach a face in a second at ten passes a second and in three
+                // at three. The exponent converts the old per-pass figure,
+                // which was chosen at ten hertz, into the same movement per
+                // second at whatever rate the vision is actually running at.
+                const smoothingFactor = 1.0 - Math.pow(0.85, 10.0 / Math.max(1, faceTracker.updateHz));
 
                 root.targetLeftRightAngle = root.targetLeftRightAngle + (clampedLeftRight - root.targetLeftRightAngle) * smoothingFactor;
                 root.targetUpDownAngle = root.targetUpDownAngle + (clampedUpDown - root.targetUpDownAngle) * smoothingFactor;
