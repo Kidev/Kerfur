@@ -15,6 +15,10 @@ qt_add_qml_module(
             src/modeldirectory.h
             src/identitydirectory.cpp
             src/identitydirectory.h
+            src/identityregistry.cpp
+            src/identityregistry.h
+            src/assetsearch.cpp
+            src/assetsearch.h
             src/settingspath.cpp
             src/settingspath.h
             src/boundedqueue.h

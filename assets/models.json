@@ -1,5 +1,5 @@
 {
-    "$comment": "Provisioning manifest for the perception models: vision, speech and the voice the speech came from. The URL is a convenience and may be replaced; the sha256 is the authority. Rationale for every entry is in docs/superpowers/specs/2026-08-19-cpu-perception-backends.md. The `file` names are duplicated as constants in modules/Vision/src/modelcatalog.cpp and in the Hearing module, and tests/tst_modelcatalog.cpp asserts the two agree.",
+    "$comment": "Provisioning manifest for the perception models: vision, speech and the voice the speech came from. Stage F is MediaPipe's two model hand pipeline, taken from OpenCV Zoo so that it runs on the cv::dnn already linked rather than on MediaPipe's own Bazel build. The `pi` profile is the same set as `desktop` because the Pi runs the same CPU graph until the accelerator backend lands; it exists as a separate name so that divergence is a manifest change rather than a code change. The URL is a convenience and may be replaced; the sha256 is the authority. Rationale for every entry is in docs/superpowers/specs/2026-08-19-cpu-perception-backends.md. The `file` names are duplicated as constants in modules/Vision/src/modelcatalog.cpp and in the Hearing module, and tests/tst_modelcatalog.cpp asserts the two agree.",
     "models": [
         {
             "id": "pose",
@@ -11,6 +11,7 @@
             "license": "AGPL-3.0-only",
             "profiles": [
                 "desktop",
+                "pi",
                 "wasm"
             ]
         },
@@ -23,7 +24,34 @@
             "sha256": "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186",
             "license": "Apache-2.0",
             "profiles": [
-                "desktop"
+                "desktop",
+                "pi"
+            ]
+        },
+        {
+            "id": "palm",
+            "stage": "F",
+            "file": "palm_detection_mediapipe_2023feb.onnx",
+            "url": "https://huggingface.co/opencv/palm_detection_mediapipe/resolve/main/palm_detection_mediapipe_2023feb.onnx",
+            "bytes": 3905734,
+            "sha256": "78ff51c38496b7fc8b8ebdb6cc8c1abb02fa6c38427c6848254cdaba57fcce7c",
+            "license": "Apache-2.0",
+            "profiles": [
+                "desktop",
+                "pi"
+            ]
+        },
+        {
+            "id": "handlandmarks",
+            "stage": "F",
+            "file": "handpose_estimation_mediapipe_2023feb.onnx",
+            "url": "https://huggingface.co/opencv/handpose_estimation_mediapipe/resolve/main/handpose_estimation_mediapipe_2023feb.onnx",
+            "bytes": 4099621,
+            "sha256": "db0898ae717b76b075d9bf563af315b29562e11f8df5027a1ef07b02bef6d81c",
+            "license": "Apache-2.0",
+            "profiles": [
+                "desktop",
+                "pi"
             ]
         },
         {
@@ -36,6 +64,7 @@
             "license": "MIT",
             "profiles": [
                 "desktop",
+                "pi",
                 "wasm"
             ]
         },
@@ -48,7 +77,8 @@
             "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
             "license": "Apache-2.0",
             "profiles": [
-                "desktop"
+                "desktop",
+                "pi"
             ]
         },
         {
@@ -61,6 +91,7 @@
             "license": "Apache-2.0",
             "profiles": [
                 "desktop",
+                "pi",
                 "wasm"
             ]
         },
@@ -73,7 +104,8 @@
             "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
             "license": "MIT",
             "profiles": [
-                "desktop"
+                "desktop",
+                "pi"
             ]
         },
         {
@@ -85,7 +117,8 @@
             "sha256": "7bb2f06e9df17cdf1ef14ee8a15ab08ed28e8d0ef5054ee135741560df2ec068",
             "license": "CC-BY-4.0",
             "profiles": [
-                "desktop"
+                "desktop",
+                "pi"
             ]
         }
     ]

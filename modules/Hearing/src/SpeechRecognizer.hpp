@@ -4,6 +4,7 @@
 #pragma once
 
 #include "WhisperEngine.hpp"
+#include "identityregistry.h"
 #include "voiceactivity.h"
 
 #include <memory>
@@ -78,6 +79,26 @@ class SpeechRecognizer : public QObject
 
     Q_PROPERTY(QString speaker READ speaker NOTIFY speakerChanged)
     Q_PROPERTY(qreal speakerConfidence READ speakerConfidence NOTIFY speakerChanged)
+
+    /// The rank of whoever is speaking, zero being the top. A stranger reports
+    /// `Kerfur::IdentityRegistry::unknownPriority`.
+    Q_PROPERTY(int speakerPriority READ speakerPriority NOTIFY speakerChanged)
+
+    /// Whether the last utterance came from somebody allowed to give orders.
+    ///
+    /// Kerfur listens to everybody and obeys one person. Transcription,
+    /// display and speaker identification run for every voice in the room;
+    /// this is the single bit that decides whether what was heard is also
+    /// acted on, and it is deliberately a property rather than a filter
+    /// upstream so that the panel can show a refused command rather than
+    /// silently discarding it.
+    Q_PROPERTY(bool commandAuthority READ commandAuthority NOTIFY speakerChanged)
+
+    /// The rank at or below which an utterance may act. Zero, and settable
+    /// only from C++ and the panel: raising it is a decision about who Kerfur
+    /// obeys, not a preference.
+    Q_PROPERTY(int commandPriorityCeiling READ commandPriorityCeiling WRITE
+                   setCommandPriorityCeiling NOTIFY commandPriorityCeilingChanged)
     Q_PROPERTY(QStringList knownVoices READ knownVoices NOTIFY voicesChanged)
     Q_PROPERTY(bool voiceIdentityReady READ voiceIdentityReady NOTIFY voicesChanged)
 
@@ -106,6 +127,10 @@ public:
     float noiseFloor() const { return m_segmenter.noiseFloor(); }
     QString speaker() const { return m_speaker; }
     qreal speakerConfidence() const { return m_speakerConfidence; }
+    int speakerPriority() const { return m_speakerPriority; }
+    bool commandAuthority() const { return m_speakerPriority <= m_commandPriorityCeiling; }
+    int commandPriorityCeiling() const { return m_commandPriorityCeiling; }
+    void setCommandPriorityCeiling(int ceiling);
     QStringList knownVoices() const { return m_knownVoices; }
     bool voiceIdentityReady() const { return m_voiceIdentityReady; }
     QStringList availableDevices() const { return m_availableDevices; }
@@ -135,6 +160,23 @@ signals:
 
     void kerfurHeard();
     void sentenceRecognized(const QString &text, float confidence);
+    void commandPriorityCeilingChanged();
+
+    /// One complete utterance, with the transcript and the speaker joined.
+    ///
+    /// This is the signal the skill layer listens to and `sentenceRecognized`
+    /// is not, because a command needs to know who gave it. The two halves are
+    /// produced by two threads that finish in their own time, so they are
+    /// matched by the sequence number they were submitted under rather than by
+    /// the order they came back in.
+    ///
+    /// `authorised` is `priority <= commandPriorityCeiling`, precomputed here
+    /// so that every receiver applies the same rule.
+    void utteranceReady(const QString &text,
+                        float confidence,
+                        const QString &speaker,
+                        int priority,
+                        bool authorised);
 
     /// To the voice identification thread.
     void identificationRequested(const std::vector<float> &samples, quint64 sequence);
@@ -143,9 +185,9 @@ private slots:
     void initializeAudio();
     void uninitializeAudio();
     void processAudioData(const QByteArray &data);
-    void handleTranscription(const QString &text, float confidence);
+    void handleTranscription(const QString &text, float confidence, quint64 sequence);
     void handleKeywordDetected(const QString &keyword);
-    void handleSpeaker(const QString &name, double similarity, quint64 sequence);
+    void handleSpeaker(const QString &name, double similarity, int priority, quint64 sequence);
     void updateVolumeLevel();
     void resetKerfurDetection();
 
@@ -154,6 +196,29 @@ private:
     void enumerateAudioDevices();
     void applyModelPath();
     void submitUtterance(const Kerfur::VoiceActivitySegmenter::Utterance &utterance);
+
+    /// One utterance in flight, waiting for both of its answers.
+    struct PendingUtterance
+    {
+        quint64 sequence{0};
+        QString text;
+        float confidence{0.0F};
+        QString speaker;
+        int priority{Kerfur::IdentityRegistry::unknownPriority};
+        bool transcribed{false};
+        bool identified{false};
+    };
+
+    PendingUtterance &pendingFor(quint64 sequence);
+
+    /// Publishes every utterance both threads have answered for, and every one
+    /// whose second answer never came.
+    ///
+    /// Ordered by rank and only then by arrival. When two people talk over each
+    /// other and both utterances complete in the same pass, the higher ranked
+    /// one is dispatched first; a rank does not decide whether somebody is
+    /// heard, only who is answered first.
+    void drainPending(bool force);
 
     /// Turns one capture buffer into 16 kHz mono floats, whatever the device
     /// handed over. The device is asked for that format first and usually
@@ -198,6 +263,9 @@ private:
     bool m_speechDetected{false};
     QString m_speaker;
     qreal m_speakerConfidence{0.0};
+    int m_speakerPriority{Kerfur::IdentityRegistry::unknownPriority};
+    int m_commandPriorityCeiling{0};
+    QList<PendingUtterance> m_pending;
     QStringList m_knownVoices;
     bool m_voiceIdentityReady{false};
     QStringList m_availableDevices;
@@ -213,8 +281,21 @@ private:
     /// context, few enough that it is a status display and not a log.
     static constexpr int transcriptHistory{6};
 
+    /// How long a completed transcript waits for its speaker before it is
+    /// published as anonymous. The speaker network is tens of milliseconds and
+    /// the decode is hundreds, so in practice the identity is always there
+    /// first; this exists for the case where the utterance was too short to
+    /// embed and no answer is coming at all.
+    static constexpr int joinTimeoutMs{700};
+
+    /// Utterances that may be in flight at once. Past this the oldest is
+    /// published with whatever it has, because something upstream is stuck and
+    /// a growing list of half answers is not a recovery.
+    static constexpr qsizetype maximumPending{8};
+
     QTimer m_volumeUpdateTimer;
     QTimer m_kerfurResetTimer;
+    QTimer m_joinTimer;
 
     QByteArray m_volumeSample;
 };

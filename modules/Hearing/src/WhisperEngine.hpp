@@ -39,7 +39,13 @@ public:
     /// Queues one utterance of 16 kHz mono samples. Returns false when the
     /// queue was full and the oldest was dropped to make room, which is the
     /// honest thing to do with speech that is already stale.
-    bool submit(std::vector<float> samples);
+    ///
+    /// `sequence` is the caller's number for this utterance and is handed back
+    /// with the transcript. Speaker identification runs on the same audio on a
+    /// different thread and finishes in its own time, so without it there is
+    /// nothing joining "what was said" to "who said it" but the hope that both
+    /// answers arrive in the order they were asked for.
+    bool submit(std::vector<float> samples, quint64 sequence);
 
     /// Drops everything queued. Used when the microphone stops, so that a
     /// backlog does not surface minutes later as a sentence from the last
@@ -52,7 +58,7 @@ public:
     void enableTranslation(bool enable);
 
 signals:
-    void transcriptionReady(const QString &text, float confidence);
+    void transcriptionReady(const QString &text, float confidence, quint64 sequence);
     void keywordDetected(const QString &keyword);
     void processingStarted();
     void processingFinished();
@@ -60,7 +66,18 @@ signals:
 private:
     bool loadModel(const QString &modelPath);
     void workerLoop();
-    void transcribe(const std::vector<float> &samples);
+    void transcribe(const std::vector<float> &samples, quint64 sequence);
+
+    /// Routes whisper.cpp's and ggml's own printf logging into a Qt category.
+    ///
+    /// Both libraries write a model card to stderr on every load -- vocabulary
+    /// size, tensor counts, buffer sizes -- and none of it is a fact about
+    /// Kerfur. It is not turned off, because the day a model fails to load it
+    /// is the only thing that says why; it is demoted to
+    /// `kerfur.hearing.whisper.internal`, which the debug build shows and the
+    /// release build does not. Called once, before the first context exists,
+    /// because it is a process wide setting.
+    static void routeLibraryLogs();
 
     whisper_context *m_context{nullptr};
     std::unique_ptr<whisper_full_params> m_params;
@@ -72,7 +89,13 @@ private:
     /// decodes slower than it is spoken to would otherwise queue for ever and
     /// answer questions from a minute ago.
     static constexpr size_t maximumPending{4};
-    std::deque<std::vector<float>> m_queue;
+    /// One queued utterance and the caller's number for it.
+    struct Job
+    {
+        std::vector<float> samples;
+        quint64 sequence{0};
+    };
+    std::deque<Job> m_queue;
     mutable std::mutex m_queueMutex;
     std::condition_variable m_queueSignal;
     std::thread m_worker;

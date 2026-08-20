@@ -10,15 +10,17 @@
 
 namespace Kerfur {
 
-/// The five inference stages of the CPU backend, named after the stages in
-/// section 5.3 of the perception design so that the two documents can be read
-/// against each other.
+/// The inference stages of the CPU backend, named after the stages in section
+/// 5.3 of the perception design so that the two documents can be read against
+/// each other.
 enum class ModelId {
-    Pose,     ///< stage A, person boxes and COCO keypoints
-    Objects,  ///< stage B, COCO 80 classes
-    Face,     ///< stage C, face box and five landmarks
-    Identity, ///< stage D, face embedding
-    Emotion   ///< stage E, facial expression
+    Pose,          ///< stage A, person boxes and COCO keypoints
+    Objects,       ///< stage B, COCO 80 classes
+    Face,          ///< stage C, face box and five landmarks
+    Identity,      ///< stage D, face embedding
+    Emotion,       ///< stage E, facial expression
+    Palm,          ///< stage F, palm boxes inside a proposed region
+    HandLandmarks  ///< stage F, twenty-one hand points from a palm
 };
 
 /// Finds the model files on disk and reports which stages can therefore run.

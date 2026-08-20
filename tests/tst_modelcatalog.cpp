@@ -14,8 +14,9 @@ using namespace Kerfur;
 
 namespace {
 
-constexpr ModelId allModels[]{
-    ModelId::Pose, ModelId::Objects, ModelId::Face, ModelId::Identity, ModelId::Emotion};
+constexpr ModelId allModels[]{ModelId::Pose,     ModelId::Objects, ModelId::Face,
+                              ModelId::Identity, ModelId::Emotion, ModelId::Palm,
+                              ModelId::HandLandmarks};
 
 // Returned by value and always copy initialized at the call sites. Braces would
 // select QJsonArray's initializer list constructor, because QJsonValue converts

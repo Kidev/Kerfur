@@ -5,6 +5,7 @@
 #define KERFUR_IDENTITYSTORE_H
 
 #include <QList>
+#include <QPair>
 #include <QString>
 
 #include <opencv2/core.hpp>
@@ -28,10 +29,18 @@ public:
         cv::Mat embedding;
     };
 
-    /// Embeds every image in `galleryDirectory` that the cache does not already
-    /// cover, and rewrites the cache. Silently does nothing useful when the
-    /// pipeline has no recognition model, which is the wasm case.
+    /// Embeds every face `identities/ids.json` declares that the cache does
+    /// not already cover, and rewrites the cache. Silently does nothing useful
+    /// when the pipeline has no recognition model, which is the wasm case.
     void enrol(FacePipeline &pipeline, const QString &galleryDirectory, const QString &cachePath);
+
+    /// The same, from an explicit `(name, imagePath)` list. This is the form
+    /// the manifest produces, and it is the one that matters: the name comes
+    /// from the manifest rather than from the file it happens to be stored in,
+    /// so a face and a voice belong to one person because a person said so.
+    void enrol(FacePipeline &pipeline,
+               const QList<QPair<QString, QString>> &entries,
+               const QString &cachePath);
 
     /// The closest gallery entry, or an empty name when nothing clears the
     /// threshold. `similarity` is written in both cases so a caller can log how

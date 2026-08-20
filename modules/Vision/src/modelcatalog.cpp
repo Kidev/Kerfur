@@ -12,8 +12,9 @@ namespace Kerfur {
 
 namespace {
 
-constexpr ModelId allModels[]{
-    ModelId::Pose, ModelId::Objects, ModelId::Face, ModelId::Identity, ModelId::Emotion};
+constexpr ModelId allModels[]{ModelId::Pose,     ModelId::Objects,  ModelId::Face,
+                              ModelId::Identity, ModelId::Emotion,  ModelId::Palm,
+                              ModelId::HandLandmarks};
 
 } // namespace
 
@@ -30,6 +31,10 @@ QString ModelCatalog::fileName(ModelId id)
         return QStringLiteral("face_recognition_sface_2021dec.onnx");
     case ModelId::Emotion:
         return QStringLiteral("facial_expression_recognition_mobilefacenet_2022july.onnx");
+    case ModelId::Palm:
+        return QStringLiteral("palm_detection_mediapipe_2023feb.onnx");
+    case ModelId::HandLandmarks:
+        return QStringLiteral("handpose_estimation_mediapipe_2023feb.onnx");
     }
     return {};
 }
@@ -47,6 +52,10 @@ QString ModelCatalog::stageName(ModelId id)
         return QStringLiteral("identity");
     case ModelId::Emotion:
         return QStringLiteral("emotion");
+    case ModelId::Palm:
+        return QStringLiteral("palm");
+    case ModelId::HandLandmarks:
+        return QStringLiteral("handlandmarks");
     }
     return {};
 }
