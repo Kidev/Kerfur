@@ -50,9 +50,21 @@ kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.8.3/gcc_64
     - `make models-web` to fetch the smaller web profile into `models/` in the source tree, which `make web` bakes into the WebAssembly file system
 
 ### Perception
-Kerfur sees and hears with models that are provisioned separately from the binary, because it has to boot without a network. `assets/models.json` is the manifest: it pins every file by SHA-256, and `make models` is what reads it. The desktop profile covers the five vision stages and the speech model; the web profile drops the ones a browser cannot afford.
+Kerfur sees and hears with models that are provisioned separately from the binary, because it has to boot without a network. `assets/models.json` is the manifest: it pins every file by SHA-256, and `make models` is what reads it. The desktop profile covers the five vision stages, speech recognition and speaker recognition; the web profile drops the ones a browser cannot afford.
 
 Without them the face still runs; it simply has nothing to look at. Any stage whose model file is missing is disabled and logged at startup rather than failing the start.
+
+### Knowing people
+`identities/` is the gallery of people Kerfur recognises. One person is two files sharing a stem:
+
+- `name.png` for the face, any reasonably lit photograph with one face in it
+- `name.mp3` for the voice, at least a few seconds of them speaking alone
+
+Either half on its own works; a person with only a photograph is recognised by sight and not by voice. The name shown on screen is the file stem, so `kidev.png` and `kidev.mp3` are both "kidev".
+
+The directory is deliberately not committed: a face and a voice are personal data, and `.gitignore` keeps them out of the history. Enrolment happens at startup and is cached against a hash of each file, so adding somebody re-reads one file rather than all of them. The directory is looked for next to the executable, one level above it, under the working directory and in the application data directory, or wherever `Paths/identitiesPath` says.
+
+A voice needs about two seconds of continuous speech before Kerfur will put a name to it. Below that the measurement says more about the room than about the speaker, so it says nothing instead.
 
 Two build knobs select what is compiled:
 - `KERFUR_PLATFORM` is `pi`, `desktop`, `wasm` or `auto`

@@ -112,6 +112,19 @@ Rectangle {
                 }
             }
 
+            // Speech gate. The meter says how loud the room is; this says
+            // whether the gate thinks any of it is somebody talking, which is
+            // the thing that actually decides what gets transcribed.
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                color: root.speechRecognizer && root.speechRecognizer.speechDetected ? "#44ff44" : "#3a3a3a"
+                border.color: "#555"
+                border.width: 1
+                height: 12
+                radius: 6
+                width: 12
+            }
+
             // Volume percentage text
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -269,48 +282,77 @@ Rectangle {
         Rectangle {
             color: "#555"
             height: 1
-            visible: root.speechRecognizer && (root.speechRecognizer.lastText !== "" || root.speechRecognizer.processing)
+            visible: root.speechRecognizer && (root.speechRecognizer.transcripts.length > 0 || root.speechRecognizer.processing)
             width: parent.width
         }
 
-        // Last recognized text
-        Rectangle {
-            border.color: "#555"
-            border.width: 1
-            color: "#3a3a3a"
-            height: textContent.height + 12
-            radius: 4
-            visible: root.speechRecognizer && root.speechRecognizer.lastText !== ""
-            width: parent.width
+        // Who is speaking, when the voice gallery recognises them.
+        Row {
+            spacing: 6
+            visible: root.speechRecognizer && root.speechRecognizer.voiceIdentityReady
 
             Text {
-                id: textContent
+                anchors.verticalCenter: parent.verticalCenter
+                color: "#aaa"
+                font.pixelSize: 9
+                text: "Voice:"
+            }
 
-                anchors.left: parent.left
-                anchors.margins: 6
-                anchors.right: parent.right
-                anchors.top: parent.top
-                color: "white"
-                font.pixelSize: 11
-                text: root.speechRecognizer ? root.speechRecognizer.lastText : ""
-                wrapMode: Text.WordWrap
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                color: {
+                    if (!root.speechRecognizer || root.speechRecognizer.speaker === "")
+                        return "#888";
+                    return root.speechRecognizer.speaker === "kidev" ? "#ff44ff" : "#7cff5a";
+                }
+                font.bold: root.speechRecognizer && root.speechRecognizer.speaker !== ""
+                font.pixelSize: 10
+                text: {
+                    if (!root.speechRecognizer)
+                        return "";
+                    if (root.speechRecognizer.speaker === "")
+                        return "unknown";
+                    return root.speechRecognizer.speaker + " (" + Math.round(root.speechRecognizer.speakerConfidence * 100) + "%)";
+                }
+            }
+        }
 
-                // Subtle animation when text changes
-                Behavior on text {
-                    SequentialAnimation {
-                        NumberAnimation {
-                            duration: 100
-                            property: "opacity"
-                            target: textContent
-                            to: 0.7
-                        }
+        // The last few utterances, newest first. A list rather than one line,
+        // because one line cannot show that the same sentence was heard twice
+        // and that is precisely what used to look like a frozen display.
+        Column {
+            spacing: 2
+            width: parent.width
 
-                        NumberAnimation {
-                            duration: 200
-                            property: "opacity"
-                            target: textContent
-                            to: 1.0
-                        }
+            Repeater {
+                model: root.speechRecognizer ? root.speechRecognizer.transcripts : []
+
+                delegate: Rectangle {
+                    id: entry
+
+                    required property int index
+                    required property string modelData
+
+                    readonly property bool newest: index === 0
+
+                    border.color: entry.newest ? "#666" : "#444"
+                    border.width: 1
+                    color: entry.newest ? "#3a3a3a" : "#2f2f2f"
+                    height: line.height + 8
+                    radius: 3
+                    width: parent.width
+
+                    Text {
+                        id: line
+
+                        anchors.left: parent.left
+                        anchors.margins: 5
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        color: entry.newest ? "white" : "#9e9e9e"
+                        font.pixelSize: entry.newest ? 11 : 10
+                        text: entry.modelData
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
