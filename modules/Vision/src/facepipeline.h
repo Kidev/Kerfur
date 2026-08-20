@@ -10,6 +10,7 @@
 #include <opencv2/dnn.hpp>
 #include <opencv2/objdetect/face.hpp>
 
+#include <array>
 #include <optional>
 
 namespace Kerfur {
@@ -23,6 +24,14 @@ namespace Kerfur {
 struct FaceObservation
 {
     cv::Rect2f box;
+
+    /// The five YuNet points in the same frame coordinates as `box`: the
+    /// subject's right eye, left eye, nose tip, right mouth corner, left mouth
+    /// corner. Carried out of the stage rather than recomputed because the
+    /// alignment already had them, and because head pose and iris search are
+    /// the two consumers that cannot work from a box alone.
+    std::array<cv::Point2f, 5> landmarks{};
+
     cv::Mat embedding;
     QString emotion;
     float emotionConfidence{0.0F};
@@ -41,6 +50,12 @@ public:
     bool loadDetector(const QString &modelPath);
     bool loadRecognizer(const QString &modelPath);
     bool loadExpression(const QString &modelPath);
+
+    /// The score a detection must reach. Applied to the live detector rather
+    /// than stored for the next load, because the camera view puts this on a
+    /// slider and a value that only takes effect on restart reads as a slider
+    /// that does nothing.
+    void setDetectionThreshold(float threshold);
 
     bool hasDetector() const { return !m_detector.empty(); }
     bool hasRecognizer() const { return !m_recognizer.empty(); }

@@ -129,6 +129,14 @@ bool FacePipeline::loadExpression(const QString &modelPath)
     return true;
 }
 
+void FacePipeline::setDetectionThreshold(float threshold)
+{
+    if (m_detector.empty()) {
+        return;
+    }
+    m_detector->setScoreThreshold(std::clamp(threshold, 0.05F, 0.99F));
+}
+
 cv::Mat FacePipeline::detectLargestFace(const cv::Mat &image)
 {
     if (m_detector.empty() || image.empty()) {
@@ -218,6 +226,11 @@ FaceObservation FacePipeline::analyse(const cv::Mat &bgr, const cv::Rect &roi)
                                      row.at<float>(0, 1) + static_cast<float>(bounded.y),
                                      row.at<float>(0, 2),
                                      row.at<float>(0, 3)};
+        for (int index{0}; index < landmarkCount; ++index) {
+            observation.landmarks[static_cast<size_t>(index)] = cv::Point2f{
+                row.at<float>(0, landmarkOffset + (index * 2)) + static_cast<float>(bounded.x),
+                row.at<float>(0, landmarkOffset + (index * 2) + 1) + static_cast<float>(bounded.y)};
+        }
         observation.valid = true;
 
         if (!m_recognizer.empty()) {

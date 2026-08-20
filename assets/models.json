@@ -1,5 +1,5 @@
 {
-    "$comment": "Provisioning manifest for the perception models, vision and speech alike. The URL is a convenience and may be replaced; the sha256 is the authority. Rationale for every entry is in docs/superpowers/specs/2026-08-19-cpu-perception-backends.md. The `file` names are duplicated as constants in modules/Vision/src/modelcatalog.cpp, and tests/tst_modelcatalog.cpp asserts the two agree.",
+    "$comment": "Provisioning manifest for the perception models: vision, speech and the voice the speech came from. The URL is a convenience and may be replaced; the sha256 is the authority. Rationale for every entry is in docs/superpowers/specs/2026-08-19-cpu-perception-backends.md. The `file` names are duplicated as constants in modules/Vision/src/modelcatalog.cpp and in the Hearing module, and tests/tst_modelcatalog.cpp asserts the two agree.",
     "models": [
         {
             "id": "pose",
@@ -9,7 +9,10 @@
             "bytes": 13484153,
             "sha256": "04f6d2416266f2aba6c5ba8b26de33ed9eba3279f972ac02e33f9f1366547586",
             "license": "AGPL-3.0-only",
-            "profiles": ["desktop", "wasm"]
+            "profiles": [
+                "desktop",
+                "wasm"
+            ]
         },
         {
             "id": "objects",
@@ -19,7 +22,9 @@
             "bytes": 3800954,
             "sha256": "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186",
             "license": "Apache-2.0",
-            "profiles": ["desktop"]
+            "profiles": [
+                "desktop"
+            ]
         },
         {
             "id": "face",
@@ -29,7 +34,10 @@
             "bytes": 232589,
             "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
             "license": "MIT",
-            "profiles": ["desktop", "wasm"]
+            "profiles": [
+                "desktop",
+                "wasm"
+            ]
         },
         {
             "id": "identity",
@@ -39,7 +47,9 @@
             "bytes": 38696353,
             "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
             "license": "Apache-2.0",
-            "profiles": ["desktop"]
+            "profiles": [
+                "desktop"
+            ]
         },
         {
             "id": "emotion",
@@ -49,7 +59,10 @@
             "bytes": 4791892,
             "sha256": "4f61307602fc089ce20488a31d4e4614e3c9753a7d6c41578c854858b183e1a9",
             "license": "Apache-2.0",
-            "profiles": ["desktop", "wasm"]
+            "profiles": [
+                "desktop",
+                "wasm"
+            ]
         },
         {
             "id": "speech",
@@ -59,7 +72,21 @@
             "bytes": 77704715,
             "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
             "license": "MIT",
-            "profiles": ["desktop"]
+            "profiles": [
+                "desktop"
+            ]
+        },
+        {
+            "id": "speaker",
+            "stage": "hearing",
+            "file": "voxceleb_resnet34_LM.onnx",
+            "url": "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM/resolve/main/voxceleb_resnet34_LM.onnx",
+            "bytes": 26530309,
+            "sha256": "7bb2f06e9df17cdf1ef14ee8a15ab08ed28e8d0ef5054ee135741560df2ec068",
+            "license": "CC-BY-4.0",
+            "profiles": [
+                "desktop"
+            ]
         }
     ]
 }

@@ -3,9 +3,9 @@
 
 #include "visioninferenceworker.h"
 
+#include "identitydirectory.h"
 #include "modelcatalog.h"
 #include "perceptionpipe.h"
-#include "settingspath.h"
 
 #include <QDir>
 #include <QLoggingCategory>
@@ -22,14 +22,10 @@ Q_LOGGING_CATEGORY(workerLog, "kerfur.vision.worker")
 
 QString galleryDirectory()
 {
-    const QSettings settings;
-    const QString configured{
-        settingsDirectoryPath(settings.value(QStringLiteral("Paths/facesGalleryPath")).toString())};
-    if (!configured.isEmpty()) {
-        return configured;
-    }
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-           + QStringLiteral("/faces");
+    // The same directory the camera view enrols from. One gallery rather than
+    // two: a person known to the preview and unknown to the pipeline is a
+    // difference nobody watching either of them can explain.
+    return IdentityDirectory::resolve();
 }
 
 QString identityCachePath()
