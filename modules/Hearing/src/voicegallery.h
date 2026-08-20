@@ -5,6 +5,7 @@
 #define KERFUR_VOICEGALLERY_H
 
 #include <QList>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 
@@ -16,11 +17,11 @@ class SpeakerEmbedder;
 
 /// The enrolled voices, and the cosine match against them.
 ///
-/// The counterpart of Vision's IdentityStore, over the same directory: a person
-/// is `name.png` for their face and `name.mp3` for their voice, so a name
-/// recognised by either half means the same person. Enrolment is cached against
-/// a hash of each recording, because embedding a minute of audio takes long
-/// enough to be worth not repeating on every start.
+/// The counterpart of Vision's IdentityStore, over the same manifest: one
+/// `identities/ids.json` entry names a person, their face and their voice, so a
+/// name recognised by either half means the same person. Enrolment is cached
+/// against a hash of each recording, because embedding a minute of audio takes
+/// long enough to be worth not repeating on every start.
 class VoiceGallery
 {
 public:
@@ -35,6 +36,14 @@ public:
     /// and rewrites the cache. Does nothing when the embedder is not loaded,
     /// rather than emptying a cache a working build had filled.
     void enrol(SpeakerEmbedder &embedder, const QString &directory, const QString &cachePath);
+
+    /// The same, from the explicit `(name, recordingPath)` list the manifest
+    /// produces. The name is the person's id, so a voice matched here and a
+    /// face matched by IdentityStore report the same string for the same
+    /// person, which is what the rank lookup depends on.
+    void enrol(SpeakerEmbedder &embedder,
+               const QList<QPair<QString, QString>> &entries,
+               const QString &cachePath);
 
     /// The closest enrolled voice, or an empty name when nothing clears the
     /// threshold. `similarity` is written either way, so a near miss can be

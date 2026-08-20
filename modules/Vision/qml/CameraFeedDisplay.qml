@@ -90,8 +90,158 @@ Rectangle {
             return out;
         }
 
+        // Hands and what is in them, flattened the same way the bones are.
+        // Only recognised people have either: the analysis does not locate a
+        // stranger's hands at all, so an empty list here is a statement about
+        // who is in the room rather than about the pose model.
+        readonly property var hands: {
+            if (!tracker || !tracker.people)
+                return [];
+            const out = [];
+            for (let p = 0; p < tracker.people.length; ++p) {
+                const person = tracker.people[p];
+                if (!person.known)
+                    continue;
+                for (let h = 0; h < person.hands.length; ++h) {
+                    const hand = person.hands[h];
+                    out.push({
+                        "box": hand.box,
+                        "side": hand.side,
+                        "identity": person.identity,
+                        "confidence": hand.confidence,
+                        "landmarks": hand.landmarks,
+                        "grip": hand.grip,
+                        "tracked": hand.tracked
+                    });
+                }
+            }
+            return out;
+        }
+
+        readonly property var held: {
+            if (!tracker || !tracker.people)
+                return [];
+            const out = [];
+            for (let p = 0; p < tracker.people.length; ++p) {
+                const person = tracker.people[p];
+                for (let h = 0; h < person.held.length; ++h) {
+                    const object = person.held[h];
+                    out.push({
+                        "box": object.box,
+                        "label": object.label,
+                        "score": object.score,
+                        "identity": person.identity
+                    });
+                }
+            }
+            return out;
+        }
+
         anchors.fill: image
         visible: live
+
+        // Under the object boxes and over the bones: a hand is a region of
+        // interest, not a detection, and it should not draw the eye away from
+        // the thing it found.
+        Repeater {
+            model: overlay.hands
+
+            delegate: Rectangle {
+                id: handBox
+
+                required property var modelData
+
+                border.width: 1
+                color: "transparent"
+                height: overlay.py(modelData.box.y + modelData.box.height) - y
+                opacity: 0.75
+                radius: 2
+                width: overlay.px(modelData.box.x + modelData.box.width) - x
+                x: overlay.px(modelData.box.x)
+                y: overlay.py(modelData.box.y)
+
+                // Bright once the landmark model has actually seen this hand,
+                // dimmed while it is still the forearm estimate. The two are
+                // drawn differently on purpose: one is a measurement and the
+                // other is a guess about where to look, and an overlay that
+                // renders them identically invites trusting the guess.
+                border.color: modelData.tracked ? "#40c4ff" : "#4080a0"
+
+                Text {
+                    anchors.bottom: parent.top
+                    anchors.left: parent.left
+                    color: "#40c4ff"
+                    font.pixelSize: overlay.labelSize - 1
+                    text: handBox.modelData.tracked
+                        ? handBox.modelData.side + "  " + (handBox.modelData.grip >= 0.4 ? "closed" : "open")
+                        : handBox.modelData.side
+                    visible: overlay.showLabels
+                }
+            }
+        }
+
+        // The twenty-one points, when they exist. Drawn over the hand box and
+        // under the object boxes, small and unlabelled: at this size the shape
+        // of the constellation is the readable thing, not any single point.
+        Repeater {
+            model: overlay.hands
+
+            delegate: Repeater {
+                required property var modelData
+
+                model: modelData.landmarks
+
+                delegate: Rectangle {
+                    required property var modelData
+
+                    color: "#e0f7ff"
+                    height: 3
+                    radius: 1.5
+                    width: 3
+                    x: overlay.px(modelData.x) - 1.5
+                    y: overlay.py(modelData.y) - 1.5
+                }
+            }
+        }
+
+        Repeater {
+            model: overlay.held
+
+            delegate: Rectangle {
+                id: heldBox
+
+                required property var modelData
+
+                border.color: "#ffd740"
+                border.width: overlay.lineWidth
+                color: "transparent"
+                height: overlay.py(modelData.box.y + modelData.box.height) - y
+                radius: 2
+                width: overlay.px(modelData.box.x + modelData.box.width) - x
+                x: overlay.px(modelData.box.x)
+                y: overlay.py(modelData.box.y)
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.bottom
+                    anchors.topMargin: 2
+                    color: "#c8000000"
+                    height: heldLabel.height + 4
+                    radius: 2
+                    visible: overlay.showLabels
+                    width: heldLabel.width + 8
+
+                    Text {
+                        id: heldLabel
+
+                        anchors.centerIn: parent
+                        color: "#ffd740"
+                        font.pixelSize: overlay.labelSize
+                        text: heldBox.modelData.identity + " holds " + heldBox.modelData.label
+                    }
+                }
+            }
+        }
 
         Repeater {
             model: overlay.bones
@@ -214,6 +364,16 @@ Rectangle {
                             font.pixelSize: overlay.labelSize
                             text: faceItem.modelData.gaze
                             visible: text !== ""
+                        }
+
+                        // The rank the manifest gives this person. Shown
+                        // because the eyes following one face out of three is
+                        // only obviously correct once the reason is on screen.
+                        Text {
+                            color: faceItem.modelData.priority === 0 ? "#ffd740" : "#9e9e9e"
+                            font.pixelSize: overlay.labelSize
+                            text: "rank " + faceItem.modelData.priority
+                            visible: faceItem.modelData.ranked
                         }
                     }
                 }
@@ -537,6 +697,56 @@ Rectangle {
                             return root.faceTracker.knownIdentities.join(", ") + "  (" + root.faceTracker.galleryDirectory + ")";
                         }
                         width: 320
+                    }
+
+                    Text {
+                        color: "white"
+                        font.pixelSize: 11
+                        text: "Roster:"
+                    }
+
+                    Text {
+                        color: "lightgray"
+                        elide: Text.ElideRight
+                        font.pixelSize: 11
+                        text: {
+                            if (!root.faceTracker || root.faceTracker.roster.length === 0)
+                                return "no ids.json; enrolling by file name, everybody unranked";
+                            return root.faceTracker.roster.join(", ");
+                        }
+                        width: 320
+                    }
+
+                    Text {
+                        color: "white"
+                        font.pixelSize: 11
+                        text: "Hands:"
+                    }
+
+                    Text {
+                        color: "lightgray"
+                        font.pixelSize: 11
+                        text: {
+                            if (!root.faceTracker)
+                                return "";
+                            if (!root.faceTracker.poseReady)
+                                return "pose model not provisioned";
+                            const hands = root.faceTracker.hands;
+                            const held = root.faceTracker.heldLabels;
+                            if (hands.length === 0)
+                                return "none visible for a recognised person";
+                            let seen = hands.length + " visible";
+                            // Says which of the two qualities this is. "2
+                            // visible" reads as two measured hands whether or
+                            // not the models are there, and they are optional.
+                            if (!root.faceTracker.handsReady)
+                                seen += " (estimated; hand models not provisioned)";
+                            else
+                                seen += ", " + hands.filter(h => h.tracked).length + " tracked";
+                            if (!root.faceTracker.objectsReady)
+                                return seen + ", object model not provisioned";
+                            return held.length === 0 ? seen + ", empty" : seen + ", holding " + held.join(", ");
+                        }
                     }
 
                     Text {

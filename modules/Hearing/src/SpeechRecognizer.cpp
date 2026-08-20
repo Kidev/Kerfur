@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace {
 
@@ -76,6 +77,7 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     , m_whisperEngine{std::make_unique<WhisperEngine>()}
     , m_volumeUpdateTimer{this}
     , m_kerfurResetTimer{this}
+    , m_joinTimer{this}
 {
     // Not parented to `this`: the engine joins a worker thread in its
     // destructor, and QObject destroys children after the derived part of the
@@ -118,6 +120,13 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     m_kerfurResetTimer.setSingleShot(true);
     m_kerfurResetTimer.setInterval(2000);
     connect(&m_kerfurResetTimer, &QTimer::timeout, this, &SpeechRecognizer::resetKerfurDetection);
+
+    // The backstop for the half of an utterance that never arrives. Restarted
+    // every time a half lands, so it measures the wait for the missing one
+    // rather than the age of the queue.
+    m_joinTimer.setSingleShot(true);
+    m_joinTimer.setInterval(joinTimeoutMs);
+    connect(&m_joinTimer, &QTimer::timeout, this, [this]() { drainPending(true); });
 
     startVoiceIdentification();
     enumerateAudioDevices();
@@ -405,7 +414,7 @@ void SpeechRecognizer::submitUtterance(const Kerfur::VoiceActivitySegmenter::Utt
     // The same audio to both. Transcription and speaker identification want
     // exactly the same segment, and cutting it twice would be two answers to
     // the question of when somebody stopped talking.
-    m_whisperEngine->submit(utterance.samples);
+    m_whisperEngine->submit(utterance.samples, sequence);
     emit identificationRequested(utterance.samples, sequence);
 }
 
@@ -477,7 +486,7 @@ std::vector<float> SpeechRecognizer::toMono16k(const QByteArray &data) const
     return resampled;
 }
 
-void SpeechRecognizer::handleTranscription(const QString &text, float confidence)
+void SpeechRecognizer::handleTranscription(const QString &text, float confidence, quint64 sequence)
 {
     if (text.isEmpty()) {
         return;
@@ -496,6 +505,13 @@ void SpeechRecognizer::handleTranscription(const QString &text, float confidence
     emit lastTextChanged();
     setConfidence(confidence);
     emit sentenceRecognized(text, confidence);
+
+    PendingUtterance &pending{pendingFor(sequence)};
+    pending.text = text;
+    pending.confidence = confidence;
+    pending.transcribed = true;
+    drainPending(false);
+    m_joinTimer.start();
 }
 
 void SpeechRecognizer::handleKeywordDetected(const QString &keyword)
@@ -506,21 +522,116 @@ void SpeechRecognizer::handleKeywordDetected(const QString &keyword)
     emit kerfurHeard();
 }
 
-void SpeechRecognizer::handleSpeaker(const QString &name, double similarity, quint64 sequence)
+void SpeechRecognizer::handleSpeaker(const QString &name,
+                                     double similarity,
+                                     int priority,
+                                     quint64 sequence)
 {
-    Q_UNUSED(sequence)
+    PendingUtterance &pending{pendingFor(sequence)};
+    pending.speaker = name;
+    pending.priority = priority;
+    pending.identified = true;
 
+    // The live readout updates immediately and independently of the join. It
+    // answers "who is talking", which is true the moment the voice is
+    // recognised; the join answers "who said this sentence", which is not.
+    //
     // An utterance too short to identify leaves the previous speaker standing
     // rather than clearing it: nobody left the room, the sentence was short.
-    if (similarity < 0.0) {
+    if (similarity >= 0.0
+        && (m_speaker != name || !qFuzzyCompare(m_speakerConfidence, similarity)
+            || m_speakerPriority != priority)) {
+        m_speaker = name;
+        m_speakerConfidence = similarity;
+        m_speakerPriority = priority;
+        emit speakerChanged();
+    }
+
+    drainPending(false);
+    m_joinTimer.start();
+}
+
+SpeechRecognizer::PendingUtterance &SpeechRecognizer::pendingFor(quint64 sequence)
+{
+    for (PendingUtterance &pending : m_pending) {
+        if (pending.sequence == sequence) {
+            return pending;
+        }
+    }
+    if (m_pending.size() >= maximumPending) {
+        // Something upstream stopped answering. Publish what the oldest has
+        // rather than letting the list grow, and say so, because a silent drop
+        // here looks exactly like a microphone that stopped working.
+        qCWarning(speechLog) << "utterance join is behind; forcing the oldest through";
+        drainPending(true);
+    }
+    m_pending.append(PendingUtterance{sequence, {}, 0.0F, {}, Kerfur::IdentityRegistry::unknownPriority, false, false});
+    return m_pending.last();
+}
+
+void SpeechRecognizer::drainPending(bool force)
+{
+    QList<PendingUtterance> ready;
+    for (qsizetype index{0}; index < m_pending.size();) {
+        const PendingUtterance &pending{m_pending.at(index)};
+        const bool complete{pending.transcribed && pending.identified};
+        if (!complete && !force) {
+            ++index;
+            continue;
+        }
+        // A forced entry with no transcript is not an utterance at all: the
+        // speaker network answered about audio whisper found no words in.
+        if (pending.transcribed) {
+            ready.append(pending);
+        }
+        m_pending.removeAt(index);
+    }
+
+    if (ready.isEmpty()) {
+        if (m_pending.isEmpty()) {
+            m_joinTimer.stop();
+        }
         return;
     }
 
-    if (m_speaker == name && qFuzzyCompare(m_speakerConfidence, similarity)) {
+    // Rank first, arrival second. Everybody is heard; the highest ranked is
+    // answered first.
+    std::stable_sort(ready.begin(),
+                     ready.end(),
+                     [](const PendingUtterance &left, const PendingUtterance &right) {
+                         if (left.priority != right.priority) {
+                             return left.priority < right.priority;
+                         }
+                         return left.sequence < right.sequence;
+                     });
+
+    for (const PendingUtterance &pending : std::as_const(ready)) {
+        const bool authorised{pending.priority <= m_commandPriorityCeiling};
+        qCDebug(speechLog) << "utterance" << pending.sequence << "from"
+                           << (pending.speaker.isEmpty() ? QStringLiteral("a stranger")
+                                                         : pending.speaker)
+                           << "rank" << pending.priority
+                           << (authorised ? "may act" : "may not act");
+        emit utteranceReady(pending.text,
+                            pending.confidence,
+                            pending.speaker,
+                            pending.priority,
+                            authorised);
+    }
+
+    if (m_pending.isEmpty()) {
+        m_joinTimer.stop();
+    }
+}
+
+void SpeechRecognizer::setCommandPriorityCeiling(int ceiling)
+{
+    const int clamped{std::max(0, ceiling)};
+    if (m_commandPriorityCeiling == clamped) {
         return;
     }
-    m_speaker = name;
-    m_speakerConfidence = similarity;
+    m_commandPriorityCeiling = clamped;
+    emit commandPriorityCeilingChanged();
     emit speakerChanged();
 }
 

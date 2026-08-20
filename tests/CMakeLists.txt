@@ -23,6 +23,7 @@ kerfur_add_test(resourcemonitor Core)
 kerfur_add_test(modeldirectory Core)
 kerfur_add_test(settingspath Core)
 kerfur_add_test(identitydirectory Core)
+kerfur_add_test(identityregistry Core)
 
 # Vision and Hearing both keep OpenCV private, so neither its headers nor its
 # libraries reach a consumer. These suites build cv::Mat inputs of their own, so
@@ -36,7 +37,8 @@ find_package(OpenCV 4.8 REQUIRED COMPONENTS core dnn)
 # geometry, the gallery and the frontend, none of which need a camera, a
 # microphone, a model file or an accelerator, which is what makes them runnable
 # in CI.
-set(VISION_SUITES visiondecode modelcatalog identitystore headpose)
+set(VISION_SUITES visiondecode modelcatalog identitystore headpose handgeometry
+                  handlandmarker)
 foreach (SUITE ${VISION_SUITES})
     kerfur_add_test(${SUITE} Vision)
 endforeach ()
@@ -58,6 +60,14 @@ foreach (SUITE ${VISION_SUITES} ${HEARING_SUITES})
 endforeach ()
 
 target_compile_definitions(tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# The skills suites. No camera, no microphone, no models and no QML engine: the
+# matcher is a function over strings and the blackboard is a map, which is what
+# makes the part that decides whether Kerfur obeys somebody testable at all.
+set(SKILLS_SUITES intent blackboard)
+foreach (SUITE ${SKILLS_SUITES})
+    kerfur_add_test(${SUITE} Skills)
+endforeach ()
 
 # The headless pipeline suites, which only exist where that pipeline is built.
 if (KERFUR_PERCEPTION_BACKEND STREQUAL "cpu")

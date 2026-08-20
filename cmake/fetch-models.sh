@@ -6,7 +6,7 @@
 # directory ModelCatalog can resolve.
 #
 # Usage: fetch-models.sh <profile> <destination>
-#   profile      desktop or wasm; selects which models the manifest lists
+#   profile      desktop, pi or wasm; selects which models the manifest lists
 #   destination  directory to populate, created if missing
 #
 # python3 is used to read the manifest. It is already a hard requirement of the

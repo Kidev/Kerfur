@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Window
 import Vision
 import Hearing
+import Skills
 import qml 1.0
 
 Rectangle {
@@ -327,6 +328,16 @@ Rectangle {
                 speechRecognizer: root.speechRecognizer
                 width: parent.width - 20
                 height: 120
+            }
+
+            Text {
+                color: "white"
+                text: "Skills"
+                topPadding: 10
+            }
+
+            SkillsDisplay {
+                width: parent.width - 20
             }
 
             // Visual Effects Section

@@ -5,6 +5,8 @@
 
 #include "facepipeline.h"
 
+#include "identityregistry.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -26,15 +28,6 @@ namespace Kerfur {
 namespace {
 
 Q_LOGGING_CATEGORY(identityLog, "kerfur.vision.identity")
-
-const QStringList &galleryFilters()
-{
-    static const QStringList filters{QStringLiteral("*.jpg"),
-                                     QStringLiteral("*.jpeg"),
-                                     QStringLiteral("*.png"),
-                                     QStringLiteral("*.bmp")};
-    return filters;
-}
 
 QString hashFile(const QString &path)
 {
@@ -98,6 +91,17 @@ void IdentityStore::enrol(FacePipeline &pipeline,
                           const QString &galleryDirectory,
                           const QString &cachePath)
 {
+    const IdentityRegistry registry{IdentityRegistry::load(galleryDirectory)};
+    if (!registry.problem().isEmpty()) {
+        qCInfo(identityLog) << registry.problem();
+    }
+    enrol(pipeline, registry.faceEntries(), cachePath);
+}
+
+void IdentityStore::enrol(FacePipeline &pipeline,
+                          const QList<QPair<QString, QString>> &entries,
+                          const QString &cachePath)
+{
     // Before the cache is touched. Without a recognition model every image
     // would fail to embed, the refreshed list would come out empty, and the
     // cache would be rewritten with nothing in it, so a build that happens to
@@ -109,23 +113,19 @@ void IdentityStore::enrol(FacePipeline &pipeline,
 
     loadFrom(cachePath);
 
-    const QDir gallery{galleryDirectory};
-    if (!gallery.exists()) {
-        qCInfo(identityLog) << "no gallery at" << galleryDirectory;
+    if (entries.isEmpty()) {
+        qCInfo(identityLog) << "no faces declared; gallery not enrolled";
         return;
     }
 
-    const QFileInfoList images{
-        gallery.entryInfoList(galleryFilters(), QDir::Files | QDir::Readable, QDir::Name)};
-
     QList<Entry> refreshed;
-    refreshed.reserve(images.size());
+    refreshed.reserve(entries.size());
     bool changed{false};
 
-    for (const QFileInfo &image : images) {
-        const QString name{image.completeBaseName()};
-        const QString hash{hashFile(image.absoluteFilePath())};
+    for (const auto &[name, path] : entries) {
+        const QString hash{hashFile(path)};
         if (hash.isEmpty()) {
+            qCWarning(identityLog) << "cannot read" << path;
             continue;
         }
 
@@ -134,7 +134,7 @@ void IdentityStore::enrol(FacePipeline &pipeline,
         // everything because its timestamps moved.
         const auto cached{std::find_if(m_entries.cbegin(),
                                        m_entries.cend(),
-                                       [&name, &hash](const Entry &entry) {
+                                       [&name = name, &hash](const Entry &entry) {
                                            return entry.name == name
                                                   && entry.sourceHash == hash;
                                        })};
@@ -143,16 +143,15 @@ void IdentityStore::enrol(FacePipeline &pipeline,
             continue;
         }
 
-        const cv::Mat picture{cv::imread(image.absoluteFilePath().toStdString(),
-                                         cv::IMREAD_COLOR)};
+        const cv::Mat picture{cv::imread(path.toStdString(), cv::IMREAD_COLOR)};
         if (picture.empty()) {
-            qCWarning(identityLog) << "cannot read" << image.absoluteFilePath();
+            qCWarning(identityLog) << "cannot decode" << path;
             continue;
         }
 
         const std::optional<cv::Mat> embedding{pipeline.embedLargestFace(picture)};
         if (!embedding.has_value()) {
-            qCWarning(identityLog) << "no face found in" << image.fileName();
+            qCWarning(identityLog) << "no face found in" << path;
             continue;
         }
 

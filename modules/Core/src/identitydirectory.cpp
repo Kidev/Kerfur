@@ -3,17 +3,18 @@
 
 #include "identitydirectory.h"
 
-#include "settingspath.h"
+#include "assetsearch.h"
+#include "identityregistry.h"
 
-#include <QCoreApplication>
 #include <QDir>
-#include <QSet>
-#include <QSettings>
-#include <QStandardPaths>
+#include <QFileInfo>
 
 namespace Kerfur {
 
 namespace {
+
+constexpr QLatin1StringView settingsKey{"Paths/identitiesPath"};
+constexpr QLatin1StringView folderName{"identities"};
 
 const QStringList &galleryFilters()
 {
@@ -31,54 +32,49 @@ const QStringList &galleryFilters()
     return filters;
 }
 
+bool holdsFiles(const QDir &directory)
+{
+    return directory.exists()
+           && !directory.entryInfoList(galleryFilters(), QDir::Files | QDir::Readable).isEmpty();
+}
+
 } // namespace
 
 QStringList IdentityDirectory::candidates()
 {
-    QStringList directories;
+    return AssetSearch::candidates(QString{settingsKey}, QString{folderName});
+}
 
-    const QSettings settings;
-    const QString configured{
-        settingsDirectoryPath(settings.value(QStringLiteral("Paths/identitiesPath")).toString())};
-    if (!configured.isEmpty()) {
-        directories.append(configured);
+bool IdentityDirectory::holdsIdentities(const QString &directory)
+{
+    const QDir gallery{directory};
+    if (!gallery.exists()) {
+        return false;
     }
-
-    const QString appData{QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)};
-    if (!appData.isEmpty()) {
-        directories.append(appData + QStringLiteral("/identities"));
+    // The manifest first. A gallery whose faces all live under `faces/` has
+    // nothing at its own level, and the version of this test that only looked
+    // at the top level declared such a directory empty and walked past it.
+    if (QFileInfo::exists(gallery.absoluteFilePath(IdentityRegistry::manifestFileName()))) {
+        return true;
     }
-
-    const QString executable{QCoreApplication::applicationDirPath()};
-    if (!executable.isEmpty()) {
-        directories.append(executable + QStringLiteral("/identities"));
-        directories.append(QDir::cleanPath(executable + QStringLiteral("/../identities")));
-    }
-
-    directories.append(QDir::cleanPath(QDir::currentPath() + QStringLiteral("/identities")));
-
-    directories.removeDuplicates();
-    return directories;
+    return holdsFiles(gallery)
+           || holdsFiles(QDir{gallery.absoluteFilePath(QStringLiteral("faces"))})
+           || holdsFiles(QDir{gallery.absoluteFilePath(QStringLiteral("voices"))});
 }
 
 QString IdentityDirectory::resolve()
 {
     for (const QString &candidate : candidates()) {
-        const QDir directory{candidate};
-        if (!directory.exists()) {
-            continue;
+        if (holdsIdentities(candidate)) {
+            return QDir{candidate}.absolutePath();
         }
-        if (directory.entryInfoList(galleryFilters(), QDir::Files | QDir::Readable).isEmpty()) {
-            continue;
-        }
-        return directory.absolutePath();
     }
     return {};
 }
 
 QString IdentityDirectory::describeSearchPath()
 {
-    return candidates().join(QStringLiteral(", "));
+    return AssetSearch::describe(QString{settingsKey}, QString{folderName});
 }
 
 QStringList IdentityDirectory::enrolledNames(const QString &directory)
@@ -86,18 +82,7 @@ QStringList IdentityDirectory::enrolledNames(const QString &directory)
     if (directory.isEmpty()) {
         return {};
     }
-
-    const QDir gallery{directory};
-    QSet<QString> stems;
-    const QFileInfoList entries{
-        gallery.entryInfoList(galleryFilters(), QDir::Files | QDir::Readable, QDir::Name)};
-    for (const QFileInfo &entry : entries) {
-        stems.insert(entry.completeBaseName());
-    }
-
-    QStringList names{stems.values()};
-    names.sort();
-    return names;
+    return IdentityRegistry::load(directory).names();
 }
 
 } // namespace Kerfur

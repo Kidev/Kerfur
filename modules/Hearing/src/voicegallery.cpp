@@ -4,6 +4,7 @@
 #include "voicegallery.h"
 
 #include "audiofile.h"
+#include "identityregistry.h"
 #include "speakerembedder.h"
 
 #include <QCryptographicHash>
@@ -23,16 +24,6 @@ namespace Kerfur {
 namespace {
 
 Q_LOGGING_CATEGORY(voiceLog, "kerfur.hearing.voices")
-
-const QStringList &recordingFilters()
-{
-    static const QStringList filters{QStringLiteral("*.mp3"),
-                                     QStringLiteral("*.wav"),
-                                     QStringLiteral("*.flac"),
-                                     QStringLiteral("*.ogg"),
-                                     QStringLiteral("*.m4a")};
-    return filters;
-}
 
 QString hashFile(const QString &path)
 {
@@ -114,6 +105,17 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
                          const QString &directory,
                          const QString &cachePath)
 {
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    if (!registry.problem().isEmpty()) {
+        qCInfo(voiceLog) << registry.problem();
+    }
+    enrol(embedder, registry.voiceEntries(), cachePath);
+}
+
+void VoiceGallery::enrol(SpeakerEmbedder &embedder,
+                         const QList<QPair<QString, QString>> &entries,
+                         const QString &cachePath)
+{
     // Before the cache is touched. Without a model every recording would fail
     // to embed, the refreshed list would come out empty, and a build that
     // happens to lack the model would silently destroy the enrolment of one
@@ -125,23 +127,19 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
 
     loadFrom(cachePath);
 
-    const QDir gallery{directory};
-    if (directory.isEmpty() || !gallery.exists()) {
-        qCInfo(voiceLog) << "no voice gallery at" << directory;
+    if (entries.isEmpty()) {
+        qCInfo(voiceLog) << "no voices declared; gallery not enrolled";
         return;
     }
 
-    const QFileInfoList recordings{
-        gallery.entryInfoList(recordingFilters(), QDir::Files | QDir::Readable, QDir::Name)};
-
     QList<Entry> refreshed;
-    refreshed.reserve(recordings.size());
+    refreshed.reserve(entries.size());
     bool changed{false};
 
-    for (const QFileInfo &recording : recordings) {
-        const QString name{recording.completeBaseName()};
-        const QString hash{hashFile(recording.absoluteFilePath())};
+    for (const auto &[name, path] : entries) {
+        const QString hash{hashFile(path)};
         if (hash.isEmpty()) {
+            qCWarning(voiceLog) << "cannot read" << path;
             continue;
         }
 
@@ -150,7 +148,7 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
         // everything because its timestamps moved.
         const auto cached{std::find_if(m_entries.cbegin(),
                                        m_entries.cend(),
-                                       [&name, &hash](const Entry &entry) {
+                                       [&name = name, &hash](const Entry &entry) {
                                            return entry.name == name && entry.sourceHash == hash;
                                        })};
         if (cached != m_entries.cend() && !cached->embedding.empty()) {
@@ -160,17 +158,16 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
 
         QString failure;
         const std::vector<float> samples{
-            decodeMonoAudio(recording.absoluteFilePath(), SpeakerEmbedder::sampleRate, &failure)};
+            decodeMonoAudio(path, SpeakerEmbedder::sampleRate, &failure)};
         if (samples.empty()) {
-            qCWarning(voiceLog) << "cannot decode" << recording.fileName() << failure;
+            qCWarning(voiceLog) << "cannot decode" << path << failure;
             continue;
         }
 
         const cv::Mat embedding{embedder.embed(samples)};
         if (embedding.empty()) {
-            qCWarning(voiceLog) << "cannot embed" << recording.fileName()
-                                << "; needs at least" << SpeakerEmbedder::minimumSeconds
-                                << "seconds of speech";
+            qCWarning(voiceLog) << "cannot embed" << path << "; needs at least"
+                                << SpeakerEmbedder::minimumSeconds << "seconds of speech";
             continue;
         }
 
@@ -180,10 +177,11 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
                          << samples.size() / SpeakerEmbedder::sampleRate << "seconds";
     }
 
-    changed = changed || refreshed.size() != m_entries.size();
-    m_entries = refreshed;
-    if (changed) {
+    if (changed || refreshed.size() != m_entries.size()) {
+        m_entries = refreshed;
         saveTo(cachePath);
+    } else {
+        m_entries = refreshed;
     }
     qCInfo(voiceLog) << "voice gallery holds" << m_entries.size() << "voices";
 }

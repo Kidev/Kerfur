@@ -17,7 +17,8 @@ namespace {
 
 Q_LOGGING_CATEGORY(backendLog, "kerfur.vision.backend")
 
-// A held object is one whose box contains a wrist. Section 5.5 of the design
+// A held object is one whose box contains a wrist of somebody the gallery
+// knows. Section 5.5 of the design
 // makes a COCO detection authoritative for its label wherever it has one, and
 // the wrist is what ties that label to a particular person.
 constexpr size_t wristIndices[]{static_cast<size_t>(Keypoint::LeftWrist),
@@ -157,13 +158,17 @@ PerceptionFrame CpuInferenceBackend::process(const VisionFrame &frame)
 
     ++m_processedFrames;
 
+    if (m_faces.hasDetector()) {
+        runFaceStages(image, frame.timestampMs);
+    }
+
+    // After the face stages, not before. The object pass only looks at people
+    // the gallery has named, so it has to run once this frame's names are in;
+    // the other order gated on the previous frame's answer and gave a
+    // one frame lag every time somebody was recognised.
     if (m_objects.isLoaded() && m_config.objectStride > 0
         && (m_processedFrames % static_cast<quint64>(m_config.objectStride)) == 0) {
         attributeObjects(m_objects.detect(image));
-    }
-
-    if (m_faces.hasDetector()) {
-        runFaceStages(image, frame.timestampMs);
     }
 
     QList<TrackedPerson> people;
@@ -319,6 +324,13 @@ void CpuInferenceBackend::attributeObjects(const QList<ObjectDetection> &objects
 
         for (PersonTrack &track : m_tracker.tracks()) {
             if (!track.confirmed) {
+                continue;
+            }
+            // Only people the gallery has named. Reading what a stranger is
+            // carrying is a different device from noticing that its owner is
+            // holding a mug, and this is the line between the two. The camera
+            // view applies the same rule, in FaceAnalysisWorker.
+            if (track.identity.settled().isEmpty()) {
                 continue;
             }
             bool held{false};

@@ -297,6 +297,9 @@ desktop-fast: desktop-build
 models:
 	@$(MODELS_SCRIPT) desktop "$(MODELS_DESKTOP_DIR)"
 
+models-pi:
+	@$(MODELS_SCRIPT) pi "$(MODELS_DESKTOP_DIR)"
+
 models-web:
 	@$(MODELS_SCRIPT) wasm "$(MODELS_WEB_DIR)"
 
@@ -466,5 +469,5 @@ clean-env:
 
 clean-all: clean clean-vcpkg
 
-.PHONY: all debug web web-debug models models-web setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
+.PHONY: all debug web web-debug models models-pi models-web setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-env clean-all

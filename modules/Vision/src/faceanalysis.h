@@ -4,6 +4,8 @@
 #ifndef KERFUR_FACEANALYSIS_H
 #define KERFUR_FACEANALYSIS_H
 
+#include "identityregistry.h"
+
 #include <QList>
 #include <QMetaType>
 #include <QPointF>
@@ -73,15 +75,89 @@ struct AnalysedFace
     /// A short human reading of pose and irises together, for the overlay.
     QString gazeDirection;
     double score{0.0};
+
+    /// The rank `identities/ids.json` gives this person, or
+    /// `IdentityRegistry::unknownPriority` for a stranger. Zero is the top, and
+    /// it is what decides whose face the rendered eyes follow when more than
+    /// one person is in the room.
+    int priority{IdentityRegistry::unknownPriority};
+};
+
+/// One hand.
+///
+/// This is reported at one of two qualities and says which. The skeleton always
+/// gives a coarse answer: the pose stage finds a wrist and the elbow behind it,
+/// and a hand sits roughly a third of a forearm beyond the wrist along that
+/// line, which is enough to say where to look. When the hand models are
+/// provisioned that region is then handed to MediaPipe's palm detector and
+/// landmark model, and the box, the landmarks and the grip below are measured
+/// rather than extrapolated. Consumers must not assume the good case: the
+/// models are optional, the person may be too far away, and a hand behind a
+/// back has a wrist estimate and nothing else.
+struct AnalysedHand
+{
+    /// Normalized, like everything else here.
+    QRectF box;
+    QPointF wrist;
+    /// The pose stage's confidence in the wrist keypoint, or the landmark
+    /// model's confidence in the hand once it has run. A hand is reported only
+    /// above the relevant floor, so this is never noise, but it is still worth
+    /// carrying: a hand at 0.42 and one at 0.95 want to be drawn differently.
+    double confidence{0.0};
+    /// The subject's own side, "left" or "right". Taken from the skeleton,
+    /// which knows which arm this is, and not from the landmark model's own
+    /// handedness output, which is a guess made from one cropped hand.
+    QString side;
+    bool valid{false};
+
+    /// The twenty-one MediaPipe points, normalized. Empty when only the
+    /// skeleton estimate is available, which is what `tracked` reports.
+    QList<QPointF> landmarks;
+    /// Zero for a flat open hand, one for a closed fist. Zero when untracked,
+    /// which is why `tracked` has to be consulted before believing it.
+    double grip{0.0};
+    /// True when the landmark model produced this hand, false when it is the
+    /// forearm extrapolation.
+    bool tracked{false};
+};
+
+/// Something a known person is holding.
+///
+/// Reported only when it overlaps a hand. An object lying on the desk in front
+/// of somebody is a thing in the room, not a thing in their hand, and the
+/// difference is the entire point of the association.
+struct HeldObject
+{
+    QRectF box;
+    QString label;
+    double score{0.0};
+    /// Which hand it was associated with.
+    QString side;
 };
 
 /// One person the pose stage found, with the seventeen COCO keypoints.
+///
+/// The identity is copied down from whichever face was found inside this
+/// person's head region, and it is what gates the two expensive stages: hands
+/// are only located for a recognised person, and objects are only looked for in
+/// the hands of one. That is not an optimization dressed up as a rule. A camera
+/// that reads what strangers are carrying is a different device from one that
+/// notices its owner is holding a mug, and this is the line between them.
 struct AnalysedPerson
 {
     QRectF box;
     QList<QPointF> keypoints;
     QList<double> keypointScores;
     double score{0.0};
+
+    QString identity;
+    double identityConfidence{0.0};
+    int priority{IdentityRegistry::unknownPriority};
+    bool known{false};
+
+    AnalysedHand leftHand;
+    AnalysedHand rightHand;
+    QList<HeldObject> held;
 };
 
 /// One worker pass. Carries the frame size it was computed against so that a
@@ -113,8 +189,16 @@ struct AnalysisCapabilities
     bool identityReady{false};
     bool emotionReady{false};
     bool poseReady{false};
+    bool objectsReady{false};
+    /// Both hand models loaded. Either one alone is useless, so this is one
+    /// flag rather than two.
+    bool handsReady{false};
     QString galleryDirectory;
     QStringList enrolled;
+    /// The declared people, in rank order, as `id (rank)`. For the panel, so
+    /// that a manifest whose ranks are not what the author meant is visible
+    /// without opening the file.
+    QStringList roster;
     /// Empty when everything loaded; otherwise a sentence naming what did not
     /// and where it was looked for.
     QString problem;

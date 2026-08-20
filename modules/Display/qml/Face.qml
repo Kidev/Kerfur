@@ -6,6 +6,7 @@ import QtQuick.Window
 import Tools
 import Vision
 import Hearing
+import Skills
 import qml 1.0
 
 Item {
@@ -295,6 +296,14 @@ Item {
 
         onSentenceRecognized: (text, confidence) => {
             console.log("Heard:", text, "with confidence:", confidence);
+        }
+
+        // Everything heard goes to the skills, whoever said it. What a rank
+        // decides is not whether somebody is listened to but whether what they
+        // said is allowed to act, and that decision belongs to the trigger
+        // rather than to this connection.
+        onUtteranceReady: (text, confidence, speaker, priority, authorised) => {
+            Skills.hear(text, speaker, priority, authorised);
         }
     }
 

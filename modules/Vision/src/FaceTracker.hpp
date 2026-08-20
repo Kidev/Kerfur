@@ -54,8 +54,9 @@ class FaceTracker : public QObject
     /// `emotionConfidence`, `yaw`, `pitch`, `roll`, `gaze` and `known`.
     Q_PROPERTY(QVariantList faces READ faces NOTIFY facesChanged)
 
-    /// Every person the pose stage found: `box` plus seventeen `keypoints` of
-    /// `x`, `y` and `score`.
+    /// Every person the pose stage found: `box`, seventeen `keypoints` of `x`,
+    /// `y` and `score`, and -- for a person whose face the gallery recognised
+    /// -- `identity`, `priority`, `hands` and `held`.
     Q_PROPERTY(QVariantList people READ people NOTIFY peopleChanged)
 
     /// The bone list the keypoints are drawn with, as index pairs. Published
@@ -73,6 +74,24 @@ class FaceTracker : public QObject
     Q_PROPERTY(QString emotion READ emotion NOTIFY facesChanged)
     Q_PROPERTY(qreal emotionConfidence READ emotionConfidence NOTIFY facesChanged)
     Q_PROPERTY(QString gazeDirection READ gazeDirection NOTIFY facesChanged)
+
+    /// The rank of the face the eyes are following, zero being the top and
+    /// `IdentityRegistry::unknownPriority` meaning a stranger. Exposed because
+    /// the panel has to be able to show that Kerfur is looking at the right
+    /// person for a reason and not by accident.
+    Q_PROPERTY(int attentionPriority READ attentionPriority NOTIFY facesChanged)
+
+    /// The hands of the person the eyes are following, as maps of `box`,
+    /// `wrist`, `side` and `confidence`. Empty for a stranger, always: hands
+    /// are located only for people the gallery knows.
+    Q_PROPERTY(QVariantList hands READ hands NOTIFY peopleChanged)
+
+    /// What that person is holding, as maps of `label`, `box`, `score` and
+    /// `side`.
+    Q_PROPERTY(QVariantList heldObjects READ heldObjects NOTIFY peopleChanged)
+
+    /// The labels alone, for a one line readout.
+    Q_PROPERTY(QStringList heldLabels READ heldLabels NOTIFY peopleChanged)
     Q_PROPERTY(qreal headYaw READ headYaw NOTIFY facesChanged)
     Q_PROPERTY(qreal headPitch READ headPitch NOTIFY facesChanged)
     Q_PROPERTY(qreal headRoll READ headRoll NOTIFY facesChanged)
@@ -94,6 +113,11 @@ class FaceTracker : public QObject
     Q_PROPERTY(bool identityReady READ identityReady NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool emotionReady READ emotionReady NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool poseReady READ poseReady NOTIFY capabilitiesChanged)
+    Q_PROPERTY(bool objectsReady READ objectsReady NOTIFY capabilitiesChanged)
+    Q_PROPERTY(bool handsReady READ handsReady NOTIFY capabilitiesChanged)
+
+    /// The declared people in rank order, as `name (rank)`.
+    Q_PROPERTY(QStringList roster READ roster NOTIFY capabilitiesChanged)
 
     Q_PROPERTY(qreal detectionConfidence READ detectionConfidence WRITE setDetectionConfidence
                    NOTIFY detectionConfidenceChanged)
@@ -124,6 +148,10 @@ public:
     QString emotion() const;
     qreal emotionConfidence() const;
     QString gazeDirection() const;
+    int attentionPriority() const;
+    QVariantList hands() const { return m_hands; }
+    QVariantList heldObjects() const { return m_held; }
+    QStringList heldLabels() const;
     qreal headYaw() const;
     qreal headPitch() const;
     qreal headRoll() const;
@@ -139,6 +167,9 @@ public:
     bool identityReady() const { return m_capabilities.identityReady; }
     bool emotionReady() const { return m_capabilities.emotionReady; }
     bool poseReady() const { return m_capabilities.poseReady; }
+    bool objectsReady() const { return m_capabilities.objectsReady; }
+    bool handsReady() const { return m_capabilities.handsReady; }
+    QStringList roster() const { return m_capabilities.roster; }
 
     qreal detectionConfidence() const { return m_detectionConfidence; }
     qreal trackingSmoothing() const { return m_trackingSmoothing; }
@@ -186,6 +217,7 @@ private:
     void setErrorString(const QString &error);
     void setCameraFrame(const QImage &frame);
     void setCaptureResolution(const QSize &size);
+    void setAttention(const QVariantList &hands, const QVariantList &held);
 
     bool m_enabled{false};
     bool m_faceDetected{false};
@@ -196,6 +228,8 @@ private:
     QVariantList m_faces;
     QVariantList m_people;
     QVariantList m_faceLandmarks;
+    QVariantList m_hands;
+    QVariantList m_held;
     QVariantMap m_primaryFace;
     Kerfur::AnalysisCapabilities m_capabilities;
     QSize m_analysisSize;

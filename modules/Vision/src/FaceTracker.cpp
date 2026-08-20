@@ -61,7 +61,60 @@ QVariantMap faceToVariant(const Kerfur::AnalysedFace &face)
         {QStringLiteral("roll"), face.pose.roll},
         {QStringLiteral("poseValid"), face.pose.valid},
         {QStringLiteral("gaze"), face.gazeDirection},
+        {QStringLiteral("priority"), face.priority},
+        {QStringLiteral("ranked"), face.priority != Kerfur::IdentityRegistry::unknownPriority},
     };
+}
+
+QVariantMap handToVariant(const Kerfur::AnalysedHand &hand)
+{
+    QVariantList landmarks;
+    landmarks.reserve(hand.landmarks.size());
+    for (const QPointF &point : hand.landmarks) {
+        landmarks.append(point);
+    }
+    return QVariantMap{{QStringLiteral("box"), hand.box},
+                       {QStringLiteral("wrist"), hand.wrist},
+                       {QStringLiteral("side"), hand.side},
+                       {QStringLiteral("confidence"), hand.confidence},
+                       // Empty unless the landmark models are provisioned and
+                       // this hand was one of the ones the frame's budget
+                       // reached, so a view must check `tracked` and not the
+                       // emptiness of this list, which is also empty when the
+                       // model simply failed to find a palm.
+                       {QStringLiteral("landmarks"), landmarks},
+                       {QStringLiteral("grip"), hand.grip},
+                       {QStringLiteral("tracked"), hand.tracked}};
+}
+
+QVariantMap heldToVariant(const Kerfur::HeldObject &object)
+{
+    return QVariantMap{{QStringLiteral("box"), object.box},
+                       {QStringLiteral("label"), object.label},
+                       {QStringLiteral("score"), object.score},
+                       {QStringLiteral("side"), object.side}};
+}
+
+QVariantList handsOf(const Kerfur::AnalysedPerson &person)
+{
+    QVariantList hands;
+    if (person.leftHand.valid) {
+        hands.append(handToVariant(person.leftHand));
+    }
+    if (person.rightHand.valid) {
+        hands.append(handToVariant(person.rightHand));
+    }
+    return hands;
+}
+
+QVariantList heldOf(const Kerfur::AnalysedPerson &person)
+{
+    QVariantList held;
+    held.reserve(person.held.size());
+    for (const Kerfur::HeldObject &object : person.held) {
+        held.append(heldToVariant(object));
+    }
+    return held;
 }
 
 QVariantMap personToVariant(const Kerfur::AnalysedPerson &person)
@@ -78,7 +131,13 @@ QVariantMap personToVariant(const Kerfur::AnalysedPerson &person)
     }
     return QVariantMap{{QStringLiteral("box"), person.box},
                        {QStringLiteral("score"), person.score},
-                       {QStringLiteral("keypoints"), keypoints}};
+                       {QStringLiteral("keypoints"), keypoints},
+                       {QStringLiteral("identity"), person.identity},
+                       {QStringLiteral("identityConfidence"), person.identityConfidence},
+                       {QStringLiteral("priority"), person.priority},
+                       {QStringLiteral("known"), person.known},
+                       {QStringLiteral("hands"), handsOf(person)},
+                       {QStringLiteral("held"), heldOf(person)}};
 }
 
 QString describeSize(const QSize &size)
@@ -327,11 +386,14 @@ void FaceTracker::uninitializeCamera()
     setCameraFrame(QImage{});
     setCaptureResolution(QSize{});
 
-    if (!m_faces.isEmpty() || !m_people.isEmpty()) {
+    if (!m_faces.isEmpty() || !m_people.isEmpty() || !m_hands.isEmpty()
+        || !m_held.isEmpty()) {
         m_faces.clear();
         m_faceLandmarks.clear();
         m_primaryFace.clear();
         m_people.clear();
+        m_hands.clear();
+        m_held.clear();
         emit facesChanged();
         emit peopleChanged();
     }
@@ -430,12 +492,18 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         emit peopleChanged();
     }
 
-    // Largest first: the nearest face is the one the panel labels and the one
-    // the rendered eyes follow.
+    // Rank first, size second. Kerfur looks at the highest ranked person in the
+    // room, and only falls back to the nearest one among equals -- which, since
+    // every stranger shares the same unknown rank, is what a room full of
+    // strangers reduces to. Sorting the other way round was the old behaviour
+    // and it meant whoever leaned closest to the camera won.
     QList<Kerfur::AnalysedFace> ordered{result.faces};
     std::sort(ordered.begin(),
               ordered.end(),
               [](const Kerfur::AnalysedFace &left, const Kerfur::AnalysedFace &right) {
+                  if (left.priority != right.priority) {
+                      return left.priority < right.priority;
+                  }
                   return left.box.width() * left.box.height()
                          > right.box.width() * right.box.height();
               });
@@ -451,6 +519,7 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         m_primaryFace.clear();
         m_faceLandmarks.clear();
         emit facesChanged();
+        setAttention({}, {});
 
         setFaceDetected(false);
         if (!m_hasLastKnownPosition) {
@@ -463,6 +532,26 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
     m_primaryFace = faceToVariant(primary);
     m_faceLandmarks = landmarksToVariant(primary.landmarks);
     emit facesChanged();
+
+    // The body that goes with that face. By name when there is one, because a
+    // name is the only association that survives two people crossing; by
+    // geometry otherwise, which is all there is for a stranger and is why a
+    // stranger has no hands to publish anyway.
+    const Kerfur::AnalysedPerson *attention{nullptr};
+    for (const Kerfur::AnalysedPerson &person : result.people) {
+        if (!primary.identity.isEmpty() && person.identity == primary.identity) {
+            attention = &person;
+            break;
+        }
+        if (attention == nullptr && person.box.contains(primary.box.center())) {
+            attention = &person;
+        }
+    }
+    if (attention == nullptr) {
+        setAttention({}, {});
+    } else {
+        setAttention(handsOf(*attention), heldOf(*attention));
+    }
 
     const QPointF centre{primary.box.center()};
     const qreal smoothing{std::clamp(m_trackingSmoothing, 0.0, 1.0)};
@@ -499,6 +588,38 @@ QString FaceTracker::emotion() const
 qreal FaceTracker::emotionConfidence() const
 {
     return m_primaryFace.value(QStringLiteral("emotionConfidence")).toDouble();
+}
+
+int FaceTracker::attentionPriority() const
+{
+    const QVariant priority{m_primaryFace.value(QStringLiteral("priority"))};
+    return priority.isValid() ? priority.toInt() : Kerfur::IdentityRegistry::unknownPriority;
+}
+
+QStringList FaceTracker::heldLabels() const
+{
+    QStringList labels;
+    labels.reserve(m_held.size());
+    for (const QVariant &entry : m_held) {
+        const QString label{entry.toMap().value(QStringLiteral("label")).toString()};
+        if (!label.isEmpty() && !labels.contains(label)) {
+            labels.append(label);
+        }
+    }
+    return labels;
+}
+
+void FaceTracker::setAttention(const QVariantList &hands, const QVariantList &held)
+{
+    if (m_hands == hands && m_held == held) {
+        return;
+    }
+    m_hands = hands;
+    m_held = held;
+    // Shares `peopleChanged` with the skeleton rather than carrying its own
+    // signal: both describe the same body, and a view that redrew one without
+    // the other would draw a hand box on last frame's arm.
+    emit peopleChanged();
 }
 
 QString FaceTracker::gazeDirection() const
