@@ -41,9 +41,14 @@ QtObject {
         id: settingsPerception
 
         property alias analysisMaxSide: root.analysisMaxSide
+        property alias previewMaxSide: root.previewMaxSide
 
         category: "Perception"
     }
+    /// The longer side the preview picture is reduced to before it is encoded
+    /// for the panel. Separate from the analysis size: this one is what a
+    /// person looks at, that one is what the models are shown.
+    property int previewMaxSide: 960
     property Settings paths: Settings {
         id: settingsPaths
 

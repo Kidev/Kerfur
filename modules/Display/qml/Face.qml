@@ -312,6 +312,7 @@ Item {
 
         analysisMaxSide: KSettings.analysisMaxSide
         enabled: KSettings.faceTrackingEnabled
+        previewMaxSide: KSettings.previewMaxSide
 
         onEnabledChanged: {
             if (!enabled) {

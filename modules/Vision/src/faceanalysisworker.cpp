@@ -350,7 +350,7 @@ void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mir
     // region to search than an extrapolated one and it can say whether the
     // hand is even closed; then the objects, because an object is only held if
     // there is a hand to hold it.
-    attributePeople(result);
+    attributePeople(result, mirrored);
     refineHands(bgr, result);
     attributeHeldObjects(bgr, result);
 
@@ -366,13 +366,24 @@ void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mir
     emit resultReady(result);
 }
 
-void FaceAnalysisWorker::attributePeople(AnalysisResult &result) const
+void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) const
 {
     if (result.people.isEmpty()) {
         return;
     }
 
     const cv::Size frame{result.frameSize.width(), result.frameSize.height()};
+
+    // Whose left is whose. The pose model labels the arms of the person it can
+    // see, and what it can see is a reflection, so the arm it calls left is the
+    // one on the subject's right. Undoing that here rather than in the view is
+    // the difference between "their right hand" and "the hand on the right of
+    // the picture": only the first is a fact about the person, and it is the
+    // one a skill will be written against.
+    const Keypoint ownLeftWrist{mirrored ? Keypoint::RightWrist : Keypoint::LeftWrist};
+    const Keypoint ownLeftElbow{mirrored ? Keypoint::RightElbow : Keypoint::LeftElbow};
+    const Keypoint ownRightWrist{mirrored ? Keypoint::LeftWrist : Keypoint::RightWrist};
+    const Keypoint ownRightElbow{mirrored ? Keypoint::LeftElbow : Keypoint::RightElbow};
 
     for (AnalysedPerson &person : result.people) {
         person.identity.clear();
@@ -420,14 +431,14 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result) const
             continue;
         }
         person.leftHand = handFromKeypoints(person,
-                                            Keypoint::LeftWrist,
-                                            Keypoint::LeftElbow,
+                                            ownLeftWrist,
+                                            ownLeftElbow,
                                             QStringLiteral("left"),
                                             result.frameSize,
                                             poseKeypointConfidence);
         person.rightHand = handFromKeypoints(person,
-                                             Keypoint::RightWrist,
-                                             Keypoint::RightElbow,
+                                             ownRightWrist,
+                                             ownRightElbow,
                                              QStringLiteral("right"),
                                              result.frameSize,
                                              poseKeypointConfidence);
@@ -509,6 +520,7 @@ void FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
         hand.wrist = hand.landmarks.at(HandWrist);
         hand.confidence = pose->confidence;
         hand.grip = pose->grip;
+        hand.gesture = gestureName(pose->gesture);
         hand.tracked = true;
     }
 }
