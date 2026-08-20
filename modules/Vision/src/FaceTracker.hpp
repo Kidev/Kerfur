@@ -64,6 +64,12 @@ class FaceTracker : public QObject
     /// the model's and not the view's.
     Q_PROPERTY(QVariantList skeletonEdges READ skeletonEdges CONSTANT)
 
+    /// The twenty-one point hand skeleton, as index pairs into a hand's
+    /// `landmarks`. Published here for the same reason the body bones are: the
+    /// point order is MediaPipe's, and a view that hard coded it would be
+    /// wrong silently the day the stage changed.
+    Q_PROPERTY(QVariantList handEdges READ handEdges CONSTANT)
+
     /// The five YuNet points of the primary face, normalized. Kept as its own
     /// property because the overlay draws them from a Repeater and a nested
     /// list in `faces` would rebuild every delegate on every frame.
@@ -108,6 +114,14 @@ class FaceTracker : public QObject
     Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY
                    availableResolutionsChanged)
 
+    /// The longer side the analysis image is reduced to before the models see
+    /// it, which is the one knob that trades detail for latency. Raising it
+    /// lets a face across the room and a hand at arm's length survive the
+    /// downscale; the cost is superlinear, so `analysisMs` is published beside
+    /// it and the panel shows both together.
+    Q_PROPERTY(int analysisMaxSide READ analysisMaxSide WRITE setAnalysisMaxSide NOTIFY
+                   analysisMaxSideChanged)
+
     Q_PROPERTY(QStringList knownIdentities READ knownIdentities NOTIFY capabilitiesChanged)
     Q_PROPERTY(QString galleryDirectory READ galleryDirectory NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool identityReady READ identityReady NOTIFY capabilitiesChanged)
@@ -142,6 +156,7 @@ public:
     QVariantList people() const { return m_people; }
     QVariantList faceLandmarks() const { return m_faceLandmarks; }
     static QVariantList skeletonEdges();
+    static QVariantList handEdges();
 
     QString identity() const;
     qreal identityConfidence() const;
@@ -161,6 +176,7 @@ public:
     QString analysisResolution() const;
     int analysisMs() const { return static_cast<int>(m_analysisMs); }
     QStringList availableResolutions() const;
+    int analysisMaxSide() const { return m_analysisMaxSide; }
 
     QStringList knownIdentities() const { return m_capabilities.enrolled; }
     QString galleryDirectory() const { return m_capabilities.galleryDirectory; }
@@ -178,6 +194,7 @@ public slots:
     void setResolution(const QString &resolution);
     void setDetectionConfidence(qreal confidence);
     void setTrackingSmoothing(qreal smoothing);
+    void setAnalysisMaxSide(int side);
 
 signals:
     void enabledChanged();
@@ -193,6 +210,7 @@ signals:
     void currentResolutionChanged();
     void detectionConfidenceChanged();
     void trackingSmoothingChanged();
+    void analysisMaxSideChanged();
 
     /// To the worker thread. Not called directly: a direct call would run the
     /// models on whichever thread emitted.
@@ -250,6 +268,7 @@ private:
 
     qreal m_detectionConfidence{0.6};
     qreal m_trackingSmoothing{0.7};
+    int m_analysisMaxSide{defaultAnalysisMaxSide};
 
     QTimer m_frameThrottleTimer;
     QTimer m_cameraRetryTimer;
@@ -261,8 +280,17 @@ private:
 
     /// The longer side the analysis image is reduced to. Large enough that an
     /// iris is still a dozen pixels across at conversational distance, small
-    /// enough that the colour conversion is not itself the cost.
-    static constexpr int analysisMaxSide{960};
+    /// enough that the colour conversion is not itself the cost. It is only the
+    /// default: `analysisMaxSide` moves it, within the bounds below.
+    static constexpr int defaultAnalysisMaxSide{960};
+
+    /// Below the lower bound the face detector is looking at a thumbnail and
+    /// reports nothing at all, which reads as a broken camera rather than as a
+    /// setting. The upper bound is the longer side of the format the camera is
+    /// asked for: the frame is never enlarged past what arrives, so every value
+    /// above it would behave identically while still looking like a choice.
+    static constexpr int minimumAnalysisMaxSide{320};
+    static constexpr int maximumAnalysisMaxSide{1920};
 
     /// The longer side of the preview. Independent of the analysis size: this
     /// one is bounded by what the panel can show, that one by what the models

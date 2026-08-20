@@ -57,6 +57,8 @@ The Pi profile is the same set as the desktop one, because until the accelerator
 
 Without them the face still runs; it simply has nothing to look at. Any stage whose model file is missing is disabled and logged at startup rather than failing the start.
 
+**How much of the frame the models get to see** is the one knob worth turning when detection is unreliable. The camera frame is reduced before any model runs -- to 960 pixels on the longer side by default -- and everything downstream sees only what survives that. A face across the room or a hand at arm's length is a few dozen pixels wide by then, which is where the detail goes. *Vision > Analysis detail* in the control panel raises it as far as 1920; the cost is superlinear and is printed next to the setting, in milliseconds per pass, so the trade is made against a number rather than a feeling. It is never enlarged past what the camera actually delivers, so if the panel reports a small camera resolution that is the thing to fix first.
+
 ### Knowing people
 `identities/` is the gallery of people Kerfur recognises, and `identities/ids.json` is what declares them:
 
@@ -94,7 +96,7 @@ From the twenty-one points comes a *grip*: zero for a flat open hand, one for a 
 
 For hands that pass, an object is reported as *held* only when it actually overlaps the hand; something lying on the desk in front of somebody is a thing in the room, not a thing in their hand. Grip is the cheap filter and the overlap is the arbiter, because grip can tell a fist from an open palm but cannot tell a fist from a fist around a mug.
 
-Both models are optional. Without them the forearm estimate stands on its own exactly as before, and the overlay says so rather than drawing a guess as though it were a measurement. Two hands per frame get the landmark pass, chosen by rank and then by nearness -- the same order the eyes follow -- so a room with four recognised people costs what a room with one costs.
+The camera preview draws the twenty-one points as a hand skeleton, over the body one, with the fingertips and the wrist marked larger than the knuckles. Both models are optional. Without them the forearm estimate stands on its own exactly as before, and the overlay says so -- a dimmed box with nothing inside it -- rather than drawing a guess as though it were a measurement. Two hands per frame get the landmark pass, chosen by rank and then by nearness -- the same order the eyes follow -- so a room with four recognised people costs what a room with one costs.
 
 None of this runs for a stranger. That is not an optimization dressed up as a rule: a camera that reads what strangers are carrying is a different device from one that notices its owner is holding a mug, and the identity check is the line between them.
 

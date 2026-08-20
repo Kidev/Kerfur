@@ -9,9 +9,9 @@ import Skills
 Rectangle {
     id: root
 
-    border.color: "#444"
+    border.color: "#3c414a"
     border.width: 1
-    color: "#2a2a2a"
+    color: "#1f2226"
     implicitHeight: column.implicitHeight + 16
     radius: 4
 
@@ -24,24 +24,15 @@ Rectangle {
         anchors.top: parent.top
         spacing: 6
 
-        Row {
-            spacing: 6
+        // What is loaded. The panel section is already titled Skills, so this
+        // says only which ones, and says it in the colour of whether there are
+        // any at all.
+        Text {
+            color: Skills.skillNames.length > 0 ? "#7cff5a" : "#98a0ac"
+            font.pixelSize: 10
+            text: Skills.skillNames.length > 0 ? Skills.skillNames.join(", ") : "none loaded"
             width: parent.width
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                color: Skills.skillNames.length > 0 ? "#7cff5a" : "#888"
-                font.bold: true
-                font.pixelSize: 10
-                text: "Skills"
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                color: "#aaa"
-                font.pixelSize: 9
-                text: Skills.skillNames.length > 0 ? Skills.skillNames.join(", ") : "none loaded"
-            }
+            wrapMode: Text.WordWrap
         }
 
         Text {
@@ -53,9 +44,9 @@ Rectangle {
         }
 
         Rectangle {
-            border.color: "#aa4444"
+            border.color: "#8a3a3a"
             border.width: 1
-            color: "#4a2a2a"
+            color: "#3a2326"
             height: problemText.height + 8
             radius: 3
             visible: Skills.problem !== ""
@@ -68,7 +59,7 @@ Rectangle {
                 anchors.margins: 4
                 anchors.right: parent.right
                 anchors.top: parent.top
-                color: "#ffaaaa"
+                color: "#ffb4b4"
                 font.pixelSize: 8
                 text: Skills.problem
                 wrapMode: Text.WordWrap
@@ -84,7 +75,7 @@ Rectangle {
             width: parent.width
 
             Text {
-                color: "white"
+                color: "#eceff4"
                 font.pixelSize: 10
                 text: "\"" + Skills.lastUtterance + "\""
                 width: parent.width
@@ -157,16 +148,16 @@ Rectangle {
 
                             required property var modelData
 
-                            border.color: "#666"
+                            border.color: "#3c414a"
                             border.width: 1
-                            color: mouse.pressed ? "#555" : "#3a3a3a"
+                            color: mouse.pressed ? "#3a3f47" : "#2c3037"
                             height: 18
                             radius: 3
                             width: 44
 
                             Text {
                                 anchors.centerIn: parent
-                                color: "white"
+                                color: "#eceff4"
                                 font.pixelSize: 9
                                 text: answer.modelData.label
                             }
@@ -194,7 +185,7 @@ Rectangle {
         }
 
         Rectangle {
-            color: "#555"
+            color: "#3c414a"
             height: 1
             visible: Blackboard.keys.length > 0
             width: parent.width
@@ -223,7 +214,7 @@ Rectangle {
                     }
 
                     Text {
-                        color: "white"
+                        color: "#eceff4"
                         font.pixelSize: 9
                         // Through the snapshot rather than through `values`,
                         // because the key is only known at run time and a
@@ -235,16 +226,16 @@ Rectangle {
         }
 
         Rectangle {
-            border.color: "#666"
+            border.color: "#3c414a"
             border.width: 1
-            color: reloadMouse.pressed ? "#555" : "#3a3a3a"
+            color: reloadMouse.pressed ? "#3a3f47" : "#2c3037"
             height: 18
             radius: 3
             width: 60
 
             Text {
                 anchors.centerIn: parent
-                color: "white"
+                color: "#eceff4"
                 font.pixelSize: 9
                 text: "Reload"
             }

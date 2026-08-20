@@ -7,6 +7,10 @@ QtObject {
     id: root
 
     property bool allowEscapeShortcut: true
+    /// The longer side the camera frame is reduced to before the vision models
+    /// see it. Persisted because it is a property of the machine Kerfur is
+    /// running on, not of the session.
+    property int analysisMaxSide: 960
     readonly property string appDataPath: StandardPaths.writableLocation(StandardPaths.AppDataLocation)
     property bool autoPaddingEnabled: true
     property real blurMultiplier: 1
@@ -33,6 +37,13 @@ QtObject {
     property real maskThresholdMax: 1.0
     property real maskThresholdMin: 0.25
     property string modelsPath: root.appDataPath + "/models/"
+    property Settings perception: Settings {
+        id: settingsPerception
+
+        property alias analysisMaxSide: root.analysisMaxSide
+
+        category: "Perception"
+    }
     property Settings paths: Settings {
         id: settingsPaths
 
