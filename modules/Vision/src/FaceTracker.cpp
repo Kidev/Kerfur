@@ -102,6 +102,7 @@ QVariantMap handToVariant(const Kerfur::AnalysedHand &hand)
                        // model simply failed to find a palm.
                        {QStringLiteral("landmarks"), landmarks},
                        {QStringLiteral("grip"), hand.grip},
+                       {QStringLiteral("gesture"), hand.gesture},
                        {QStringLiteral("tracked"), hand.tracked}};
 }
 
@@ -444,9 +445,16 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     // told that it is looking at one.
     const QImage image{captured.flipped(Qt::Horizontal)};
 
+    // Reduced, never enlarged, exactly like the analysis image below. A preview
+    // scaled up past the frame that arrived is a blurrier picture of the same
+    // pixels and a bigger JPEG to encode for it.
     QSize previewSize{image.size()};
-    previewSize.scale(previewMaxSide, previewMaxSide, Qt::KeepAspectRatio);
-    setCameraFrame(image.scaled(previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    if (std::max(image.width(), image.height()) > m_previewMaxSide) {
+        previewSize.scale(m_previewMaxSide, m_previewMaxSide, Qt::KeepAspectRatio);
+    }
+    setCameraFrame(previewSize == image.size()
+                       ? image
+                       : image.scaled(previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     // One pass at a time. Queueing a second while the first is still running
     // would build a backlog of images that are already out of date by the time
@@ -685,7 +693,7 @@ QString FaceTracker::cameraFrameBase64() const
     QByteArray encoded;
     QBuffer buffer{&encoded};
     buffer.open(QIODevice::WriteOnly);
-    if (!m_cameraFrame.save(&buffer, "JPEG", 75)) {
+    if (!m_cameraFrame.save(&buffer, "JPEG", previewJpegQuality)) {
         return QString{};
     }
 
@@ -731,6 +739,22 @@ QString FaceTracker::requestedResolution() const
 QString FaceTracker::analysisResolution() const
 {
     return describeSize(m_analysisSize);
+}
+
+QString FaceTracker::previewResolution() const
+{
+    return m_cameraFrame.isNull() ? QStringLiteral("Starting...")
+                                  : describeSize(m_cameraFrame.size());
+}
+
+void FaceTracker::setPreviewMaxSide(int side)
+{
+    const int bounded{std::clamp(side, minimumPreviewMaxSide, maximumPreviewMaxSide)};
+    if (m_previewMaxSide == bounded) {
+        return;
+    }
+    m_previewMaxSide = bounded;
+    emit previewMaxSideChanged();
 }
 
 void FaceTracker::setResolution(const QString &resolution)

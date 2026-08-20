@@ -17,6 +17,18 @@ Rectangle {
     readonly property color kidevColor: "#ff44ff"
     readonly property color unknownColor: "#00e5ff"
 
+    // The last thing that was said, who said it, and whether it is still recent
+    // enough to show. Set by whoever owns both the camera and the microphone,
+    // because this view owns neither: it knows where the heads are, which is
+    // the one thing the other two cannot answer.
+    //
+    // An utterance with no name attached is not passed down at all. Without a
+    // name there is no head it belongs above, and a caption over a stranger, or
+    // over nobody, would be a claim rather than an observation.
+    property bool speechShown: false
+    property string speechSpeaker: ""
+    property string speechText: ""
+
     function identityColor(face) {
         if (!face || !face.known)
             return root.unknownColor;
@@ -36,6 +48,14 @@ Rectangle {
         property real lineWidth: 2
         property bool showLabels: true
         property real labelSize: 9
+
+        // The utterance being shown over its speaker's head, if anybody is
+        // saying anything. Passed down rather than looked up: this component
+        // knows where the heads are and nothing else, which is the only reason
+        // it is the one drawing this.
+        property string speechSpeaker: ""
+        property string speechText: ""
+        property bool speechShown: false
 
         readonly property real originX: (image.width - image.paintedWidth) / 2
         readonly property real originY: (image.height - image.paintedHeight) / 2
@@ -111,6 +131,7 @@ Rectangle {
                         "confidence": hand.confidence,
                         "landmarks": hand.landmarks,
                         "grip": hand.grip,
+                        "gesture": hand.gesture,
                         "tracked": hand.tracked
                     });
                 }
@@ -213,15 +234,25 @@ Rectangle {
                 // renders them identically invites trusting the guess.
                 border.color: modelData.tracked ? "#40c4ff" : "#4080a0"
 
+                // The side is the subject's own, not the picture's: this is
+                // their left hand even though the mirrored preview puts it on
+                // the right of the frame. The shape is shown in preference to
+                // open and closed, which is the same measurement with less in
+                // it.
                 Text {
                     anchors.bottom: parent.top
                     anchors.left: parent.left
                     color: "#40c4ff"
                     font.pixelSize: overlay.labelSize - 1
-                    text: handBox.modelData.tracked
-                        ? handBox.modelData.side + "  " + (handBox.modelData.grip >= 0.4 ? "closed" : "open")
-                        : handBox.modelData.side
                     visible: overlay.showLabels
+
+                    text: {
+                        if (!handBox.modelData.tracked)
+                            return handBox.modelData.side;
+                        if (handBox.modelData.gesture !== "")
+                            return handBox.modelData.side + "  " + handBox.modelData.gesture;
+                        return handBox.modelData.side + "  " + (handBox.modelData.grip >= 0.4 ? "closed" : "open");
+                    }
                 }
             }
         }
@@ -444,6 +475,72 @@ Rectangle {
                         }
                     }
                 }
+
+                // What this person just said, over their head.
+                //
+                // Inside the face delegate rather than positioned from
+                // outside, because being above somebody's head means knowing
+                // where their head is and the delegate is already the thing
+                // that knows. The match is on the name: the face gallery and
+                // the voice gallery are enrolled from one manifest, so the two
+                // halves agree on the string when they agree on the person.
+                //
+                // Nothing is drawn for a voice with no face in shot. That is
+                // not a gap: the transcript is in the hearing panel either
+                // way, and a caption floating over a stranger's head or over
+                // nobody at all would be a claim rather than an observation.
+                Rectangle {
+                    id: bubble
+
+                    readonly property bool mine: faceItem.modelData.known
+                                                 && overlay.speechText !== ""
+                                                 && faceItem.modelData.identity === overlay.speechSpeaker
+                    readonly property bool labelAbove: label.visible && label.y < faceBox.y
+                    readonly property real headTop: bubble.labelAbove ? label.y : faceBox.y
+                    readonly property real headBottom: Math.max(faceBox.y + faceBox.height,
+                                                                label.visible && label.y > faceBox.y ? label.y + label.height : 0)
+
+                    antialiasing: true
+                    border.color: faceItem.tint
+                    border.width: 1
+                    color: "#e6101418"
+                    height: bubbleText.height + 10
+                    opacity: bubble.mine && overlay.speechShown ? 1 : 0
+                    radius: 4
+                    visible: opacity > 0
+                    width: bubbleText.width + 14
+
+                    // Above the head when there is room above it, below
+                    // everything when there is not. A person standing close
+                    // enough fills the top of the frame, and a bubble clamped
+                    // to y zero sits across their forehead.
+                    y: bubble.headTop - height - 4 >= 0 ? bubble.headTop - height - 4 : bubble.headBottom + 4
+                    x: Math.max(0, Math.min(overlay.width - width,
+                                            faceBox.x + ((faceBox.width - width) / 2)))
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 180
+                        }
+                    }
+
+                    Text {
+                        id: bubbleText
+
+                        anchors.centerIn: parent
+                        color: "#eceff4"
+                        elide: Text.ElideRight
+                        font.pixelSize: overlay.labelSize + 1
+                        horizontalAlignment: Text.AlignHCenter
+                        // Three lines at most, and the width is capped before
+                        // the wrap so that a long sentence grows downwards
+                        // instead of across the whole frame.
+                        maximumLineCount: 3
+                        text: overlay.speechText
+                        width: Math.min(implicitWidth, Math.min(overlay.width * 0.72, 320))
+                        wrapMode: Text.Wrap
+                    }
+                }
             }
         }
     }
@@ -466,6 +563,9 @@ Rectangle {
         PerceptionOverlay {
             image: cameraImage
             showLabels: false
+            speechShown: root.speechShown
+            speechSpeaker: root.speechSpeaker
+            speechText: root.speechText
             tracker: root.faceTracker
         }
 
@@ -635,6 +735,9 @@ Rectangle {
                         image: popupImage
                         labelSize: 12
                         lineWidth: 3
+                        speechShown: root.speechShown
+                        speechSpeaker: root.speechSpeaker
+                        speechText: root.speechText
                         tracker: root.faceTracker
                     }
                 }

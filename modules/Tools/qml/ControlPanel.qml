@@ -54,7 +54,21 @@ Rectangle {
     // that a later version might reorder.
     readonly property var analysisPresetLabels: ["480 - fastest", "640 - fast", "960 - default", "1280 - detailed", "1600 - finer", "1920 - maximum"]
     readonly property var analysisPresetSides: [480, 640, 960, 1280, 1600, 1920]
+
+    // The same ladder for the preview, which is a JPEG encode and a base64 of
+    // it per bound view rather than an inference chain, so it is cheap at the
+    // top of the range in a way the analysis is not.
+    readonly property var previewPresetLabels: ["480 - cheapest", "640 - small", "960 - default", "1280 - sharp", "1920 - maximum"]
+    readonly property var previewPresetSides: [480, 640, 960, 1280, 1920]
     readonly property var blendModeNames: ["Additive", "Screen", "Replace", "Outer"]
+
+    // The last utterance, while it is still worth showing over the head of the
+    // person who said it. Long enough to read a sentence twice, short enough
+    // that it is gone before it can be mistaken for the current one.
+    readonly property int spokenHoldMs: 6000
+    property bool spokenShown: false
+    property string spokenBy: ""
+    property string spokenText: ""
 
     function hearingSummary() {
         if (!root.speechRecognizer || !root.speechRecognizer.enabled)
@@ -66,6 +80,29 @@ Rectangle {
         if (root.speechRecognizer.listening)
             return "listening";
         return "starting";
+    }
+
+    // The hands of whoever the eyes are following, and what they are doing.
+    // The side is the person's own, so "left" is the hand they would raise if
+    // asked to raise their left, whichever side of the mirrored picture it is
+    // drawn on.
+    function handsSummary() {
+        if (!root.faceTracker || root.faceTracker.hands.length === 0)
+            return "none in view";
+        const parts = [];
+        for (let index = 0; index < root.faceTracker.hands.length; ++index) {
+            const hand = root.faceTracker.hands[index];
+            if (!hand.tracked) {
+                parts.push(hand.side + " estimated");
+                continue;
+            }
+            if (hand.gesture !== "") {
+                parts.push(hand.side + " " + hand.gesture);
+                continue;
+            }
+            parts.push(hand.side + " " + (hand.grip >= 0.4 ? "closed" : "open"));
+        }
+        return parts.join(", ");
     }
 
     function visionSummary() {
@@ -590,6 +627,9 @@ Rectangle {
 
         CameraFeedDisplay {
             faceTracker: root.faceTracker
+            speechShown: root.spokenShown
+            speechSpeaker: root.spokenBy
+            speechText: root.spokenText
         }
     }
 
@@ -606,6 +646,35 @@ Rectangle {
 
         SkillsDisplay {
         }
+    }
+
+    // A finished utterance, held here for a few seconds so that the preview can
+    // draw it over the head of whoever said it.
+    //
+    // It is the joined signal and not `sentenceRecognized`, because that one
+    // carries the words without the name, and the name is the whole of the
+    // question. It is held rather than bound because the same sentence said
+    // twice is two things that were said, and a binding on the transcript would
+    // show the first of them and then sit still.
+    Connections {
+        function onUtteranceReady(text, confidence, speaker, priority, authorised) {
+            if (speaker === "" || text === "")
+                return;
+            root.spokenBy = speaker;
+            root.spokenText = text;
+            root.spokenShown = true;
+            spokenHoldTimer.restart();
+        }
+
+        target: root.speechRecognizer
+    }
+
+    Timer {
+        id: spokenHoldTimer
+
+        interval: root.spokenHoldMs
+
+        onTriggered: root.spokenShown = false
     }
 
     Timer {
@@ -765,6 +834,8 @@ Rectangle {
                     // the frame property when this is inactive, and the frame
                     // is a JPEG encode and a base64 of it ten times a second.
                     Loader {
+                        id: cameraPreviewLoader
+
                         active: visionSection.expanded
                         anchors.left: parent.left
                         anchors.right: parent.right
@@ -796,6 +867,25 @@ Rectangle {
                 }
 
                 Caption {
+                    label: "Hands"
+                    value: root.handsSummary()
+                }
+
+                Caption {
+                    label: "Preview detail"
+                    value: root.faceTracker ? root.faceTracker.previewResolution : ""
+                }
+
+                Combo {
+                    id: previewCombo
+
+                    currentIndex: root.previewPresetSides.indexOf(KSettings.previewMaxSide)
+                    model: root.previewPresetLabels
+
+                    onActivated: KSettings.previewMaxSide = root.previewPresetSides[previewCombo.currentIndex]
+                }
+
+                Caption {
                     label: "Analysis detail"
                     value: root.faceTracker ? (root.faceTracker.analysisResolution + ", " + root.faceTracker.analysisMs + " ms") : ""
                 }
@@ -812,7 +902,7 @@ Rectangle {
                 Text {
                     color: root.colorDim
                     font.pixelSize: 9
-                    text: "A larger frame is what lets a face across the room, or a hand at arm's length, survive the downscale. It is never enlarged past what the camera delivers, and the cost is the milliseconds above."
+                    text: "The preview is the picture on this panel; the analysis is what the models are shown. Neither is ever enlarged past what the camera delivers, so both are capped by the camera line above. A larger analysis frame is what lets a face across the room, or a hand at arm's length, survive the downscale, and its cost is the milliseconds beside it."
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }

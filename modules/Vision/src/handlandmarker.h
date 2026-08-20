@@ -57,6 +57,28 @@ struct PalmDetection
     float score{0.0F};
 };
 
+/// A hand shape worth naming.
+///
+/// Deliberately short. Every entry here is a shape a person makes on purpose
+/// and would be surprised not to have noticed, which is the only useful test:
+/// a classifier that reports thirty poses reports twenty nine accidents. The
+/// set is also chosen to be unambiguous under reflection, because the frame
+/// Kerfur analyses is a mirror -- a thumb pointing up still points up in it,
+/// which is not true of anything that depends on which hand is which.
+enum class HandGesture {
+    None,
+    OpenPalm,
+    Fist,
+    ThumbUp,
+    ThumbDown,
+    Point,
+    Victory,
+    Ok,
+};
+
+/// The name a view shows, or an empty string for `None`.
+QString gestureName(HandGesture gesture);
+
 /// One hand, measured rather than extrapolated.
 struct HandPose
 {
@@ -66,6 +88,8 @@ struct HandPose
     double confidence{0.0};
     /// Zero for a flat open hand, one for a closed fist. See gripStrength.
     double grip{0.0};
+    /// The shape, if it is one of the named ones. See handGesture.
+    HandGesture gesture{HandGesture::None};
 };
 
 /// MediaPipe's two stage hand pipeline: palm detection, then landmarks.
@@ -150,6 +174,30 @@ QList<PalmDetection> decodePalms(const std::vector<cv::Mat> &outputs,
 /// wrist, so its ratio barely moves between an open hand and a fist and
 /// including it only dilutes the other four.
 double gripStrength(const std::array<cv::Point2f, handPointCount> &landmarks);
+
+/// How far a finger is extended, as the same wrist-relative ratio gripStrength
+/// averages: about 1.7 straight out, about 0.8 curled into the palm.
+///
+/// Exposed because the gesture rules below need the four fingers separately and
+/// the grip needs them averaged, and computing the ratio twice in two places is
+/// how the two would drift apart.
+double fingerExtension(const std::array<cv::Point2f, handPointCount> &landmarks, HandPoint tip);
+
+/// True when the thumb is held clear of the palm rather than folded across it.
+///
+/// Measured against the pinky knuckle rather than the wrist: the thumb's own
+/// distance from the wrist hardly changes when it folds, which is exactly why
+/// gripStrength excludes it, but the distance across the palm nearly doubles.
+bool thumbIsOut(const std::array<cv::Point2f, handPointCount> &landmarks);
+
+/// Which of the named shapes this hand is making, or `None`.
+///
+/// Every rule is a ratio between two lengths of the same hand, so the answer
+/// does not change with how near the person is or which way the hand is turned.
+/// The one exception is the thumb pair, which has to consult image up and down
+/// because that is what makes a thumb up mean approval and a thumb down mean
+/// the opposite; they are the only two entries that know which way is up.
+HandGesture handGesture(const std::array<cv::Point2f, handPointCount> &landmarks);
 
 } // namespace Kerfur
 
