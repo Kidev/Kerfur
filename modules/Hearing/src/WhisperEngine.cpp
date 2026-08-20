@@ -5,6 +5,7 @@
 
 #include "transcriptfilter.h"
 
+#include <ggml.h>
 #include <whisper.h>
 
 #include <QFileInfo>
@@ -13,10 +14,39 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 
 namespace {
 
 Q_LOGGING_CATEGORY(whisperLog, "kerfur.hearing.whisper")
+
+// Everything whisper.cpp and ggml print about themselves. Separate from the
+// category above so that Kerfur's own two lines per load survive a filter that
+// silences the library's forty.
+Q_LOGGING_CATEGORY(whisperInternalLog, "kerfur.hearing.whisper.internal")
+
+void forwardLibraryLog(ggml_log_level level, const char *text, void *)
+{
+    if (text == nullptr) {
+        return;
+    }
+    // The library terminates most of its lines itself and Qt adds its own.
+    const QString message{QString::fromUtf8(text).trimmed()};
+    if (message.isEmpty()) {
+        return;
+    }
+    switch (level) {
+    case GGML_LOG_LEVEL_ERROR:
+        qCWarning(whisperInternalLog).noquote() << message;
+        break;
+    case GGML_LOG_LEVEL_WARN:
+        qCWarning(whisperInternalLog).noquote() << message;
+        break;
+    default:
+        qCDebug(whisperInternalLog).noquote() << message;
+        break;
+    }
+}
 
 } // namespace
 
@@ -59,8 +89,22 @@ bool WhisperEngine::initialize(const QString &modelPath)
     return loadModel(modelPath);
 }
 
+void WhisperEngine::routeLibraryLogs()
+{
+    static std::once_flag once;
+    std::call_once(once, []() {
+        whisper_log_set(&forwardLibraryLog, nullptr);
+        ggml_log_set(&forwardLibraryLog, nullptr);
+    });
+}
+
 bool WhisperEngine::loadModel(const QString &modelPath)
 {
+    // Before the context exists, because the model card is printed while it is
+    // being built and a callback installed afterwards would arrive too late for
+    // the one load anybody wants to read.
+    routeLibraryLogs();
+
     whisper_context_params contextParams{whisper_context_default_params()};
     contextParams.use_gpu = false;
 
@@ -106,7 +150,7 @@ bool WhisperEngine::loadModel(const QString &modelPath)
     return true;
 }
 
-bool WhisperEngine::submit(std::vector<float> samples)
+bool WhisperEngine::submit(std::vector<float> samples, quint64 sequence)
 {
     if (!m_initialized || samples.size() < minimumSamples) {
         return true;
@@ -122,7 +166,7 @@ bool WhisperEngine::submit(std::vector<float> samples)
             m_queue.pop_front();
             dropped = true;
         }
-        m_queue.push_back(std::move(samples));
+        m_queue.push_back(Job{std::move(samples), sequence});
     }
     m_queueSignal.notify_one();
 
@@ -147,24 +191,24 @@ int WhisperEngine::pending() const
 void WhisperEngine::workerLoop()
 {
     for (;;) {
-        std::vector<float> utterance;
+        Job job;
         {
             std::unique_lock<std::mutex> lock{m_queueMutex};
             m_queueSignal.wait(lock, [this]() { return m_stopping || !m_queue.empty(); });
             if (m_stopping) {
                 return;
             }
-            utterance = std::move(m_queue.front());
+            job = std::move(m_queue.front());
             m_queue.pop_front();
         }
 
         emit processingStarted();
-        transcribe(utterance);
+        transcribe(job.samples, job.sequence);
         emit processingFinished();
     }
 }
 
-void WhisperEngine::transcribe(const std::vector<float> &samples)
+void WhisperEngine::transcribe(const std::vector<float> &samples, quint64 sequence)
 {
     if (m_context == nullptr || samples.empty()) {
         return;
@@ -219,7 +263,7 @@ void WhisperEngine::transcribe(const std::vector<float> &samples)
                                    : 0.0F};
         qCInfo(whisperLog) << "heard" << text << "at" << confidence;
 
-        emit transcriptionReady(text, confidence);
+        emit transcriptionReady(text, confidence, sequence);
         if (Kerfur::containsWakeWord(text)) {
             emit keywordDetected(QStringLiteral("kerfur"));
         }

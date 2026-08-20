@@ -315,6 +315,33 @@ Rectangle {
                     return root.speechRecognizer.speaker + " (" + Math.round(root.speechRecognizer.speakerConfidence * 100) + "%)";
                 }
             }
+
+            // Whether this voice may give orders. Everybody is transcribed;
+            // this is the one bit that decides whether what they said acts.
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                border.color: "#555"
+                border.width: 1
+                color: root.speechRecognizer && root.speechRecognizer.commandAuthority ? "#3a4a2a" : "#3a3a3a"
+                height: authorityText.height + 4
+                radius: 3
+                width: authorityText.width + 8
+
+                Text {
+                    id: authorityText
+
+                    anchors.centerIn: parent
+                    color: root.speechRecognizer && root.speechRecognizer.commandAuthority ? "#7cff5a" : "#888"
+                    font.pixelSize: 9
+                    text: {
+                        if (!root.speechRecognizer)
+                            return "";
+                        if (root.speechRecognizer.speakerPriority >= 1000000)
+                            return "unranked - heard only";
+                        return "rank " + root.speechRecognizer.speakerPriority + (root.speechRecognizer.commandAuthority ? " - may command" : " - heard only");
+                    }
+                }
+            }
         }
 
         // The last few utterances, newest first. A list rather than one line,

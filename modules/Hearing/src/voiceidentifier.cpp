@@ -64,7 +64,11 @@ void VoiceIdentifier::initialize()
         return;
     }
 
-    m_gallery.enrol(m_embedder, gallery, cachePath());
+    m_registry = IdentityRegistry::load(gallery);
+    if (!m_registry.problem().isEmpty()) {
+        qCInfo(voiceIdLog) << m_registry.problem();
+    }
+    m_gallery.enrol(m_embedder, m_registry.voiceEntries(), cachePath());
     qCInfo(voiceIdLog) << "voices from" << gallery << m_gallery.names();
     emit ready(true, m_gallery.names(), QString{});
 }
@@ -72,7 +76,7 @@ void VoiceIdentifier::initialize()
 void VoiceIdentifier::identify(const std::vector<float> &samples, quint64 sequence)
 {
     if (!m_embedder.isLoaded() || m_gallery.isEmpty()) {
-        emit identified(QString{}, -1.0, sequence);
+        emit identified(QString{}, -1.0, IdentityRegistry::unknownPriority, sequence);
         return;
     }
 
@@ -81,15 +85,17 @@ void VoiceIdentifier::identify(const std::vector<float> &samples, quint64 sequen
         // Too short to say anything about. Reported as an unknown speaker with
         // no similarity rather than as a mismatch, because the two are
         // different facts and only one of them is about the person.
-        emit identified(QString{}, -1.0, sequence);
+        emit identified(QString{}, -1.0, IdentityRegistry::unknownPriority, sequence);
         return;
     }
 
     double similarity{-1.0};
     const QString name{m_gallery.match(embedding, similarity)};
+    const int priority{m_registry.priorityOf(name)};
     qCDebug(voiceIdLog) << "utterance" << sequence << "matched"
-                        << (name.isEmpty() ? QStringLiteral("nobody") : name) << "at" << similarity;
-    emit identified(name, similarity, sequence);
+                        << (name.isEmpty() ? QStringLiteral("nobody") : name) << "at" << similarity
+                        << "rank" << priority;
+    emit identified(name, similarity, priority, sequence);
 }
 
 } // namespace Kerfur

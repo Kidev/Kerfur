@@ -65,6 +65,7 @@ qt_add_qml_module(
                  Tools
                  Display
                  Hearing
+                 Skills
     RESOURCES ${RESOURCES_FILE}
 )
 
@@ -83,6 +84,7 @@ target_link_libraries(
            Tools
            Display
            Hearing
+           Skills
 )
 
 # WebAssembly has no filesystem to provision models into, so they are baked

@@ -20,6 +20,8 @@ set(
     src/posedetector.cpp
     src/objectdetector.h
     src/objectdetector.cpp
+    src/handlandmarker.h
+    src/handlandmarker.cpp
     src/facepipeline.h
     src/facepipeline.cpp
     src/identitystore.h
@@ -79,9 +81,13 @@ find_package(
                objdetect
 )
 
+# Qt6::Gui is PUBLIC because faceanalysisworker.h is: it sits in the PUBLIC
+# include directory below and names QImage in its interface, so anything that
+# includes it needs Gui too. It used to arrive by accident through Multimedia,
+# which is PRIVATE, so the module compiled and its consumers did not.
 target_link_libraries(
     ${VISION_MODULE}
-    PUBLIC Core
+    PUBLIC Core Qt6::Gui
     PRIVATE ${OpenCV_LIBS} Qt6::Multimedia
 )
 

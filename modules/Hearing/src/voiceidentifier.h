@@ -4,6 +4,7 @@
 #ifndef KERFUR_VOICEIDENTIFIER_H
 #define KERFUR_VOICEIDENTIFIER_H
 
+#include "identityregistry.h"
 #include "speakerembedder.h"
 #include "voicegallery.h"
 
@@ -40,11 +41,17 @@ public slots:
 
 signals:
     void ready(bool loaded, const QStringList &voices, const QString &problem);
-    void identified(const QString &name, double similarity, quint64 sequence);
+    /// `priority` is the rank `identities/ids.json` gives this voice, zero
+    /// being the top and `IdentityRegistry::unknownPriority` a stranger. It
+    /// comes from here rather than being looked up by the receiver because the
+    /// manifest is already open on this side, and because a rank that travels
+    /// with the name can never disagree with it.
+    void identified(const QString &name, double similarity, int priority, quint64 sequence);
 
 private:
     SpeakerEmbedder m_embedder;
     VoiceGallery m_gallery;
+    IdentityRegistry m_registry;
     bool m_initialized{false};
 };
 
