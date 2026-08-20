@@ -118,6 +118,52 @@ Rectangle {
             return out;
         }
 
+        // The hand bones and their joints, flattened exactly the way the body's
+        // are and for the same reason: twenty-one segments per hand bound one
+        // delegate at a time is twenty-one bindings that always change
+        // together, so they are built once per frame instead.
+        readonly property var handBones: {
+            const edges = tracker ? tracker.handEdges : [];
+            const out = [];
+            for (let h = 0; h < overlay.hands.length; ++h) {
+                const points = overlay.hands[h].landmarks;
+                if (!points || points.length === 0)
+                    continue;
+                for (let e = 0; e < edges.length; ++e) {
+                    const a = points[edges[e][0]];
+                    const b = points[edges[e][1]];
+                    if (!a || !b)
+                        continue;
+                    out.push({
+                        "ax": a.x,
+                        "ay": a.y,
+                        "bx": b.x,
+                        "by": b.y
+                    });
+                }
+            }
+            return out;
+        }
+
+        // The five fingertips and the wrist, drawn a little larger than the
+        // knuckles. They are the points a person actually reads a hand by, and
+        // at preview size a uniform constellation is just a smudge.
+        readonly property var handJoints: {
+            const anchors = [0, 4, 8, 12, 16, 20];
+            const out = [];
+            for (let h = 0; h < overlay.hands.length; ++h) {
+                const points = overlay.hands[h].landmarks;
+                for (let k = 0; k < points.length; ++k) {
+                    out.push({
+                        "x": points[k].x,
+                        "y": points[k].y,
+                        "anchor": anchors.indexOf(k) >= 0
+                    });
+                }
+            }
+            return out;
+        }
+
         readonly property var held: {
             if (!tracker || !tracker.people)
                 return [];
@@ -140,9 +186,9 @@ Rectangle {
         anchors.fill: image
         visible: live
 
-        // Under the object boxes and over the bones: a hand is a region of
-        // interest, not a detection, and it should not draw the eye away from
-        // the thing it found.
+        // The bottom layer, under the skeletons and under the object boxes: a
+        // hand box is a region of interest rather than a detection, and it
+        // should not draw the eye away from the thing that was found in it.
         Repeater {
             model: overlay.hands
 
@@ -176,30 +222,6 @@ Rectangle {
                         ? handBox.modelData.side + "  " + (handBox.modelData.grip >= 0.4 ? "closed" : "open")
                         : handBox.modelData.side
                     visible: overlay.showLabels
-                }
-            }
-        }
-
-        // The twenty-one points, when they exist. Drawn over the hand box and
-        // under the object boxes, small and unlabelled: at this size the shape
-        // of the constellation is the readable thing, not any single point.
-        Repeater {
-            model: overlay.hands
-
-            delegate: Repeater {
-                required property var modelData
-
-                model: modelData.landmarks
-
-                delegate: Rectangle {
-                    required property var modelData
-
-                    color: "#e0f7ff"
-                    height: 3
-                    radius: 1.5
-                    width: 3
-                    x: overlay.px(modelData.x) - 1.5
-                    y: overlay.py(modelData.y) - 1.5
                 }
             }
         }
@@ -277,6 +299,51 @@ Rectangle {
                 height: overlay.dotSize
                 radius: height / 2
                 width: overlay.dotSize
+                x: overlay.px(modelData.x) - width / 2
+                y: overlay.py(modelData.y) - height / 2
+            }
+        }
+
+        // Over the arm it hangs off, because the hand is the fine structure and
+        // the forearm bone runs straight through it. Only ever present for a
+        // hand the landmark model measured: the forearm estimate has a box and
+        // nothing inside it, which is the visible difference between the two.
+        Repeater {
+            model: overlay.handBones
+
+            delegate: Rectangle {
+                required property var modelData
+
+                readonly property real x1: overlay.px(modelData.ax)
+                readonly property real y1: overlay.py(modelData.ay)
+                readonly property real x2: overlay.px(modelData.bx)
+                readonly property real y2: overlay.py(modelData.by)
+
+                antialiasing: true
+                color: "#40c4ff"
+                height: Math.max(1, overlay.lineWidth - 1)
+                opacity: 0.9
+                radius: height / 2
+                rotation: Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI
+                transformOrigin: Item.Left
+                width: Math.hypot(x2 - x1, y2 - y1)
+                x: x1
+                y: y1 - height / 2
+            }
+        }
+
+        Repeater {
+            model: overlay.handJoints
+
+            delegate: Rectangle {
+                required property var modelData
+
+                readonly property real side: modelData.anchor ? Math.max(3, overlay.dotSize - 1) : Math.max(2, overlay.dotSize - 3)
+
+                color: modelData.anchor ? "#ffffff" : "#b3e5fc"
+                height: side
+                radius: height / 2
+                width: side
                 x: overlay.px(modelData.x) - width / 2
                 y: overlay.py(modelData.y) - height / 2
             }
@@ -381,9 +448,9 @@ Rectangle {
         }
     }
 
-    border.color: "#444"
+    border.color: "#3c414a"
     border.width: 1
-    color: "#1a1a1a"
+    color: "#15171a"
 
     Image {
         id: cameraImage
