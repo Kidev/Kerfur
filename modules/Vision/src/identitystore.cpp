@@ -114,6 +114,10 @@ void IdentityStore::enrol(FacePipeline &pipeline,
     loadFrom(cachePath);
 
     if (entries.isEmpty()) {
+        // The cache may still hold somebody who has since been removed from
+        // the manifest. Matching against them would recognise a person nobody
+        // declares any more.
+        m_entries.clear();
         qCInfo(identityLog) << "no faces declared; gallery not enrolled";
         return;
     }

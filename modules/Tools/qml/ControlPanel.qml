@@ -5,6 +5,8 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
+import Core
 import Vision
 import Hearing
 import Skills
@@ -17,7 +19,7 @@ import qml 1.0
 /// preview, the numbers it produces and the knobs that change them all live in
 /// the same section, because reading a knob's effect anywhere else is guesswork.
 ///
-/// Every section is closed until asked for. There are five of them and forty
+/// Every section is closed until asked for. There are six of them and forty
 /// odd controls, and a wall of sliders is a thing to scroll past rather than a
 /// thing to read. The header of a closed section carries the one line that says
 /// whether the thing behind it is working, which is what makes the closed state
@@ -70,6 +72,12 @@ Rectangle {
     readonly property var updateRateValues: [3, 6, 10, 15]
     readonly property var blendModeNames: ["Additive", "Screen", "Replace", "Outer"]
 
+    // Rank for somebody added from the panel. Zero is the only rank that may
+    // give commands, so it says so; the default is two, which may not.
+    readonly property var rankLabels: ["0 - may command", "1", "2 - default", "3", "4", "5"]
+    readonly property var rankValues: [0, 1, 2, 3, 4, 5]
+    readonly property int defaultRankIndex: 2
+
     // The last utterance, while it is still worth showing over the head of the
     // person who said it. Long enough to read a sentence twice, short enough
     // that it is gone before it can be mistaken for the current one.
@@ -88,6 +96,33 @@ Rectangle {
         if (root.speechRecognizer.listening)
             return "listening";
         return "starting";
+    }
+
+    function peopleSummary() {
+        if (!Identities.ready)
+            return "loading";
+        const known = root.faceTracker ? root.faceTracker.roster.length : 0;
+        return known + " known, " + Identities.people.length + " added here";
+    }
+
+    function enrolledHalves(person) {
+        if (person.hasFace && person.hasVoice)
+            return "face and voice";
+        return person.hasFace ? "face only" : (person.hasVoice ? "voice only" : "no files");
+    }
+
+    // The browser has no file system for a QML dialog to show, so on the web
+    // build the browser's own picker is used and hands the bytes over.
+    function browseIdentityFile(kind) {
+        if (Identities.browserFiles) {
+            if (kind === "face")
+                Identities.browseFace();
+            else
+                Identities.browseVoice();
+            return;
+        }
+        identityFileDialog.kind = kind;
+        identityFileDialog.open();
     }
 
     // The hands of whoever the eyes are following, and what they are doing.
@@ -553,6 +588,7 @@ Rectangle {
         border.width: 1
         color: mouse.pressed ? "#3a3f47" : root.colorRaised
         height: 20
+        opacity: button.enabled ? 1 : 0.4
         radius: 3
         width: labelText.width + 16
 
@@ -572,6 +608,24 @@ Rectangle {
             hoverEnabled: true
 
             onClicked: button.clicked()
+        }
+    }
+
+    component Field: TextField {
+        id: field
+
+        color: root.colorText
+        font.pixelSize: 10
+        implicitHeight: 26
+        leftPadding: 8
+        placeholderTextColor: root.colorDim
+        width: parent ? parent.width : 0
+
+        background: Rectangle {
+            border.color: field.activeFocus ? root.colorAccent : root.colorLine
+            border.width: 1
+            color: root.colorRaised
+            radius: 4
         }
     }
 
@@ -638,6 +692,22 @@ Rectangle {
             speechShown: root.spokenShown
             speechSpeaker: root.spokenBy
             speechText: root.spokenText
+        }
+    }
+
+    FileDialog {
+        id: identityFileDialog
+
+        property string kind: "face"
+
+        nameFilters: identityFileDialog.kind === "face" ? ["Pictures (*.png *.jpg *.jpeg *.bmp)"] : ["Recordings (*.wav *.mp3 *.flac *.ogg *.m4a)"]
+        title: identityFileDialog.kind === "face" ? "Choose a picture" : "Choose a recording"
+
+        onAccepted: {
+            if (identityFileDialog.kind === "face")
+                Identities.stageFaceFile(identityFileDialog.selectedFile);
+            else
+                Identities.stageVoiceFile(identityFileDialog.selectedFile);
         }
     }
 
@@ -1016,6 +1086,166 @@ Rectangle {
                     active: hearingSection.expanded
                     sourceComponent: speechDisplayComponent
                     width: parent.width
+                }
+            }
+
+            Section {
+                id: peopleSection
+
+                summary: root.peopleSummary()
+                summaryColor: Identities.problem !== "" ? root.colorWarn : root.colorDim
+                title: "People"
+
+                Repeater {
+                    model: Identities.people
+
+                    delegate: Item {
+                        id: personRow
+
+                        required property var modelData
+
+                        height: 20
+                        width: parent ? parent.width : 0
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: removeButton.left
+                            anchors.rightMargin: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.colorText
+                            elide: Text.ElideRight
+                            font.pixelSize: 10
+                            text: personRow.modelData.name + " (" + personRow.modelData.standing + "): " + root.enrolledHalves(personRow.modelData)
+                        }
+
+                        SmallButton {
+                            id: removeButton
+
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            label: "Remove"
+
+                            onClicked: Identities.remove(personRow.modelData.id)
+                        }
+                    }
+                }
+
+                Text {
+                    color: root.colorDim
+                    font.pixelSize: 9
+                    text: "Nobody has been added here yet."
+                    visible: Identities.people.length === 0
+                }
+
+                Caption {
+                    label: "Add or update someone"
+                    value: Identities.ready ? "" : "loading"
+                }
+
+                Field {
+                    id: personName
+
+                    maximumLength: 64
+                    placeholderText: "Name"
+                }
+
+                Field {
+                    id: personTitle
+
+                    maximumLength: 64
+                    placeholderText: "Title: owner, trusted, ..."
+                }
+
+                Combo {
+                    id: personRank
+
+                    currentIndex: root.defaultRankIndex
+                    model: root.rankLabels
+                }
+
+                Caption {
+                    label: "Face"
+                    value: Identities.stagedFace !== "" ? Identities.stagedFace : "none"
+                }
+
+                Row {
+                    spacing: 6
+
+                    SmallButton {
+                        enabled: root.faceTracker !== null && root.faceTracker.enabled
+                        label: "Take from camera"
+
+                        onClicked: Identities.stageFaceImage(root.faceTracker.cameraFrame, "camera")
+                    }
+
+                    SmallButton {
+                        label: "Choose a picture"
+
+                        onClicked: root.browseIdentityFile("face")
+                    }
+                }
+
+                Caption {
+                    label: "Voice"
+                    value: Identities.stagedVoice !== "" ? Identities.stagedVoice : "none"
+                }
+
+                Row {
+                    spacing: 6
+
+                    SmallButton {
+                        enabled: root.speechRecognizer !== null && root.speechRecognizer.lastUtteranceSeconds >= root.speechRecognizer.minimumVoiceSeconds
+                        label: root.speechRecognizer ? "Use last sentence (" + root.speechRecognizer.lastUtteranceSeconds.toFixed(1) + " s)" : "Use last sentence"
+
+                        onClicked: root.speechRecognizer.stageLastUtterance()
+                    }
+
+                    SmallButton {
+                        label: "Choose a recording"
+
+                        onClicked: root.browseIdentityFile("voice")
+                    }
+                }
+
+                Row {
+                    spacing: 6
+
+                    SmallButton {
+                        enabled: Identities.ready && personName.text.trim() !== ""
+                        label: "Save"
+
+                        onClicked: {
+                            if (Identities.enrol(personName.text, personTitle.text, root.rankValues[personRank.currentIndex])) {
+                                personName.text = "";
+                                personTitle.text = "";
+                                personRank.currentIndex = root.defaultRankIndex;
+                            }
+                        }
+                    }
+
+                    SmallButton {
+                        enabled: Identities.stagedFace !== "" || Identities.stagedVoice !== ""
+                        label: "Discard"
+
+                        onClicked: Identities.clearStaged()
+                    }
+                }
+
+                Text {
+                    color: root.colorBad
+                    font.pixelSize: 9
+                    text: Identities.problem
+                    visible: Identities.problem !== ""
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    color: root.colorDim
+                    font.pixelSize: 9
+                    text: (Identities.browserFiles ? "Kept in this browser's storage." : "Kept in " + Identities.directory + ", outside the source tree.") + " Saving a name that is already here replaces whatever was staged for it and keeps the rest. A voice needs a sentence of at least " + (root.speechRecognizer ? root.speechRecognizer.minimumVoiceSeconds : 2) + " seconds."
+                    width: parent.width
+                    wrapMode: Text.WordWrap
                 }
             }
 

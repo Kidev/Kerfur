@@ -57,12 +57,13 @@ class FaceTracker : public QObject
 
     /// Every face this pass, newest first by area. Each entry is a map of
     /// `box`, `landmarks`, `identity`, `identityConfidence`, `emotion`,
-    /// `emotionConfidence`, `yaw`, `pitch`, `roll`, `gaze` and `known`.
+    /// `emotionConfidence`, `yaw`, `pitch`, `roll`, `gaze`, `known` and
+    /// `title`.
     Q_PROPERTY(QVariantList faces READ faces NOTIFY facesChanged)
 
     /// Every person the pose stage found: `box`, seventeen `keypoints` of `x`,
     /// `y` and `score`, and -- for a person whose face the gallery recognised
-    /// -- `identity`, `priority`, `hands` and `held`.
+    /// `identity`, `priority`, `title`, `hands` and `held`.
     Q_PROPERTY(QVariantList people READ people NOTIFY peopleChanged)
 
     /// The bone list the keypoints are drawn with, as index pairs. Published

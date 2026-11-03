@@ -34,6 +34,11 @@ public slots:
     /// including the one where nothing loaded.
     void initialize();
 
+    /// Reads the galleries again and re-enrols, then emits `ready` with the
+    /// new list. Connected to `IdentityLibrary::galleryChanged`; a recording
+    /// whose file is unchanged is answered from the cache.
+    void reloadGallery();
+
     /// One complete utterance of 16 kHz mono samples. Utterances shorter than
     /// the embedder's minimum are answered with an empty name rather than
     /// dropped, so that a caller waiting on a result is never left waiting.
@@ -42,13 +47,21 @@ public slots:
 signals:
     void ready(bool loaded, const QStringList &voices, const QString &problem);
     /// `priority` is the rank `identities/ids.json` gives this voice, zero
-    /// being the top and `IdentityRegistry::unknownPriority` a stranger. It
-    /// comes from here rather than being looked up by the receiver because the
-    /// manifest is already open on this side, and because a rank that travels
-    /// with the name can never disagree with it.
-    void identified(const QString &name, double similarity, int priority, quint64 sequence);
+    /// being the top and `IdentityRegistry::unknownPriority` a stranger, and
+    /// `title` is what the same manifest calls them -- "owner", "trusted" --
+    /// or the rank spelled out when it calls them nothing. Both come from here
+    /// rather than being looked up by the receiver because the manifest is
+    /// already open on this side, and because a standing that travels with the
+    /// name can never disagree with it.
+    void identified(const QString &name,
+                    double similarity,
+                    int priority,
+                    const QString &title,
+                    quint64 sequence);
 
 private:
+    void enrolGallery();
+
     SpeakerEmbedder m_embedder;
     VoiceGallery m_gallery;
     IdentityRegistry m_registry;

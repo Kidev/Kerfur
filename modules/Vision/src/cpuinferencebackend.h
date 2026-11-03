@@ -17,6 +17,7 @@
 #include "perceptiontypes.h"
 
 #include <QString>
+#include <QStringList>
 
 namespace Kerfur {
 
@@ -37,8 +38,13 @@ public:
     /// the pose stage is missing, because nothing else in the graph has an
     /// input without it.
     bool initialize(const ModelCatalog &catalog,
-                    const QString &galleryDirectory,
+                    const QStringList &galleries,
                     const QString &identityCachePath);
+
+    /// Enrols every face the galleries declare, merged as
+    /// `IdentityRegistry::load` merges them. Called again whenever the
+    /// galleries change; an unchanged file is answered from the cache.
+    void enrolGallery(const QStringList &galleries, const QString &identityCachePath);
 
     bool isReady() const { return m_pose.isLoaded(); }
 

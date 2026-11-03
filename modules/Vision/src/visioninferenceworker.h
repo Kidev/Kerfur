@@ -42,6 +42,10 @@ public slots:
 
     void setOrientationOverride(int degrees);
 
+    /// Re-enrols from the galleries. Connected to
+    /// `IdentityLibrary::galleryChanged`.
+    void reloadGallery();
+
 signals:
     void readyChanged(bool ready);
 

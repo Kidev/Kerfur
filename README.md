@@ -74,7 +74,8 @@ The picture is held back until the pass measured on it comes home, so the boxes 
         "name": "kidev",
         "face": "faces/kidev.png",
         "voice": "voices/kidev.mp3",
-        "priority": 0
+        "priority": 0,
+        "title": "owner"
     }
 }
 ```
@@ -84,12 +85,23 @@ Paths are relative to the manifest, so the whole directory can be copied to a Pi
 - `face` is any reasonably lit photograph with one face in it
 - `voice` is at least a few seconds of them speaking alone
 - `priority` is rank, zero being the top
+- `title` is what the interface calls them: "owner", "trusted", anything you like
 
 Either half on its own works: a person with only a photograph is recognised by sight and not by voice. Both are optional too -- omit them and the conventional locations, `faces/<id>.png` and `voices/<id>.mp3`, are used. A gallery with no manifest at all still works, by file stem, with everybody unranked.
 
+**Rank decides, and the title is what you read.** Nothing on screen says "rank 2" any more; it says "trusted", because a number under somebody's chin is the consequence of a decision rather than the decision itself. The rank still does all the deciding, and the panel still says out loud what it decided -- "owner, may command". A manifest that declares no title falls back to spelling the rank out, so an older gallery loses nothing.
+
 **Rank decides two things, and only two.** When several people are in the room, Kerfur's eyes follow the highest ranked one. And an utterance may only act on the world if the voice it came from is rank 0. Everybody is heard, transcribed, identified and shown; when several people speak at once the higher ranked one is answered first. A command from anybody else is reported as refused rather than silently dropped, because a command that was declined and one that was never heard look identical otherwise.
 
-The directory is deliberately not committed: a face and a voice are personal data, and `.gitignore` keeps them out of the history. Enrolment happens at startup and is cached against a hash of each file, so adding somebody re-reads one file rather than all of them. The directory is looked for next to the executable, one level above it, under the working directory and in the application data directory, or wherever `Paths/identitiesPath` says.
+The directory is deliberately not committed: a face and a voice are personal data, and `.gitignore` keeps them out of the history. Enrolment happens at startup and is cached against a hash of each file, so adding somebody re-reads one file rather than all of them. The directory is looked for wherever `Paths/identitiesPath` says, next to the executable, one level above it, and under the working directory.
+
+#### Adding people while Kerfur runs
+
+The *People* section of the control panel enrols somebody without touching the source tree. Stage a face (*Take from camera*, or a picture file) and a voice (*Use last sentence*, or a recording), give a name, a title and a rank, and press *Save*. Saving a name that is already there updates that person: whatever was staged replaces their file, and the rest stays.
+
+People added this way live in `identities/` under the application data directory (`~/.local/share/kidev/Kerfur/identities` on Linux), in a gallery of the same shape as the one above. On the web build that directory is kept in the browser's IndexedDB, so it survives a reload and never leaves the browser. Both galleries are read together, the panel's last: a record there overrides a shipped record with the same id. Both recognisers re-enrol as soon as a person is saved or removed, with no restart.
+
+The panel writes its own `ids.json` and refuses to rewrite one edited by hand into the list or `identities` form. Pictures are re-encoded as PNG at most 1920 pixels on the longer side, which also drops any metadata the original carried. A sentence used as a voice is stored as 16 bit WAV and has to last at least two seconds.
 
 A voice needs about two seconds of continuous speech before Kerfur will put a name to it. Below that the measurement says more about the room than about the speaker, so it says nothing instead.
 
@@ -107,6 +119,8 @@ From the twenty-one points comes a *grip*: zero for a flat open hand, one for a 
 For hands that pass, the object detector is shown a square crop taken around the hand rather than the whole frame. It has one fixed input side, so a mug thirty pixels across in a 960 wide frame is thirteen pixels by the time the network sees it -- enough to notice that something is there and nowhere near enough to say what it is. In a crop the same mug arrives at a hundred and fifty, which is the difference between "an object" and "a cup". An object is then reported as *held* only when it actually overlaps the hand; something lying on the desk in front of somebody is a thing in the room, not a thing in their hand. Grip is the cheap filter and the overlap is the arbiter, because grip can tell a fist from an open palm but cannot tell a fist from a fist around a mug.
 
 A name has to be seen twice in three looks before it is published. One pass's best class over a small crop flickers between the two nearest things it could be -- a cup and a bowl, a phone and a remote -- and the flicker is worse than silence, because this string is what a skill is written against and what Kerfur says out loud.
+
+The same twenty-one points are also counted: how many digits are held out, from zero to five, thumb included, so a hand held up to say three reads as three and a thumbs up reads as one. The count is shown for every measured hand -- `left 3/5` -- and it is the one reading here that never abstains. It is only ever displayed, never acted on, so each digit is decided at a single line instead of the two-band test below, and a hand between shapes still comes back as a number rather than as nothing.
 
 The same twenty-one points are read for a *gesture*: an open palm, a fist, a thumb up or down, a point, a victory, or a thumb and finger ring. Every rule is a ratio between two lengths of the same hand, so the answer does not change with how near the person is or which way the hand is turned, and the set is chosen to survive reflection -- a thumb pointing up still points up in a mirror, which is not true of anything that depends on which hand is which. A hand caught between two shapes is reported as no shape at all rather than as the nearer of the two: the gesture is the sort of thing that gets acted on, and a wrong answer costs more there than no answer.
 

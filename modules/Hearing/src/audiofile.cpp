@@ -3,10 +3,13 @@
 
 #include "audiofile.h"
 
+#include "wavfile.h"
+
 #include <QAudioBuffer>
 #include <QAudioDecoder>
 #include <QAudioFormat>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QLoggingCategory>
 #include <QTimer>
@@ -91,8 +94,24 @@ std::vector<float> decodeMonoAudio(const QString &path, int sampleRate, QString 
         return std::vector<float>{};
     };
 
-    if (!QFileInfo::exists(path)) {
+    const QFileInfo info{path};
+    if (!info.exists()) {
         return fail(QStringLiteral("no such file"));
+    }
+
+    // Plain PCM is read directly. It is what the application records itself,
+    // and it then reads back on a platform whose multimedia backend has no
+    // decoder, and without a nested event loop.
+    if (info.suffix().compare(QStringLiteral("wav"), Qt::CaseInsensitive) == 0) {
+        QFile file{path};
+        if (file.open(QIODevice::ReadOnly)) {
+            std::vector<float> pcm;
+            int pcmRate{0};
+            if (WavFile::decodeMono(file.readAll(), pcm, pcmRate) && !pcm.empty()) {
+                qCDebug(audioFileLog) << path << "read" << pcm.size() << "frames at" << pcmRate;
+                return resample(pcm, pcmRate, sampleRate);
+            }
+        }
     }
 
     QAudioDecoder decoder;

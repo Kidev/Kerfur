@@ -24,6 +24,8 @@ kerfur_add_test(modeldirectory Core)
 kerfur_add_test(settingspath Core)
 kerfur_add_test(identitydirectory Core)
 kerfur_add_test(identityregistry Core)
+kerfur_add_test(identitylibrary Core)
+kerfur_add_test(wavfile Core)
 
 # Vision and Hearing both keep OpenCV private, so neither its headers nor its
 # libraries reach a consumer. These suites build cv::Mat inputs of their own, so

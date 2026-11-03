@@ -81,6 +81,12 @@ struct AnalysedFace
     /// it is what decides whose face the rendered eyes follow when more than
     /// one person is in the room.
     int priority{IdentityRegistry::unknownPriority};
+
+    /// What the manifest calls this person -- "owner", "trusted" -- or the rank
+    /// spelled out when it calls them nothing. The rank above is what sorts;
+    /// this is what an overlay writes, because a number under somebody's chin
+    /// says who is first without saying what being first means.
+    QString title;
 };
 
 /// One hand.
@@ -129,6 +135,17 @@ struct AnalysedHand
     /// landmarks are unambiguous about which. Empty otherwise, and empty for
     /// every untracked hand: a forearm direction says nothing about fingers.
     QString gesture;
+    /// How many digits are held out, thumb included, from zero to five. Minus
+    /// one when this hand was never measured, which is not the same as zero:
+    /// a closed fist and a hand nobody looked at both have no fingers showing
+    /// and only one of them is an observation.
+    ///
+    /// Separate from `gesture` on purpose. A gesture is refused whenever the
+    /// hand is between two shapes, because it is about to be acted on; this is
+    /// only ever read, so it always answers, and a hand held up to say "three"
+    /// is counted whether or not three fingers is a shape with a name.
+    int fingers{-1};
+
     /// True when the landmark model produced this hand, false when it is the
     /// forearm extrapolation.
     bool tracked{false};
@@ -166,6 +183,8 @@ struct AnalysedPerson
     QString identity;
     double identityConfidence{0.0};
     int priority{IdentityRegistry::unknownPriority};
+    /// As on AnalysedFace, and copied down from the same face.
+    QString title;
     bool known{false};
 
     AnalysedHand leftHand;
