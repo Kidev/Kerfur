@@ -29,6 +29,16 @@ struct IdentityRecord
     /// What the overlay writes under the box. Defaults to the id.
     QString name;
 
+    /// What this person is to Kerfur -- "owner", "trusted" -- as the manifest
+    /// says it. Empty when the record does not declare one.
+    ///
+    /// This is what the interface shows, and rank is what the code decides
+    /// with. They are two readings of the same standing: a rank is an ordering
+    /// and orders sort, but "rank 2" tells a person watching the overlay
+    /// nothing about what rank 2 is allowed to do, and the manifest's author
+    /// already knew the word for it.
+    QString title;
+
     /// Absolute, resolved against the directory holding the manifest. Empty
     /// when this person has no enrolled face, which is allowed: a voice alone
     /// is still a person.
@@ -68,6 +78,12 @@ public:
     /// available reactions.
     static IdentityRegistry load(const QString &directory);
 
+    /// Every directory in turn, merged by id. A later directory replaces an
+    /// earlier one's record of the same id rather than adding a second person,
+    /// which is how a record enrolled at run time overrides a shipped one.
+    /// `directory()` is the first of them; problems from all are joined.
+    static IdentityRegistry load(const QStringList &directories);
+
     QList<IdentityRecord> records() const { return m_records; }
     bool isEmpty() const { return m_records.isEmpty(); }
     qsizetype size() const { return m_records.size(); }
@@ -97,6 +113,17 @@ public:
     /// that means "no match". Never fails, because every consumer of a rank
     /// needs an answer for a stranger too.
     int priorityOf(const QString &nameOrId) const;
+
+    /// The declared title, or an empty string for a stranger and for a record
+    /// that carries no title. Empty is a legitimate answer and every caller
+    /// has to have something to say for it, so this does not invent a word.
+    QString titleOf(const QString &nameOrId) const;
+
+    /// The title if there is one, otherwise the rank spelled out. For the
+    /// places that have to print something for everybody: an older manifest
+    /// declares no titles at all, and refusing to say anything about those
+    /// people would be a regression dressed up as a feature.
+    QString standingOf(const QString &nameOrId) const;
 
     /// The ids, sorted.
     QStringList names() const;

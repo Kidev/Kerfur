@@ -90,6 +90,8 @@ struct HandPose
     double grip{0.0};
     /// The shape, if it is one of the named ones. See handGesture.
     HandGesture gesture{HandGesture::None};
+    /// Zero to five digits held out. See extendedFingerCount.
+    int fingers{0};
 };
 
 /// MediaPipe's two stage hand pipeline: palm detection, then landmarks.
@@ -195,6 +197,21 @@ double fingerExtension(const std::array<cv::Point2f, handPointCount> &landmarks,
 /// distance from the wrist hardly changes when it folds, which is exactly why
 /// gripStrength excludes it, but the distance across the palm nearly doubles.
 bool thumbIsOut(const std::array<cv::Point2f, handPointCount> &landmarks);
+
+/// How many digits are held out, thumb included, from zero to five.
+///
+/// The counting reading of a hand, and the one thing here that always answers.
+/// handGesture refuses a hand whose fingers are between the two bands, because
+/// naming a shape wrongly means acting wrongly; this is only ever displayed, so
+/// each digit is decided at a single line drawn halfway between those bands and
+/// a hand held up to say three reads as three whether or not three is a shape
+/// with a name.
+///
+/// The thumb is judged by thumbIsOut rather than by the wrist ratio the four
+/// fingers use, for the reason gripStrength gives: it folds across the palm
+/// instead of towards the wrist, so its own ratio barely moves. That is what
+/// makes a thumbs up one and a fist zero.
+int extendedFingerCount(const std::array<cv::Point2f, handPointCount> &landmarks);
 
 /// Which of the named shapes this hand is making, or `None`.
 ///

@@ -128,6 +128,9 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
     loadFrom(cachePath);
 
     if (entries.isEmpty()) {
+        // The cache may still hold a voice that has since been removed from
+        // the manifest, and nobody declares it any more.
+        m_entries.clear();
         qCInfo(voiceLog) << "no voices declared; gallery not enrolled";
         return;
     }

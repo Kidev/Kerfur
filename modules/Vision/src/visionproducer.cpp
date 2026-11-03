@@ -4,6 +4,7 @@
 #include "visionproducer.h"
 
 #include "cameraframesource.h"
+#include "identitylibrary.h"
 #include "resourcemonitor.h"
 #include "visionconfig.h"
 #include "visioninferenceworker.h"
@@ -93,6 +94,10 @@ void VisionProducer::startPipeline()
             m_worker,
             &VisionInferenceWorker::processPending,
             Qt::QueuedConnection);
+    connect(&IdentityLibrary::instance(),
+            &IdentityLibrary::galleryChanged,
+            m_worker,
+            &VisionInferenceWorker::reloadGallery);
     connect(this,
             &VisionProducer::orientationOverrideRequested,
             m_worker,

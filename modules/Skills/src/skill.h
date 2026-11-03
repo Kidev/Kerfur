@@ -82,7 +82,7 @@ class Trigger : public SkillItem
     Q_PROPERTY(QString confirm READ confirm WRITE setConfirm NOTIFY confirmChanged)
 
     /// The lowest rank allowed to fire this. Zero -- only the top ranked person
-    /// -- because that is the safe default for anything that acts on the world.
+    /// because that is the safe default for anything that acts on the world.
     /// A trigger that merely answers a question can raise it, and
     /// `Trigger.Anyone` opens it to strangers.
     Q_PROPERTY(int authority READ authority WRITE setAuthority NOTIFY authorityChanged)

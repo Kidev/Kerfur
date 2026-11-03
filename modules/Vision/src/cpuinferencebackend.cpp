@@ -3,6 +3,8 @@
 
 #include "cpuinferencebackend.h"
 
+#include "identityregistry.h"
+
 #include <QLoggingCategory>
 
 #include <opencv2/imgproc.hpp>
@@ -53,7 +55,7 @@ QRectF normalized(const cv::Rect2f &box, const cv::Size &frameSize)
 CpuInferenceBackend::CpuInferenceBackend(VisionConfig config) : m_config{config} {}
 
 bool CpuInferenceBackend::initialize(const ModelCatalog &catalog,
-                                     const QString &galleryDirectory,
+                                     const QStringList &galleries,
                                      const QString &identityCachePath)
 {
     if (!catalog.has(ModelId::Pose)) {
@@ -82,15 +84,26 @@ bool CpuInferenceBackend::initialize(const ModelCatalog &catalog,
         m_faces.loadExpression(catalog.path(ModelId::Emotion));
     }
 
-    if (m_faces.hasRecognizer()) {
-        m_identities.enrol(m_faces, galleryDirectory, identityCachePath);
-    }
+    enrolGallery(galleries, identityCachePath);
 
     const QStringList missing{catalog.missingStages()};
     if (!missing.isEmpty()) {
         qCInfo(backendLog) << "stages unavailable:" << missing.join(QStringLiteral(", "));
     }
     return true;
+}
+
+void CpuInferenceBackend::enrolGallery(const QStringList &galleries,
+                                       const QString &identityCachePath)
+{
+    if (!m_faces.hasRecognizer()) {
+        return;
+    }
+    const IdentityRegistry registry{IdentityRegistry::load(galleries)};
+    if (!registry.problem().isEmpty()) {
+        qCInfo(backendLog) << registry.problem();
+    }
+    m_identities.enrol(m_faces, registry.faceEntries(), identityCachePath);
 }
 
 void CpuInferenceBackend::setOrientationOverride(int degrees)

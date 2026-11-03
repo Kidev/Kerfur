@@ -101,6 +101,9 @@ if (EMSCRIPTEN)
     else ()
         message(WARNING "No models directory; the web build will start without perception")
     endif ()
+
+    # IndexedDB backs the directory people enrolled at run time are kept in.
+    target_link_options(${PROJECT_NAME} PRIVATE -lidbfs.js)
 endif ()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake")

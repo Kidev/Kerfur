@@ -79,6 +79,11 @@ public slots:
 
     void setFaceConfidence(double confidence);
 
+    /// Reads the galleries again and re-enrols, then emits `ready` with the
+    /// new roster. Connected to `IdentityLibrary::galleryChanged`; a face
+    /// whose file is unchanged is answered from the cache.
+    void reloadGallery();
+
 signals:
     void ready(const Kerfur::AnalysisCapabilities &capabilities);
     void resultReady(const Kerfur::AnalysisResult &result);
@@ -121,6 +126,10 @@ private:
         QString settled;
         double settledConfidence{0.0};
     };
+
+    /// The gallery half of `initialize`, on top of the model half kept in
+    /// `m_capabilities` and `m_modelProblems`.
+    void enrolGallery();
 
     AnalysedFace describeFace(const cv::Mat &bgr,
                               const cv::Mat &gray,
@@ -178,6 +187,11 @@ private:
     ObjectDetector m_objects;
     HandLandmarker m_handLandmarker;
     IdentityRegistry m_registry;
+
+    /// What the models said at start up. A gallery reload changes the roster
+    /// and nothing else, so it starts from these.
+    AnalysisCapabilities m_capabilities;
+    QStringList m_modelProblems;
 
     QList<FaceTrack> m_tracks;
     QList<AnalysedPerson> m_lastPeople;
