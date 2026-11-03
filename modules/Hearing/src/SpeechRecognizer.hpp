@@ -84,6 +84,12 @@ class SpeechRecognizer : public QObject
     /// `Kerfur::IdentityRegistry::unknownPriority`.
     Q_PROPERTY(int speakerPriority READ speakerPriority NOTIFY speakerChanged)
 
+    /// What `identities/ids.json` calls whoever is speaking -- "owner",
+    /// "trusted" -- or the rank spelled out for a manifest that gives them no
+    /// title. Empty for a stranger. This is what the panel shows; the rank
+    /// beside it is what the code decides with.
+    Q_PROPERTY(QString speakerTitle READ speakerTitle NOTIFY speakerChanged)
+
     /// Whether the last utterance came from somebody allowed to give orders.
     ///
     /// Kerfur listens to everybody and obeys one person. Transcription,
@@ -101,6 +107,12 @@ class SpeechRecognizer : public QObject
                    setCommandPriorityCeiling NOTIFY commandPriorityCeilingChanged)
     Q_PROPERTY(QStringList knownVoices READ knownVoices NOTIFY voicesChanged)
     Q_PROPERTY(bool voiceIdentityReady READ voiceIdentityReady NOTIFY voicesChanged)
+
+    /// Length of the last utterance heard, kept so that it can be enrolled as
+    /// somebody's voice, and the length the speaker network needs before a
+    /// recording identifies anybody.
+    Q_PROPERTY(qreal lastUtteranceSeconds READ lastUtteranceSeconds NOTIFY lastUtteranceChanged)
+    Q_PROPERTY(qreal minimumVoiceSeconds READ minimumVoiceSeconds CONSTANT)
 
     Q_PROPERTY(QStringList availableDevices READ availableDevices NOTIFY availableDevicesChanged)
     Q_PROPERTY(QString currentDevice READ currentDevice NOTIFY currentDeviceChanged)
@@ -128,11 +140,19 @@ public:
     QString speaker() const { return m_speaker; }
     qreal speakerConfidence() const { return m_speakerConfidence; }
     int speakerPriority() const { return m_speakerPriority; }
+    QString speakerTitle() const { return m_speakerTitle; }
     bool commandAuthority() const { return m_speakerPriority <= m_commandPriorityCeiling; }
     int commandPriorityCeiling() const { return m_commandPriorityCeiling; }
     void setCommandPriorityCeiling(int ceiling);
     QStringList knownVoices() const { return m_knownVoices; }
     bool voiceIdentityReady() const { return m_voiceIdentityReady; }
+    qreal lastUtteranceSeconds() const;
+    qreal minimumVoiceSeconds() const;
+
+    /// Stages the last utterance with `Identities` as the voice of whoever is
+    /// enrolled next. Refused, with the reason on `Identities.problem`, when it
+    /// is too short to identify anybody by.
+    Q_INVOKABLE bool stageLastUtterance();
     QStringList availableDevices() const { return m_availableDevices; }
     QString currentDevice() const { return m_currentDevice; }
     QString captureFormat() const;
@@ -157,6 +177,7 @@ signals:
     void availableDevicesChanged();
     void currentDeviceChanged();
     void modelPathChanged();
+    void lastUtteranceChanged();
 
     void kerfurHeard();
     void sentenceRecognized(const QString &text, float confidence);
@@ -187,7 +208,11 @@ private slots:
     void processAudioData(const QByteArray &data);
     void handleTranscription(const QString &text, float confidence, quint64 sequence);
     void handleKeywordDetected(const QString &keyword);
-    void handleSpeaker(const QString &name, double similarity, int priority, quint64 sequence);
+    void handleSpeaker(const QString &name,
+                       double similarity,
+                       int priority,
+                       const QString &title,
+                       quint64 sequence);
     void updateVolumeLevel();
     void resetKerfurDetection();
 
@@ -264,6 +289,7 @@ private:
     QString m_speaker;
     qreal m_speakerConfidence{0.0};
     int m_speakerPriority{Kerfur::IdentityRegistry::unknownPriority};
+    QString m_speakerTitle;
     int m_commandPriorityCeiling{0};
     QList<PendingUtterance> m_pending;
     QStringList m_knownVoices;
@@ -273,6 +299,10 @@ private:
     QString m_modelPath;
 
     quint64 m_utteranceSequence{0};
+
+    /// The samples of the last utterance, 16 kHz mono. Replaced by the next
+    /// one, so only ever one sentence is held.
+    std::vector<float> m_lastUtterance;
 
     static constexpr int sampleRate{16000};
     static constexpr int channelCount{1};

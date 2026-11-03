@@ -187,6 +187,13 @@ double distance(const cv::Point2f &from, const cv::Point2f &to)
 constexpr double extendedRatio{1.35};
 constexpr double curledRatio{1.15};
 
+/// The single line the counting reading uses, halfway between the two bands
+/// above. Counting cannot abstain -- a hand held up to say three has to come
+/// back as a number -- so the refusal band is collapsed to a point and the
+/// worst a marginal finger can do is be counted or not, rather than throw the
+/// whole hand away.
+constexpr double countingRatio{(extendedRatio + curledRatio) / 2.0};
+
 /// How much further from the pinky knuckle an extended thumb sits than its own
 /// knuckle does. A thumb folded across the palm comes in around 0.5 and one held
 /// clear around 1.5, so the line is drawn where nothing lands.
@@ -369,6 +376,17 @@ double gripStrength(const std::array<cv::Point2f, handPointCount> &landmarks)
         ++counted;
     }
     return counted > 0 ? total / counted : 0.0;
+}
+
+int extendedFingerCount(const std::array<cv::Point2f, handPointCount> &landmarks)
+{
+    int count{thumbIsOut(landmarks) ? 1 : 0};
+    for (const HandPoint tip : fingerTips) {
+        if (fingerExtension(landmarks, tip) >= countingRatio) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 QString gestureName(HandGesture gesture)
@@ -661,6 +679,7 @@ std::optional<HandPose> HandLandmarker::landmarksFor(const cv::Mat &bgrRoi, cons
                           height * handBoxEnlarge};
     pose.grip = gripStrength(pose.landmarks);
     pose.gesture = handGesture(pose.landmarks);
+    pose.fingers = extendedFingerCount(pose.landmarks);
     return pose;
 }
 

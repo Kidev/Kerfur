@@ -217,9 +217,7 @@ QStringList rosterOf(const IdentityRegistry &registry)
     QStringList roster;
     roster.reserve(registry.size());
     for (const IdentityRecord &record : registry.records()) {
-        roster.append(record.priority == IdentityRegistry::unknownPriority
-                          ? QStringLiteral("%1 (unranked)").arg(record.name)
-                          : QStringLiteral("%1 (%2)").arg(record.name).arg(record.priority));
+        roster.append(QStringLiteral("%1 (%2)").arg(record.name, registry.standingOf(record.id)));
     }
     return roster;
 }
@@ -252,6 +250,8 @@ void FaceAnalysisWorker::initialize()
         capabilities.problem = QStringLiteral("No model directory. Searched %1. "
                                               "Run `make models` to provision one.")
                                    .arg(ModelDirectory::describeSearchPath());
+        m_modelProblems = QStringList{capabilities.problem};
+        m_capabilities = capabilities;
         emit ready(capabilities);
         return;
     }
@@ -280,31 +280,63 @@ void FaceAnalysisWorker::initialize()
         qCInfo(analysisLog) << "stages without a model file:" << missing;
     }
 
-    const QString gallery{IdentityDirectory::resolve()};
-    capabilities.galleryDirectory = gallery;
-    if (gallery.isEmpty()) {
+    m_modelProblems = problems;
+    m_capabilities = capabilities;
+    enrolGallery();
+}
+
+void FaceAnalysisWorker::reloadGallery()
+{
+    // Before initialize there is nothing to reload, and initialize enrols
+    // whatever is on disk by the time it runs.
+    if (!m_initialized) {
+        return;
+    }
+    enrolGallery();
+}
+
+void FaceAnalysisWorker::enrolGallery()
+{
+    AnalysisCapabilities capabilities{m_capabilities};
+    capabilities.enrolled.clear();
+    capabilities.roster.clear();
+    QStringList problems{m_modelProblems};
+
+    // A name voted for under the old gallery is not evidence under the new one.
+    m_tracks.clear();
+    m_held.clear();
+
+    const QStringList galleries{IdentityDirectory::galleries()};
+    capabilities.galleryDirectory = galleries.join(QStringLiteral(", "));
+    if (galleries.isEmpty()) {
+        m_registry = IdentityRegistry{};
+        m_identities.clear();
         problems.append(QStringLiteral("no identities gallery; searched %1")
                             .arg(IdentityDirectory::describeSearchPath()));
     } else {
-        m_registry = IdentityRegistry::load(gallery);
+        m_registry = IdentityRegistry::load(galleries);
         capabilities.enrolled = m_registry.names();
         capabilities.roster = rosterOf(m_registry);
         if (!m_registry.problem().isEmpty()) {
             qCInfo(analysisLog) << m_registry.problem();
         }
         if (m_registry.isEmpty()) {
-            problems.append(QStringLiteral("%1 declares nobody").arg(gallery));
+            m_identities.clear();
+            problems.append(QStringLiteral("%1 declares nobody").arg(capabilities.galleryDirectory));
         } else if (capabilities.identityReady) {
             m_identities.enrol(m_faces, m_registry.faceEntries(), identityCachePath());
-            qCInfo(analysisLog) << "enrolled" << m_identities.size() << "faces from" << gallery
-                                << "roster" << capabilities.roster;
-            if (m_identities.isEmpty()) {
-                problems.append(QStringLiteral("no face could be embedded from %1").arg(gallery));
+            qCInfo(analysisLog) << "enrolled" << m_identities.size() << "faces from"
+                                << capabilities.galleryDirectory << "roster"
+                                << capabilities.roster;
+            if (m_identities.isEmpty() && !m_registry.faceEntries().isEmpty()) {
+                problems.append(QStringLiteral("no face could be embedded from %1")
+                                    .arg(capabilities.galleryDirectory));
             }
         }
     }
 
     capabilities.problem = problems.join(QStringLiteral("; "));
+    m_capabilities = capabilities;
     emit ready(capabilities);
 }
 
@@ -454,6 +486,7 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
         person.identity.clear();
         person.identityConfidence = 0.0;
         person.priority = IdentityRegistry::unknownPriority;
+        person.title.clear();
         person.known = false;
         person.leftHand = AnalysedHand{};
         person.rightHand = AnalysedHand{};
@@ -486,6 +519,7 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
                 person.identity = face.identity;
                 person.identityConfidence = face.identityConfidence;
                 person.priority = face.priority;
+                person.title = face.title;
             }
         }
         person.known = !person.identity.isEmpty();
@@ -590,6 +624,7 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
         hand.confidence = pose->confidence;
         hand.grip = pose->grip;
         hand.gesture = gestureName(pose->gesture);
+        hand.fingers = pose->fingers;
         hand.tracked = true;
         measured = true;
 
@@ -811,6 +846,10 @@ AnalysedFace FaceAnalysisWorker::describeFace(const cv::Mat &bgr,
         face.identity = voteIdentity(observation.box, observed, similarity, m_passes, confidence);
         face.identityConfidence = confidence;
         face.priority = m_registry.priorityOf(face.identity);
+        // Empty for a stranger. standingOf would happily call them
+        // "unranked", which is true and is also the manifest speaking about
+        // somebody it has never heard of.
+        face.title = face.identity.isEmpty() ? QString{} : m_registry.standingOf(face.identity);
     }
 
     // The preview is a mirror, so what the detector called the subject's right

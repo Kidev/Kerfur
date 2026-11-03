@@ -255,10 +255,14 @@ Rectangle {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
+                // Whoever may give orders is picked out, and the manifest
+                // decides who that is. The name used to be written here as a
+                // literal, which made a second person with authority invisible
+                // and a renamed first one a stranger.
                 color: {
                     if (!root.speechRecognizer || root.speechRecognizer.speaker === "")
                         return root.colorDim;
-                    return root.speechRecognizer.speaker === "kidev" ? "#ff44ff" : root.colorOk;
+                    return root.speechRecognizer.commandAuthority ? "#ff44ff" : root.colorOk;
                 }
                 font.bold: root.speechRecognizer && root.speechRecognizer.speaker !== ""
                 font.pixelSize: 10
@@ -286,12 +290,14 @@ Rectangle {
                     anchors.centerIn: parent
                     color: root.speechRecognizer && root.speechRecognizer.commandAuthority ? root.colorOk : root.colorDim
                     font.pixelSize: 9
+                    // What the manifest calls them, not what it ranks them.
+                    // The rank is still the thing that decides, and it is the
+                    // second half of this line that says what it decided.
                     text: {
                         if (!root.speechRecognizer)
                             return "";
-                        if (root.speechRecognizer.speakerPriority >= 1000000)
-                            return "unranked, heard only";
-                        return "rank " + root.speechRecognizer.speakerPriority + (root.speechRecognizer.commandAuthority ? ", may command" : ", heard only");
+                        const standing = root.speechRecognizer.speakerTitle !== "" ? root.speechRecognizer.speakerTitle : "unranked";
+                        return standing + (root.speechRecognizer.commandAuthority ? ", may command" : ", heard only");
                     }
                 }
             }

@@ -20,12 +20,12 @@ namespace {
 
 Q_LOGGING_CATEGORY(workerLog, "kerfur.vision.worker")
 
-QString galleryDirectory()
+QStringList galleries()
 {
-    // The same directory the camera view enrols from. One gallery rather than
-    // two: a person known to the preview and unknown to the pipeline is a
+    // The same directories the camera view enrols from. One gallery rather
+    // than two: a person known to the preview and unknown to the pipeline is a
     // difference nobody watching either of them can explain.
-    return IdentityDirectory::resolve();
+    return IdentityDirectory::galleries();
 }
 
 QString identityCachePath()
@@ -56,11 +56,19 @@ void VisionInferenceWorker::initialize()
     }
     qCInfo(workerLog) << "models from" << catalog.directory();
 
-    const bool ready{m_backend.initialize(catalog, galleryDirectory(), identityCachePath())};
+    const bool ready{m_backend.initialize(catalog, galleries(), identityCachePath())};
     if (ready != m_ready) {
         m_ready = ready;
         emit readyChanged(m_ready);
     }
+}
+
+void VisionInferenceWorker::reloadGallery()
+{
+    if (!m_ready) {
+        return;
+    }
+    m_backend.enrolGallery(galleries(), identityCachePath());
 }
 
 void VisionInferenceWorker::processPending()

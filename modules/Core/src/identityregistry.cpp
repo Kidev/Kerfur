@@ -176,6 +176,8 @@ bool readRecord(const QDir &base,
         record.name = record.id;
     }
 
+    record.title = entry.value(QStringLiteral("title")).toString().trimmed();
+
     record.facePath = resolvePath(base, entry.value(QStringLiteral("face")).toString());
     record.voicePath = resolvePath(base, entry.value(QStringLiteral("voice")).toString());
 
@@ -221,6 +223,20 @@ bool readRecord(const QDir &base,
     }
 
     return true;
+}
+
+/// Rank first, then id, so that every consumer that walks the list in order
+/// walks it in rank order without sorting again.
+void sortByRank(QList<IdentityRecord> &records)
+{
+    std::sort(records.begin(),
+              records.end(),
+              [](const IdentityRecord &left, const IdentityRecord &right) {
+                  if (left.priority != right.priority) {
+                      return left.priority < right.priority;
+                  }
+                  return left.id.compare(right.id, Qt::CaseInsensitive) < 0;
+              });
 }
 
 } // namespace
@@ -318,19 +334,46 @@ IdentityRegistry IdentityRegistry::load(const QString &directory)
 
     registry.m_hasManifest = true;
     registry.m_problem = problems.join(QStringLiteral("; "));
-
-    // Rank first, then id, so that every consumer that walks the list in order
-    // walks it in rank order without sorting again.
-    std::sort(registry.m_records.begin(),
-              registry.m_records.end(),
-              [](const IdentityRecord &left, const IdentityRecord &right) {
-                  if (left.priority != right.priority) {
-                      return left.priority < right.priority;
-                  }
-                  return left.id.compare(right.id, Qt::CaseInsensitive) < 0;
-              });
-
+    sortByRank(registry.m_records);
     return registry;
+}
+
+IdentityRegistry IdentityRegistry::load(const QStringList &directories)
+{
+    if (directories.size() == 1) {
+        return load(directories.first());
+    }
+
+    IdentityRegistry merged;
+    QStringList problems;
+    for (const QString &directory : directories) {
+        const IdentityRegistry layer{load(directory)};
+        if (merged.m_directory.isEmpty()) {
+            merged.m_directory = layer.m_directory;
+        }
+        merged.m_hasManifest = merged.m_hasManifest || layer.m_hasManifest;
+        if (!layer.m_problem.isEmpty()) {
+            problems.append(layer.m_problem);
+        }
+        for (const IdentityRecord &record : layer.m_records) {
+            const auto existing{std::find_if(merged.m_records.begin(),
+                                             merged.m_records.end(),
+                                             [&record](const IdentityRecord &candidate) {
+                                                 return candidate.id.compare(record.id,
+                                                                             Qt::CaseInsensitive)
+                                                        == 0;
+                                             })};
+            if (existing != merged.m_records.end()) {
+                *existing = record;
+            } else {
+                merged.m_records.append(record);
+            }
+        }
+    }
+
+    merged.m_problem = problems.join(QStringLiteral("; "));
+    sortByRank(merged.m_records);
+    return merged;
 }
 
 IdentityRegistry IdentityRegistry::scanDirectory(const QString &directory)
@@ -404,6 +447,25 @@ int IdentityRegistry::priorityOf(const QString &nameOrId) const
 {
     const std::optional<IdentityRecord> record{find(nameOrId)};
     return record.has_value() ? record->priority : unknownPriority;
+}
+
+QString IdentityRegistry::titleOf(const QString &nameOrId) const
+{
+    const std::optional<IdentityRecord> record{find(nameOrId)};
+    return record.has_value() ? record->title : QString{};
+}
+
+QString IdentityRegistry::standingOf(const QString &nameOrId) const
+{
+    const std::optional<IdentityRecord> record{find(nameOrId)};
+    if (!record.has_value()) {
+        return QStringLiteral("unranked");
+    }
+    if (!record->title.isEmpty()) {
+        return record->title;
+    }
+    return record->priority == unknownPriority ? QStringLiteral("unranked")
+                                               : QStringLiteral("rank %1").arg(record->priority);
 }
 
 QStringList IdentityRegistry::names() const

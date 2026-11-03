@@ -117,6 +117,9 @@ private slots:
     void refusesAHandCaughtBetweenShapes();
     void gestureSurvivesScaleAndPosition();
     void namesEveryShapeItReports();
+    void countsTheDigitsOfEveryShape();
+    void countsAHandTheGestureRulesRefuse();
+    void countSurvivesScaleAndPosition();
 };
 
 /// The first and last rows of upstream's 2016 entry literal table. The
@@ -326,6 +329,47 @@ void TestHandLandmarker::namesEveryShapeItReports()
                  qPrintable(QString::number(static_cast<int>(shape))));
     }
     QVERIFY(gestureName(HandGesture::None).isEmpty());
+}
+
+/// The counting reading, over the same shapes the gesture rules name. A thumbs
+/// up is one because a person holding one up has one digit showing, which is the
+/// only definition that lets somebody count to five at a camera.
+void TestHandLandmarker::countsTheDigitsOfEveryShape()
+{
+    const cv::Point2f up{0.0F, -1.0F};
+    QCOMPARE(extendedFingerCount(posedHand(up, HandSpec{true, true, true, true, true})), 5);
+    QCOMPARE(extendedFingerCount(posedHand(up, HandSpec{true, true, true, true, false})), 4);
+    QCOMPARE(extendedFingerCount(posedHand(up, HandSpec{true, true, true, false, false})), 3);
+    QCOMPARE(extendedFingerCount(posedHand(up, HandSpec{true, true, false, false, false})), 2);
+    QCOMPARE(extendedFingerCount(posedHand(up, HandSpec{true, false, false, false, false})), 1);
+    QCOMPARE(extendedFingerCount(posedHand(up, HandSpec{})), 0);
+    // The thumb, from the side, is the whole of the difference between a fist
+    // and a one.
+    QCOMPARE(extendedFingerCount(
+                 posedHand(cv::Point2f{1.0F, 0.0F}, HandSpec{false, false, false, false, true})),
+             1);
+}
+
+/// Counting cannot abstain. The same hand that handGesture refuses, because one
+/// finger is between the two bands, still has to come back as a number: it is
+/// read rather than acted on, and a person holding it up is waiting to see one.
+void TestHandLandmarker::countsAHandTheGestureRulesRefuse()
+{
+    std::array<cv::Point2f, handPointCount> hand{
+        posedHand(cv::Point2f{0.0F, -1.0F}, HandSpec{true, true, true, true, true})};
+    // The wrist is at the origin here, so scaling a knuckle is scaling its own
+    // ratio: 1.2 sits inside the band handGesture throws the hand away for.
+    hand[RingTip] = hand[RingMcp] * 1.2F;
+    QCOMPARE(handGesture(hand), HandGesture::None);
+    QCOMPARE(extendedFingerCount(hand), 4);
+}
+
+void TestHandLandmarker::countSurvivesScaleAndPosition()
+{
+    const HandSpec three{true, true, true, false, false};
+    const cv::Point2f up{0.0F, -1.0F};
+    QCOMPARE(extendedFingerCount(posedHand(up, three, 12.0F, cv::Point2f{5.0F, 900.0F})), 3);
+    QCOMPARE(extendedFingerCount(posedHand(up, three, 400.0F, cv::Point2f{-70.0F, 30.0F})), 3);
 }
 
 QTEST_APPLESS_MAIN(TestHandLandmarker)

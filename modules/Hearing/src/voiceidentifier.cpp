@@ -55,8 +55,25 @@ void VoiceIdentifier::initialize()
         return;
     }
 
-    const QString gallery{IdentityDirectory::resolve()};
-    if (gallery.isEmpty()) {
+    enrolGallery();
+}
+
+void VoiceIdentifier::reloadGallery()
+{
+    // Without a model nothing can be enrolled, and `ready` has already said
+    // why.
+    if (!m_initialized || !m_embedder.isLoaded()) {
+        return;
+    }
+    enrolGallery();
+}
+
+void VoiceIdentifier::enrolGallery()
+{
+    const QStringList galleries{IdentityDirectory::galleries()};
+    if (galleries.isEmpty()) {
+        m_registry = IdentityRegistry{};
+        m_gallery.clear();
         emit ready(true,
                    {},
                    QStringLiteral("No identities gallery; searched %1")
@@ -64,19 +81,19 @@ void VoiceIdentifier::initialize()
         return;
     }
 
-    m_registry = IdentityRegistry::load(gallery);
+    m_registry = IdentityRegistry::load(galleries);
     if (!m_registry.problem().isEmpty()) {
         qCInfo(voiceIdLog) << m_registry.problem();
     }
     m_gallery.enrol(m_embedder, m_registry.voiceEntries(), cachePath());
-    qCInfo(voiceIdLog) << "voices from" << gallery << m_gallery.names();
+    qCInfo(voiceIdLog) << "voices from" << galleries << m_gallery.names();
     emit ready(true, m_gallery.names(), QString{});
 }
 
 void VoiceIdentifier::identify(const std::vector<float> &samples, quint64 sequence)
 {
     if (!m_embedder.isLoaded() || m_gallery.isEmpty()) {
-        emit identified(QString{}, -1.0, IdentityRegistry::unknownPriority, sequence);
+        emit identified(QString{}, -1.0, IdentityRegistry::unknownPriority, QString{}, sequence);
         return;
     }
 
@@ -85,7 +102,7 @@ void VoiceIdentifier::identify(const std::vector<float> &samples, quint64 sequen
         // Too short to say anything about. Reported as an unknown speaker with
         // no similarity rather than as a mismatch, because the two are
         // different facts and only one of them is about the person.
-        emit identified(QString{}, -1.0, IdentityRegistry::unknownPriority, sequence);
+        emit identified(QString{}, -1.0, IdentityRegistry::unknownPriority, QString{}, sequence);
         return;
     }
 
@@ -95,7 +112,11 @@ void VoiceIdentifier::identify(const std::vector<float> &samples, quint64 sequen
     qCDebug(voiceIdLog) << "utterance" << sequence << "matched"
                         << (name.isEmpty() ? QStringLiteral("nobody") : name) << "at" << similarity
                         << "rank" << priority;
-    emit identified(name, similarity, priority, sequence);
+    emit identified(name,
+                    similarity,
+                    priority,
+                    name.isEmpty() ? QString{} : m_registry.standingOf(name),
+                    sequence);
 }
 
 } // namespace Kerfur

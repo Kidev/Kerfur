@@ -4,6 +4,7 @@
 #include "FaceTracker.hpp"
 
 #include "faceanalysisworker.h"
+#include "identitylibrary.h"
 
 #include <QCameraFormat>
 #include <QDebug>
@@ -80,6 +81,10 @@ QVariantMap faceToVariant(const Kerfur::AnalysedFace &face)
         {QStringLiteral("gaze"), face.gazeDirection},
         {QStringLiteral("priority"), face.priority},
         {QStringLiteral("ranked"), face.priority != Kerfur::IdentityRegistry::unknownPriority},
+        // What the manifest calls this person. The overlay writes this and not
+        // the rank beside it: the rank is for sorting, and a number under a
+        // chin means nothing to whoever is reading the screen.
+        {QStringLiteral("title"), face.title},
     };
 }
 
@@ -102,6 +107,9 @@ QVariantMap handToVariant(const Kerfur::AnalysedHand &hand)
                        {QStringLiteral("landmarks"), landmarks},
                        {QStringLiteral("grip"), hand.grip},
                        {QStringLiteral("gesture"), hand.gesture},
+                       // Minus one for a hand that was never measured, so a
+                       // view has to test for that before printing a count.
+                       {QStringLiteral("fingers"), hand.fingers},
                        {QStringLiteral("tracked"), hand.tracked}};
 }
 
@@ -153,6 +161,7 @@ QVariantMap personToVariant(const Kerfur::AnalysedPerson &person)
                        {QStringLiteral("identity"), person.identity},
                        {QStringLiteral("identityConfidence"), person.identityConfidence},
                        {QStringLiteral("priority"), person.priority},
+                       {QStringLiteral("title"), person.title},
                        {QStringLiteral("known"), person.known},
                        {QStringLiteral("hands"), handsOf(person)},
                        {QStringLiteral("held"), heldOf(person)}};
@@ -218,6 +227,11 @@ void FaceTracker::startWorker()
             this,
             &FaceTracker::applyResult);
     connect(m_worker, &Kerfur::FaceAnalysisWorker::ready, this, &FaceTracker::applyCapabilities);
+    // Queued onto the worker's thread, after the initialize below.
+    connect(&Kerfur::IdentityLibrary::instance(),
+            &Kerfur::IdentityLibrary::galleryChanged,
+            m_worker,
+            &Kerfur::FaceAnalysisWorker::reloadGallery);
 
     m_workerThread.setObjectName(QStringLiteral("kerfur-vision"));
     m_workerThread.start();

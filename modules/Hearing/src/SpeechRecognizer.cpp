@@ -3,7 +3,9 @@
 
 #include "SpeechRecognizer.hpp"
 
+#include "identitylibrary.h"
 #include "modeldirectory.h"
+#include "speakerembedder.h"
 #include "voiceidentifier.h"
 
 #include <QLoggingCategory>
@@ -168,6 +170,12 @@ void SpeechRecognizer::startVoiceIdentification()
                     qCInfo(speechLog) << problem;
                 }
             });
+
+    // Queued onto the voice thread, after the initialize below.
+    connect(&Kerfur::IdentityLibrary::instance(),
+            &Kerfur::IdentityLibrary::galleryChanged,
+            m_voiceIdentifier,
+            &Kerfur::VoiceIdentifier::reloadGallery);
 
     m_voiceThread.setObjectName(QStringLiteral("kerfur-voices"));
     m_voiceThread.start();
@@ -416,6 +424,29 @@ void SpeechRecognizer::submitUtterance(const Kerfur::VoiceActivitySegmenter::Utt
     // the question of when somebody stopped talking.
     m_whisperEngine->submit(utterance.samples, sequence);
     emit identificationRequested(utterance.samples, sequence);
+
+    m_lastUtterance = utterance.samples;
+    emit lastUtteranceChanged();
+}
+
+qreal SpeechRecognizer::lastUtteranceSeconds() const
+{
+    return static_cast<qreal>(m_lastUtterance.size()) / sampleRate;
+}
+
+qreal SpeechRecognizer::minimumVoiceSeconds() const
+{
+    return static_cast<qreal>(Kerfur::SpeakerEmbedder::minimumSeconds);
+}
+
+bool SpeechRecognizer::stageLastUtterance()
+{
+    // The library refuses an empty or short recording itself, so the reason
+    // lands on `Identities.problem` where the panel reads it.
+    return Kerfur::IdentityLibrary::instance().stageVoiceSamples(m_lastUtterance,
+                                                                 sampleRate,
+                                                                 QStringLiteral("last sentence"),
+                                                                 minimumVoiceSeconds());
 }
 
 std::vector<float> SpeechRecognizer::toMono16k(const QByteArray &data) const
@@ -522,10 +553,8 @@ void SpeechRecognizer::handleKeywordDetected(const QString &keyword)
     emit kerfurHeard();
 }
 
-void SpeechRecognizer::handleSpeaker(const QString &name,
-                                     double similarity,
-                                     int priority,
-                                     quint64 sequence)
+void SpeechRecognizer::handleSpeaker(
+    const QString &name, double similarity, int priority, const QString &title, quint64 sequence)
 {
     PendingUtterance &pending{pendingFor(sequence)};
     pending.speaker = name;
@@ -538,12 +567,12 @@ void SpeechRecognizer::handleSpeaker(const QString &name,
     //
     // An utterance too short to identify leaves the previous speaker standing
     // rather than clearing it: nobody left the room, the sentence was short.
-    if (similarity >= 0.0
-        && (m_speaker != name || !qFuzzyCompare(m_speakerConfidence, similarity)
-            || m_speakerPriority != priority)) {
+    if (similarity >= 0.0 && (m_speaker != name || !qFuzzyCompare(m_speakerConfidence, similarity) ||
+                              m_speakerPriority != priority || m_speakerTitle != title)) {
         m_speaker = name;
         m_speakerConfidence = similarity;
         m_speakerPriority = priority;
+        m_speakerTitle = title;
         emit speakerChanged();
     }
 

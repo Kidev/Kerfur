@@ -17,6 +17,10 @@ qt_add_qml_module(
             src/identitydirectory.h
             src/identityregistry.cpp
             src/identityregistry.h
+            src/identitylibrary.cpp
+            src/identitylibrary.h
+            src/wavfile.cpp
+            src/wavfile.h
             src/assetsearch.cpp
             src/assetsearch.h
             src/settingspath.cpp
@@ -34,7 +38,14 @@ qt_add_qml_module(
             src/resourcemonitor.h
 )
 
-target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Qml)
+target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Gui Qt6::Qml)
+
+# The browser's file picker is reached through QFileDialog::getOpenFileContent,
+# which on the web build needs no QApplication.
+if (EMSCRIPTEN)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    target_link_libraries(${CORE_MODULE} PRIVATE Qt6::Widgets)
+endif ()
 
 # PUBLIC so that consumers and the test tree can include these headers by their
 # bare name, which is how every file in this module refers to its neighbours.

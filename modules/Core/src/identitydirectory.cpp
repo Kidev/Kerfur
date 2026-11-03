@@ -8,6 +8,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QStandardPaths>
 
 namespace Kerfur {
 
@@ -70,6 +71,36 @@ QString IdentityDirectory::resolve()
         }
     }
     return {};
+}
+
+QString IdentityDirectory::writableDirectory()
+{
+    const QString appData{QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)};
+    if (appData.isEmpty()) {
+        return {};
+    }
+    return QDir::cleanPath(appData + QLatin1Char('/') + folderName);
+}
+
+QStringList IdentityDirectory::galleries()
+{
+    const QString writable{writableDirectory()};
+
+    QStringList directories;
+    for (const QString &candidate : candidates()) {
+        const QString absolute{QDir{candidate}.absolutePath()};
+        if (!writable.isEmpty() && absolute == writable) {
+            continue;
+        }
+        if (holdsIdentities(absolute)) {
+            directories.append(absolute);
+            break;
+        }
+    }
+    if (!writable.isEmpty() && holdsIdentities(writable)) {
+        directories.append(writable);
+    }
+    return directories;
 }
 
 QString IdentityDirectory::describeSearchPath()

@@ -33,7 +33,7 @@ void SkillItem::attach(Skill *skill)
     m_skill = skill;
 }
 
-// --- Trigger ---------------------------------------------------------------
+// Trigger
 
 void Trigger::setIntent(const QString &intent)
 {
@@ -78,7 +78,7 @@ QString Trigger::key() const
     return owner + QStringLiteral("::") + m_intent;
 }
 
-// --- Routine ---------------------------------------------------------------
+// Routine
 
 Routine::Routine(QObject *parent) : SkillItem{parent}, m_timer{this}
 {
@@ -180,7 +180,7 @@ void Routine::fire()
     rearm();
 }
 
-// --- Watch -----------------------------------------------------------------
+// Watch
 
 void Watch::setKey(const QString &key)
 {
@@ -204,7 +204,7 @@ void Watch::attach(Skill *skill)
             });
 }
 
-// --- Variable --------------------------------------------------------------
+// Variable
 
 void Variable::setKey(const QString &key)
 {
@@ -241,7 +241,7 @@ void Variable::attach(Skill *skill)
     }
 }
 
-// --- Skill -----------------------------------------------------------------
+// Skill
 
 Skill::Skill(QObject *parent) : SkillItem{parent} {}
 

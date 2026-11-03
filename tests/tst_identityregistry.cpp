@@ -59,6 +59,11 @@ private slots:
     void fallsBackToScanningWhenThereIsNoManifest();
     void reportsAManifestThatIsNotJson();
     void splitsFaceAndVoiceEntries();
+    void readsTheDeclaredTitle();
+    void spellsOutTheRankWhenThereIsNoTitle();
+    void saysNothingAboutAStranger();
+    void aLaterDirectoryReplacesARecordOfTheSameId();
+    void mergedRecordsAreRankedTogether();
 };
 
 void TestIdentityRegistry::readsTheDeclaredLayout()
@@ -258,6 +263,95 @@ void TestIdentityRegistry::splitsFaceAndVoiceEntries()
     QCOMPARE(registry.faceEntries().size(), 2);
     QCOMPARE(registry.voiceEntries().size(), 1);
     QCOMPARE(registry.voiceEntries().first().first, QStringLiteral("kidev"));
+}
+
+/// The word the manifest's author chose, carried through untouched. This is
+/// what the overlay writes, so inventing, capitalising or translating it here
+/// would be this file deciding what somebody is called.
+void TestIdentityRegistry::readsTheDeclaredTitle()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"kidev":{"priority":0,"title":"owner"},)"
+                                    R"("ada":{"priority":2,"title":"trusted"}})"),
+                     {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QCOMPARE(registry.titleOf(QStringLiteral("kidev")), QStringLiteral("owner"));
+    QCOMPARE(registry.standingOf(QStringLiteral("ada")), QStringLiteral("trusted"));
+}
+
+/// A manifest written before titles existed still has to produce something for
+/// every person in it, because the interface stopped printing ranks and would
+/// otherwise print nothing at all.
+void TestIdentityRegistry::spellsOutTheRankWhenThereIsNoTitle()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root, QStringLiteral(R"({"kidev":{"priority":0},"ada":{}})"), {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QVERIFY(registry.titleOf(QStringLiteral("kidev")).isEmpty());
+    QCOMPARE(registry.standingOf(QStringLiteral("kidev")), QStringLiteral("rank 0"));
+    QCOMPARE(registry.standingOf(QStringLiteral("ada")), QStringLiteral("unranked"));
+}
+
+void TestIdentityRegistry::saysNothingAboutAStranger()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root, QStringLiteral(R"({"kidev":{"priority":0,"title":"owner"}})"), {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QVERIFY(registry.titleOf(QStringLiteral("nobody")).isEmpty());
+    QVERIFY(registry.titleOf(QString{}).isEmpty());
+    QCOMPARE(registry.standingOf(QStringLiteral("nobody")), QStringLiteral("unranked"));
+}
+
+/// The shipped gallery says one thing about a person and the one enrolled at
+/// run time says another. The later directory wins, and the person is still
+/// one person.
+void TestIdentityRegistry::aLaterDirectoryReplacesARecordOfTheSameId()
+{
+    QTemporaryDir shipped;
+    QTemporaryDir enrolled;
+    const QString first{buildGallery(
+        shipped,
+        QStringLiteral(R"({"ada":{"name":"Ada","priority":2,"title":"trusted"},)"
+                       R"("bob":{"priority":3}})"),
+        {})};
+    const QString second{buildGallery(
+        enrolled, QStringLiteral(R"({"ADA":{"name":"Ada L.","priority":0,"title":"owner"}})"), {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(QStringList{first, second})};
+    QCOMPARE(registry.size(), 2);
+    QCOMPARE(registry.directory(), first);
+    QVERIFY(registry.hasManifest());
+
+    const std::optional<IdentityRecord> ada{registry.find(QStringLiteral("ada"))};
+    QVERIFY(ada.has_value());
+    QCOMPARE(ada->name, QStringLiteral("Ada L."));
+    QCOMPARE(ada->priority, 0);
+    QCOMPARE(ada->title, QStringLiteral("owner"));
+    QCOMPARE(registry.priorityOf(QStringLiteral("bob")), 3);
+}
+
+void TestIdentityRegistry::mergedRecordsAreRankedTogether()
+{
+    QTemporaryDir shipped;
+    QTemporaryDir enrolled;
+    const QString first{
+        buildGallery(shipped, QStringLiteral(R"({"zoe":{"priority":2}})"), {})};
+    const QString second{buildGallery(
+        enrolled, QStringLiteral(R"({"bob":{"priority":1},"ada":{"priority":3}})"), {})};
+
+    const QList<IdentityRecord> records{
+        IdentityRegistry::load(QStringList{first, second}).records()};
+    QCOMPARE(records.size(), 3);
+    QCOMPARE(records.at(0).id, QStringLiteral("bob"));
+    QCOMPARE(records.at(1).id, QStringLiteral("zoe"));
+    QCOMPARE(records.at(2).id, QStringLiteral("ada"));
 }
 
 QTEST_MAIN(TestIdentityRegistry)

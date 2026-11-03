@@ -136,6 +136,7 @@ Rectangle {
                         "landmarks": hand.landmarks,
                         "grip": hand.grip,
                         "gesture": hand.gesture,
+                        "fingers": hand.fingers,
                         "tracked": hand.tracked
                     });
                 }
@@ -250,12 +251,21 @@ Rectangle {
                     font.pixelSize: overlay.labelSize - 1
                     visible: overlay.showLabels
 
+                    // The count is always there for a measured hand, and
+                    // it is the part a person reads: fingers held up are how
+                    // somebody counts at a camera, and a shape that has a name
+                    // is a bonus rather than the point. The named shape follows
+                    // it, and open and closed only when there is no name -- the
+                    // same measurement with less in it.
                     text: {
                         if (!handBox.modelData.tracked)
                             return handBox.modelData.side;
+                        let out = handBox.modelData.side;
+                        if (handBox.modelData.fingers >= 0)
+                            out += "  " + handBox.modelData.fingers + "/5";
                         if (handBox.modelData.gesture !== "")
-                            return handBox.modelData.side + "  " + handBox.modelData.gesture;
-                        return handBox.modelData.side + "  " + (handBox.modelData.grip >= 0.4 ? "closed" : "open");
+                            return out + "  " + handBox.modelData.gesture;
+                        return out + "  " + (handBox.modelData.grip >= 0.4 ? "closed" : "open");
                     }
                 }
             }
@@ -468,14 +478,17 @@ Rectangle {
                             visible: text !== ""
                         }
 
-                        // The rank the manifest gives this person. Shown
+                        // What the manifest calls this person. Shown
                         // because the eyes following one face out of three is
-                        // only obviously correct once the reason is on screen.
+                        // only obviously correct once the reason is on screen,
+                        // and "owner" is the reason where "rank 0" is only the
+                        // consequence of it. Highlighted at the top rank, which
+                        // is the one that may also give orders.
                         Text {
                             color: faceItem.modelData.priority === 0 ? "#ffd740" : "#9e9e9e"
                             font.pixelSize: overlay.labelSize
-                            text: "rank " + faceItem.modelData.priority
-                            visible: faceItem.modelData.ranked
+                            text: faceItem.modelData.title
+                            visible: text !== ""
                         }
                     }
                 }
@@ -915,10 +928,17 @@ Rectangle {
                             // Says which of the two qualities this is. "2
                             // visible" reads as two measured hands whether or
                             // not the models are there, and they are optional.
-                            if (!root.faceTracker.handsReady)
+                            if (!root.faceTracker.handsReady) {
                                 seen += " (estimated; hand models not provisioned)";
-                            else
-                                seen += ", " + hands.filter(h => h.tracked).length + " tracked";
+                            } else {
+                                // The counts, because this line is readable
+                                // when the preview is closed and the overlay
+                                // that carries them is not.
+                                const measured = hands.filter(h => h.tracked);
+                                seen += ", " + measured.length + " tracked";
+                                if (measured.length > 0)
+                                    seen += " (" + measured.map(h => h.side + " " + h.fingers + "/5").join(", ") + ")";
+                            }
                             if (!root.faceTracker.objectsReady)
                                 return seen + ", object model not provisioned";
                             return held.length === 0 ? seen + ", empty" : seen + ", holding " + held.join(", ");
