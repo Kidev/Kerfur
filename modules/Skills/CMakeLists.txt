@@ -3,7 +3,7 @@
 
 set(SKILLS_MODULE Skills)
 
-qt_add_library(${SKILLS_MODULE})
+qt_add_library(${SKILLS_MODULE} STATIC)
 
 # No OpenCV, no multimedia, no camera and no microphone. This module turns a
 # sentence somebody already transcribed into a decision, and the narrowness of
@@ -26,6 +26,6 @@ qt_add_qml_module(
             src/skillregistry.cpp
 )
 
-target_link_libraries(${SKILLS_MODULE} PUBLIC Core Qt6::Core Qt6::Qml)
+target_link_libraries(${SKILLS_MODULE} PUBLIC KerfurCore Qt6::Core Qt6::Qml)
 
 target_include_directories(${SKILLS_MODULE} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

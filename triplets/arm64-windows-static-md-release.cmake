@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Alexandre 'kidev' Poumaroux
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-# Overrides vcpkg's community arm64-windows-static-release triplet.
+# Static libraries on the dynamic CRT, which is what the Qt binaries use.
 set(VCPKG_TARGET_ARCHITECTURE arm64)
-set(VCPKG_CRT_LINKAGE static)
+set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 
 set(VCPKG_BUILD_TYPE release)
