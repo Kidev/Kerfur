@@ -130,6 +130,11 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     m_joinTimer.setInterval(joinTimeoutMs);
     connect(&m_joinTimer, &QTimer::timeout, this, [this]() { drainPending(true); });
 
+    connect(&m_mediaDevices,
+            &QMediaDevices::audioInputsChanged,
+            this,
+            &SpeechRecognizer::handleAudioInputsChanged);
+
     startVoiceIdentification();
     enumerateAudioDevices();
 }
@@ -241,6 +246,22 @@ void SpeechRecognizer::enumerateAudioDevices()
     if (!names.isEmpty()) {
         const qsizetype index{m_audioDevices.indexOf(m_selectedDevice)};
         setCurrentDevice(index >= 0 ? names.at(index) : names.first());
+    }
+}
+
+void SpeechRecognizer::handleAudioInputsChanged()
+{
+    const QList<QAudioDevice> inputs{QMediaDevices::audioInputs()};
+    if (!m_selectedDevice.isNull() && !inputs.contains(m_selectedDevice)) {
+        m_selectedDevice = QAudioDevice{};
+    }
+    enumerateAudioDevices();
+    qCInfo(speechLog) << inputs.size() << "audio input(s) available";
+
+    // A running capture keeps its stream even when the entry it was opened
+    // from is replaced, which the browser does once permission is granted.
+    if (m_enabled && !m_audioSource) {
+        initializeAudio();
     }
 }
 

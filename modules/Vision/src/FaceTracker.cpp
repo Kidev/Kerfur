@@ -194,6 +194,11 @@ FaceTracker::FaceTracker(QObject *parent)
     m_cameraRetryTimer.setInterval(2000);
     connect(&m_cameraRetryTimer, &QTimer::timeout, this, &FaceTracker::retryCameraInitialization);
 
+    connect(&m_mediaDevices,
+            &QMediaDevices::videoInputsChanged,
+            this,
+            &FaceTracker::handleVideoInputsChanged);
+
     startWorker();
     enumerateCameras();
 }
@@ -255,6 +260,22 @@ void FaceTracker::enumerateCameras()
 
     if (m_preferredCamera.isNull() && !cameras.isEmpty()) {
         m_preferredCamera = QMediaDevices::defaultVideoInput();
+    }
+}
+
+void FaceTracker::handleVideoInputsChanged()
+{
+    const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
+    if (!m_preferredCamera.isNull() && !cameras.contains(m_preferredCamera)) {
+        m_preferredCamera = QCameraDevice{};
+    }
+    enumerateCameras();
+    qCInfo(trackerLog) << cameras.size() << "camera(s) available";
+
+    // A running camera keeps its stream even when the entry it was opened from
+    // is replaced, which the browser does once permission is granted.
+    if (m_enabled && !m_isInitializing && !m_camera.isActive()) {
+        initializeCamera();
     }
 }
 
