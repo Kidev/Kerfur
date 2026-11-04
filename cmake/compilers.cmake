@@ -15,12 +15,10 @@ endif ()
 if (EMSCRIPTEN)
     set_target_properties(${PROJECT_NAME} PROPERTIES QT_WASM_INITIAL_MEMORY "128MB")
     target_compile_options(${PROJECT_NAME} PUBLIC -Os -DNDEBUG)
-    target_link_options(
-        ${PROJECT_NAME}
-        PUBLIC
-        -sASYNCIFY
-        -Os
-    )
+    # Never -sASYNCIFY: the Qt wasm libraries are built without it, and its JS
+    # runtime alone sends QMediaDevices down a path they compiled out, which
+    # leaves every camera and microphone list empty.
+    target_link_options(${PROJECT_NAME} PUBLIC -Os)
     target_link_options(
         ${PROJECT_NAME}
         PRIVATE
