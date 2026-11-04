@@ -13,7 +13,7 @@ jobs:
         include:
           - name: 'Linux x64'
             os: ubuntu-24.04
-            qt_version: '6.8.3'
+            qt_version: '6.12.0'
             qt_host: linux
             qt_target: desktop
             qt_arch: linux_gcc_64
@@ -25,7 +25,7 @@ jobs:
 
           - name: 'Linux ARM64'
             os: ubuntu-24.04-arm
-            qt_version: '6.8.3'
+            qt_version: '6.12.0'
             qt_host: linux_arm64
             qt_target: desktop
             qt_arch: linux_gcc_arm64
@@ -49,7 +49,7 @@ jobs:
 
           - name: 'Windows x64'
             os: windows-2025
-            qt_version: '6.8.3'
+            qt_version: '6.12.0'
             qt_host: windows
             qt_target: desktop
             qt_arch: win64_msvc2022_64
@@ -61,7 +61,7 @@ jobs:
 
           - name: 'Windows ARM64'
             os: windows-11-arm
-            qt_version: '6.8.3'
+            qt_version: '6.12.0'
             qt_host: windows_arm64
             qt_target: desktop
             qt_arch: win64_msvc2022_arm64
@@ -73,7 +73,7 @@ jobs:
 
           - name: 'macOS-15 ARM64'
             os: macos-15
-            qt_version: '6.8.3'
+            qt_version: '6.12.0'
             qt_host: mac
             qt_target: desktop
             qt_arch: clang_64
@@ -85,7 +85,7 @@ jobs:
 
           - name: 'Web'
             os: ubuntu-24.04
-            qt_version: '6.8.3'
+            qt_version: '6.12.0'
             qt_host: all_os
             qt_target: wasm
             qt_arch: wasm_multithread
@@ -110,14 +110,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           submodules: 'recursive'
           lfs: 'true'
 
       - name: Get latest CMake and Ninja
-        uses: lukka/get-cmake@v4.0.2
+        uses: lukka/get-cmake@v4.4.5
         with:
             cmakeVersion: latest
             ninjaVersion: latest
@@ -153,10 +153,10 @@ jobs:
 
       - name: Setup MSVC
         if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Install Qt
-        uses: Kidev/install-qt-action@v5
+        uses: jurplel/install-qt-action@v4.5.0
         with:
           version: ${{ matrix.qt_version }}
           host: ${{ matrix.qt_host }}
@@ -207,7 +207,7 @@ jobs:
           fi
 
       - name: Restore vcpkg cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         id: vcpkg-cache
         with:
           path: |
@@ -225,7 +225,7 @@ jobs:
 
       - name: Save vcpkg cache
         if: steps.vcpkg-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             vcpkg
@@ -347,7 +347,7 @@ jobs:
 
       - name: Create and Upload Release
         if: matrix.artifact_name != 'web' && startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/*
@@ -362,7 +362,7 @@ jobs:
 
       - name: Upload development artifacts
         if: matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}
           path: artifacts/*
@@ -370,14 +370,14 @@ jobs:
 
       - name: Upload AppImage development artifacts (Linux only)
         if: runner.os == 'Linux' && matrix.artifact_name != 'web' && !startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Kerfur-${{ matrix.artifact_name }}-${{ steps.get_version.outputs.VERSION }}.AppImage
           path: appimage-artifacts/*
           retention-days: 1
 
       - name: Upload Installer development artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: matrix.artifact_name != 'web' && steps.package_installer.outputs.INSTALLER_CREATED == 'true'
         with:
           name: KerfurInstaller-${{ matrix.artifact_name }}

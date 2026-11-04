@@ -23,10 +23,21 @@ namespace {
 
 Q_LOGGING_CATEGORY(blackboardLog, "kerfur.skills.blackboard")
 
+// Qt 6.11 added QQmlPropertyMap::create and deprecated the public constructor
+// in its favour; older Qt only has the constructor.
+QQmlPropertyMap *createValueMap(QObject *parent)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 11, 0)
+    return QQmlPropertyMap::create(parent);
+#else
+    return new QQmlPropertyMap{parent};
+#endif
+}
+
 } // namespace
 
 Blackboard::Blackboard(QObject *parent)
-    : QObject{parent}, m_values{QQmlPropertyMap::create(this)}, m_persistTimer{this}
+    : QObject{parent}, m_values{createValueMap(this)}, m_persistTimer{this}
 {
     m_persistTimer.setSingleShot(true);
     m_persistTimer.setInterval(persistDelayMs);

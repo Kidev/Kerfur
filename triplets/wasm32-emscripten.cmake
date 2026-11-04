@@ -27,6 +27,11 @@ set(VCPKG_C_FLAGS "${KERFUR_WASM_FLAGS}")
 set(VCPKG_CXX_FLAGS "${KERFUR_WASM_FLAGS}")
 set(VCPKG_LINKER_FLAGS "-pthread")
 
+# libwebp builds its SSE4.1 sources for Emscripten without the SSE2 helpers they include.
+if (PORT STREQUAL "libwebp")
+    list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS -DWEBP_ENABLE_SIMD=OFF)
+endif ()
+
 if (NOT DEFINED ENV{EMSDK})
     message(WARNING "EMSDK is not set; vcpkg will not find the Emscripten toolchain")
 endif ()
