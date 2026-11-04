@@ -321,6 +321,21 @@ void SpeechRecognizer::initializeAudio()
         return;
     }
 
+    const auto retry{[this]() {
+        if (m_enabled && !m_audioSource) {
+            initializeAudio();
+        }
+    }};
+    switch (m_microphonePermission.ensure(this, retry)) {
+    case Kerfur::CapturePermission::Access::Allowed:
+        break;
+    case Kerfur::CapturePermission::Access::Pending:
+        return;
+    case Kerfur::CapturePermission::Access::Denied:
+        setErrorString(QStringLiteral("Microphone access was denied"));
+        return;
+    }
+
     if (m_selectedDevice.isNull()) {
         enumerateAudioDevices();
     }
