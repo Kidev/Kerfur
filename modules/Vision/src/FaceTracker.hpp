@@ -9,6 +9,7 @@
 #include <QCameraDevice>
 #include <QImage>
 #include <QMediaCaptureSession>
+#include <QMediaDevices>
 #include <QObject>
 #include <QPointF>
 #include <QQmlEngine>
@@ -269,6 +270,7 @@ private:
     void initializeCamera();
     void uninitializeCamera();
     void enumerateCameras();
+    void handleVideoInputsChanged();
     void selectCameraFormat();
 
     void setFaceDetected(bool detected);
@@ -298,6 +300,9 @@ private:
     QMediaCaptureSession m_captureSession;
     QVideoSink m_videoSink;
     QCameraDevice m_preferredCamera;
+    /// The browser backend fills its device list after start-up, so a camera
+    /// that did not exist when the tracker was enabled can still arrive.
+    QMediaDevices m_mediaDevices;
     QSize m_requestedResolution{1920, 1080};
     QSize m_captureResolution;
 

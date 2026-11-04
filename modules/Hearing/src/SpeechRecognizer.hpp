@@ -14,6 +14,7 @@
 #include <QAudioFormat>
 #include <QAudioSource>
 #include <QIODevice>
+#include <QMediaDevices>
 #include <QObject>
 #include <QQmlEngine>
 #include <QStringList>
@@ -219,6 +220,7 @@ private slots:
 private:
     void startVoiceIdentification();
     void enumerateAudioDevices();
+    void handleAudioInputsChanged();
     void applyModelPath();
     void submitUtterance(const Kerfur::VoiceActivitySegmenter::Utterance &utterance);
 
@@ -273,6 +275,9 @@ private:
     QAudioFormat m_actualFormat;
     QList<QAudioDevice> m_audioDevices;
     QAudioDevice m_selectedDevice;
+    /// The browser backend fills its device list after start-up, so a
+    /// microphone that did not exist when capture was enabled can still arrive.
+    QMediaDevices m_mediaDevices;
 
     bool m_enabled{false};
     bool m_listening{false};
