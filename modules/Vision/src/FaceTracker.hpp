@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "capturepermission.h"
 #include "faceanalysis.h"
 
 #include <QCamera>
@@ -303,6 +304,7 @@ private:
     /// The browser backend fills its device list after start-up, so a camera
     /// that did not exist when the tracker was enabled can still arrive.
     QMediaDevices m_mediaDevices;
+    Kerfur::CapturePermission m_cameraPermission{Kerfur::CapturePermission::Device::Camera};
     QSize m_requestedResolution{1920, 1080};
     QSize m_captureResolution;
 

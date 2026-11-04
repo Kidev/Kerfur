@@ -369,6 +369,22 @@ void FaceTracker::initializeCamera()
     if (m_isInitializing) {
         return;
     }
+
+    const auto retry{[this]() {
+        if (m_enabled) {
+            initializeCamera();
+        }
+    }};
+    switch (m_cameraPermission.ensure(this, retry)) {
+    case Kerfur::CapturePermission::Access::Allowed:
+        break;
+    case Kerfur::CapturePermission::Access::Pending:
+        return;
+    case Kerfur::CapturePermission::Access::Denied:
+        setErrorString(QStringLiteral("Camera access was denied"));
+        return;
+    }
+
     m_isInitializing = true;
 
     if (m_preferredCamera.isNull()) {
