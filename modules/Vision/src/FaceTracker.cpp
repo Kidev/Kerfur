@@ -487,7 +487,11 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     // rendered eyes follow the viewer the way a mirror would. The one place the
     // reflection has to be undone is the head pose solve, and the worker is
     // told that it is looking at one.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
     const QImage image{captured.flipped(Qt::Horizontal)};
+#else
+    const QImage image{captured.mirrored(true, false)};
+#endif
 
     // Reduced, never enlarged, exactly like the analysis image below. A preview
     // scaled up past the frame that arrived is a blurrier picture of the same
