@@ -60,7 +60,7 @@ qt_add_qml_module(
     VERSION 1.0
     QML_FILES ${SOURCES_QML} ${SOURCES_QML_SINGLETON}
     DEPENDENCIES TARGET
-                 Core
+                 KerfurCore
                  Vision
                  Tools
                  Display
@@ -79,12 +79,24 @@ target_link_libraries(
            Qt6::Multimedia
            Qt6::MultimediaWidgets
            Qt6::QuickControls2
-           Core
+           KerfurCore
            Vision
            Tools
            Display
            Hearing
            Skills
+)
+
+# The modules are static libraries, so each QML plugin is linked in too; its
+# init object imports the plugin, which registers the module's types.
+target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE KerfurCoreplugin
+            Visionplugin
+            Toolsplugin
+            Displayplugin
+            Hearingplugin
+            Skillsplugin
 )
 
 # WebAssembly has no filesystem to provision models into, so they are baked

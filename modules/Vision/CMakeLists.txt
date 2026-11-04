@@ -3,7 +3,7 @@
 
 set(VISION_MODULE Vision)
 
-qt_add_library(${VISION_MODULE})
+qt_add_library(${VISION_MODULE} STATIC)
 
 # The perception stages: the model wrappers themselves. Always built, because
 # the camera view in the control panel runs them directly and is not part of the
@@ -91,7 +91,7 @@ find_package(
 # the PUBLIC include directory below and names QQuickItem in its interface.
 target_link_libraries(
     ${VISION_MODULE}
-    PUBLIC Core Qt6::Gui Qt6::Quick
+    PUBLIC KerfurCore Qt6::Gui Qt6::Quick
     PRIVATE ${OpenCV_LIBS} Qt6::Multimedia
 )
 

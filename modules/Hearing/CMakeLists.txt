@@ -3,7 +3,7 @@
 
 set(HEARING_MODULE Hearing)
 
-qt_add_library(${HEARING_MODULE})
+qt_add_library(${HEARING_MODULE} STATIC)
 
 qt_add_qml_module(
     ${HEARING_MODULE}
@@ -41,7 +41,7 @@ target_link_libraries(
     ${HEARING_MODULE}
     PRIVATE Qt6::Multimedia
             Qt6::Core
-            Core
+            KerfurCore
             ${OpenCV_LIBS}
             whisper
             ggml::all
