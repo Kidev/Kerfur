@@ -35,11 +35,11 @@ VCPKG_TRIPLET ?= $(shell \
         elif [ "$$(uname -m)" = "arm64" ]; then echo "arm64-osx-release"; \
         else echo "$$(uname -m)-osx-release"; fi; \
     elif echo "$$(uname -s)" | grep -q "MINGW\|MSYS\|CYGWIN"; then \
-        if [ -n "$(findstring arm64,$(QT_ROOT_DIR))" ]; then echo "arm64-windows-static-release"; \
-        elif [ "$$(uname -m)" = "x86_64" ]; then echo "x64-windows-static-release"; \
-        elif [ "$$(uname -m)" = "i686" ]; then echo "x86-windows-static-release"; \
-        elif [ "$$(uname -m)" = "aarch64" ]; then echo "arm64-windows-static-release"; \
-        else echo "x64-windows-static-release"; fi; \
+        if [ -n "$(findstring arm64,$(QT_ROOT_DIR))" ]; then echo "arm64-windows-static-md-release"; \
+        elif [ "$$(uname -m)" = "x86_64" ]; then echo "x64-windows-static-md-release"; \
+        elif [ "$$(uname -m)" = "i686" ]; then echo "x86-windows-static-md"; \
+        elif [ "$$(uname -m)" = "aarch64" ]; then echo "arm64-windows-static-md-release"; \
+        else echo "x64-windows-static-md-release"; fi; \
     else echo "x64-linux-release"; fi)
 VCPKG_TOOLCHAIN := $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
 OS_NAME_UNAME := $(shell uname -s)

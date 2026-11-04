@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Alexandre 'kidev' Poumaroux
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-set(CORE_MODULE Core)
+# Qt's resource helpers special-case a target named Core as QtCore and skip the
+# link to its init objects, so the target keeps a prefix the URI does not.
+set(CORE_MODULE KerfurCore)
 
-qt_add_library(${CORE_MODULE})
+qt_add_library(${CORE_MODULE} STATIC)
 
 qt_add_qml_module(
     ${CORE_MODULE}
