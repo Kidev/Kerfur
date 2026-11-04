@@ -89,7 +89,8 @@ SHELL = /bin/bash
 QT_IFW_VERSION ?= $(shell ls "$(QT_TOOLS_DIR)/QtInstallerFramework" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+' | sort -V | tail -1)
 INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
 REPO_NAME ?= $(PROJECT_TLD)_$(PROJECT_ORG)_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
-TARGET_PACKAGE ?= $(PROJECT_TLD).$(PROJECT_ORG).$(PROJECT_BINARY).$(BUILD_QUALIFIER)
+# IFW reserves '-' in a package id for the version separator.
+TARGET_PACKAGE ?= $(PROJECT_TLD).$(PROJECT_ORG).$(PROJECT_BINARY).$(subst -,_,$(BUILD_QUALIFIER))
 INSTALLER_NAME ?= $(PROJECT_TITLE)Installer-$(BUILD_QUALIFIER)
 SCRIPT_EXT := $(if $(filter 1,$(IS_WINDOWS)),.bat,)
 CDN_UPLOAD_SOCKET ?=
