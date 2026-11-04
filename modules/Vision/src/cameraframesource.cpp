@@ -111,6 +111,21 @@ void CameraFrameSource::openCamera()
         return;
     }
 
+    const auto retry{[this]() {
+        if (m_wantActive && !isActive()) {
+            openCamera();
+        }
+    }};
+    switch (m_permission.ensure(this, retry)) {
+    case CapturePermission::Access::Allowed:
+        break;
+    case CapturePermission::Access::Pending:
+        return;
+    case CapturePermission::Access::Denied:
+        qCWarning(cameraLog) << "camera access denied; the headless pipeline stays idle";
+        return;
+    }
+
     const QCameraDevice device{QMediaDevices::defaultVideoInput()};
     if (device.isNull()) {
         qCInfo(cameraLog) << "no video input yet";

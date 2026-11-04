@@ -5,6 +5,7 @@
 #define KERFUR_CAMERAFRAMESOURCE_H
 
 #include "boundedqueue.h"
+#include "capturepermission.h"
 #include "visiontypes.h"
 
 #include <QMediaCaptureSession>
@@ -65,6 +66,7 @@ private:
     QVideoSink m_sink;
     QMediaDevices m_devices;
     std::unique_ptr<QCamera> m_camera;
+    CapturePermission m_permission{CapturePermission::Device::Camera};
     quint64 m_sequence{0};
     quint64 m_received{0};
     int m_frameStride{1};
