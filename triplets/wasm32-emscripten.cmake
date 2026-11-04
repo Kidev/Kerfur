@@ -32,7 +32,25 @@ if (PORT STREQUAL "libwebp")
     list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS -DWEBP_ENABLE_SIMD=OFF)
 endif ()
 
-if (NOT DEFINED ENV{EMSDK})
-    message(WARNING "EMSDK is not set; vcpkg will not find the Emscripten toolchain")
+# OpenCV's CPU detection treats wasm32 as x86 and probes an SSE baseline; with
+# both lists empty its SIMD comes from intrin_wasm.hpp alone, as in OpenCV's
+# own build_js.py. WITH_V4L defaults on for every UNIX target and the port
+# verifies it, so it is turned off explicitly.
+if (PORT STREQUAL "opencv4")
+    list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS
+        -DX86=OFF
+        -DCPU_BASELINE=
+        -DCPU_DISPATCH=
+        -DWITH_V4L=OFF
+    )
 endif ()
-set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "$ENV{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake")
+
+# The port builds run Emscripten from the environment the build was started in.
+set(VCPKG_ENV_PASSTHROUGH_UNTRACKED EMSCRIPTEN_ROOT EMSDK PATH)
+if (NOT DEFINED ENV{EMSDK} AND NOT DEFINED ENV{EMSCRIPTEN_ROOT})
+    message(FATAL_ERROR "Set EMSDK (or EMSCRIPTEN_ROOT) before building for wasm32-emscripten")
+endif ()
+
+# Chainloading Emscripten.cmake directly would drop the flags above; see the
+# wrapper for how it applies them.
+set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../cmake/emscripten-chainload.cmake")
