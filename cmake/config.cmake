@@ -14,6 +14,8 @@ file(
 )
 
 set(SOURCES_QML_SINGLETON "qml/KSettings.qml")
+# The glob also matches the singleton, which QML_FILES must list only once.
+list(REMOVE_ITEM SOURCES_QML ${SOURCES_QML_SINGLETON})
 set(
     MISC_EXTRA_FILES
     "Makefile"

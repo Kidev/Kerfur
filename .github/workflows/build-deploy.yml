@@ -53,6 +53,8 @@ jobs:
             qt_host: windows
             qt_target: desktop
             qt_arch: win64_msvc2022_64
+            # aqtinstall 3.3 does not know the per-compiler Windows repositories of Qt 6.11+.
+            aqt_source: 'git+https://github.com/miurahr/aqtinstall.git@5a49f2b391ae8ee1d3c0dd87f8b33c1d49a4deb7'
             artifact_name: windows-x64
             build_name: '-x64'
             qt_tools: 'tools_ifw'
@@ -167,6 +169,8 @@ jobs:
           cache: 'true'
           cache-key-prefix: 'install-qt-${{ matrix.qt_version }}-${{ matrix.qt_arch }}'
           tools: ${{ matrix.qt_tools }}
+          aqtsource: ${{ matrix.aqt_source }}
+          py7zrversion: '==1.1.4'
 
       - name: Install Emscripten SDK (Web only)
         if: matrix.artifact_name == 'web'
