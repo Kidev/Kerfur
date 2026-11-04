@@ -4,6 +4,7 @@
 #pragma once
 
 #include "WhisperEngine.hpp"
+#include "capturepermission.h"
 #include "identityregistry.h"
 #include "voiceactivity.h"
 
@@ -278,6 +279,8 @@ private:
     /// The browser backend fills its device list after start-up, so a
     /// microphone that did not exist when capture was enabled can still arrive.
     QMediaDevices m_mediaDevices;
+    Kerfur::CapturePermission m_microphonePermission{
+        Kerfur::CapturePermission::Device::Microphone};
 
     bool m_enabled{false};
     bool m_listening{false};

@@ -3,7 +3,13 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(${PROJECT_NAME} PUBLIC -Wall -Werror -Wpedantic)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE TRUE)
+    # The usage descriptions in this plist are what make Qt link its camera and
+    # microphone permission plugins.
+    set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES MACOSX_BUNDLE TRUE
+                   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Info.plist.in"
+    )
     target_compile_options(${PROJECT_NAME} PUBLIC -Wall -Werror -Wpedantic)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)

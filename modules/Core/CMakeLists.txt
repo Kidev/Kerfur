@@ -25,6 +25,8 @@ qt_add_qml_module(
             src/wavfile.h
             src/assetsearch.cpp
             src/assetsearch.h
+            src/capturepermission.cpp
+            src/capturepermission.h
             src/settingspath.cpp
             src/settingspath.h
             src/boundedqueue.h
