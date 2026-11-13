@@ -101,6 +101,10 @@ CDN_UPLOAD_PASSWORD ?=
 WASM_UPLOAD_SOCKET ?=
 WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
+# Bounds lftp's retries so an unreachable host fails the upload within minutes.
+LFTP_SETUP := set cmd:fail-exit yes; set net:timeout 30; set net:max-retries 3; \
+	set net:reconnect-interval-base 5; set net:reconnect-interval-multiplier 2; \
+	set ssl:verify-certificate no;
 
 # The web build resolves its dependencies for Emscripten rather than for the
 # host. The overlay triplet adds -msimd128 and -pthread: without the first,
@@ -181,7 +185,7 @@ repo:
 upload-repo:
 	@if [ -n "$(CDN_UPLOAD_USERNAME)" ] && [ -n "$(CDN_UPLOAD_PASSWORD)" ] && [ -n "$(CDN_UPLOAD_SOCKET)" ]; then \
 		lftp -u "$(CDN_UPLOAD_USERNAME),$(CDN_UPLOAD_PASSWORD)" "$(CDN_UPLOAD_SOCKET)" -e "\
-		set ssl:verify-certificate no; \
+		$(LFTP_SETUP) \
 		mirror -R --only-newer --verbose $(REPO_NAME) $(BUILD_QUALIFIER); \
 		quit"; \
 	else \
@@ -191,7 +195,7 @@ upload-repo:
 upload-web:
 	@if [ -n "$(WASM_UPLOAD_USERNAME)" ] && [ -n "$(WASM_UPLOAD_PASSWORD)" ] && [ -n "$(WASM_UPLOAD_SOCKET)" ]; then \
 		lftp -u "$(WASM_UPLOAD_USERNAME),$(WASM_UPLOAD_PASSWORD)" "$(WASM_UPLOAD_SOCKET)" -e "\
-		set ssl:verify-certificate no; \
+		$(LFTP_SETUP) \
 		mirror -R --only-newer --verbose $(ABS_INSTALL_DIR) $(PROJECT_TITLE); \
 		quit"; \
 	else \
