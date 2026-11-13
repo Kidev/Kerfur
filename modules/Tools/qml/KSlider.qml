@@ -1,11 +1,12 @@
-import Qt.labs.synchronizer
+import Core
 import QtQuick
 import QtQuick.Controls
 import qml
 
-// A slider whose value is a setting. The Synchronizer is the whole point: a
-// plain two way binding between a control and a persisted property oscillates,
-// and every attempt to break the loop by hand ends up dropping an edit.
+// A slider whose value is a setting. The PropertySynchronizer is the whole
+// point: a plain two way binding between a control and a persisted property
+// oscillates, and every attempt to break the loop by hand ends up dropping an
+// edit.
 //
 // The look is defined here rather than at each of the twenty call sites. The
 // colours are the control panel's; there is no shared palette singleton because
@@ -44,7 +45,7 @@ Slider {
         y: root.topPadding + (root.availableHeight / 2) - (height / 2)
     }
 
-    Synchronizer on value {
+    PropertySynchronizer on value {
         id: sync
 
         sourceObject: root.settingsObject
