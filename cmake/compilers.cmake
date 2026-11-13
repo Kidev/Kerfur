@@ -41,6 +41,6 @@ if (UNIX AND NOT APPLE)
     set_target_properties(
         ${PROJECT_NAME}
         PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE
-                   INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib:${QT_INSTALL_DIR}/lib"
+                   INSTALL_RPATH "$ORIGIN/../lib:${CMAKE_INSTALL_PREFIX}/lib:${QT_INSTALL_DIR}/lib"
     )
 endif ()

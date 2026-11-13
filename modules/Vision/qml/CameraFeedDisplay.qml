@@ -5,6 +5,9 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+// Its own module, for CameraFrameView: before Qt 6.8 a file in qml/ does not
+// see the C++ types registered beside it without this.
+import Vision
 
 Rectangle {
     id: root
