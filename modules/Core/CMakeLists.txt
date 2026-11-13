@@ -40,6 +40,8 @@ qt_add_qml_module(
             src/perceptionpipe.h
             src/resourcemonitor.cpp
             src/resourcemonitor.h
+            src/propertysynchronizer.cpp
+            src/propertysynchronizer.h
 )
 
 target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Gui Qt6::Qml)

@@ -91,6 +91,8 @@ INSTALLER_BIN_DIR ?= $(QT_TOOLS_DIR)/QtInstallerFramework/$(QT_IFW_VERSION)/bin
 REPO_NAME ?= $(PROJECT_TLD)_$(PROJECT_ORG)_$(PROJECT_BINARY)_$(BUILD_QUALIFIER)
 # IFW reserves '-' in a package id for the version separator.
 TARGET_PACKAGE ?= $(PROJECT_TLD).$(PROJECT_ORG).$(PROJECT_BINARY).$(subst -,_,$(BUILD_QUALIFIER))
+# Installs made under the hyphenated id take this package as their update.
+LEGACY_PACKAGE := $(PROJECT_TLD).$(PROJECT_ORG).$(PROJECT_BINARY).$(BUILD_QUALIFIER)
 INSTALLER_NAME ?= $(PROJECT_TITLE)Installer-$(BUILD_QUALIFIER)
 SCRIPT_EXT := $(if $(filter 1,$(IS_WINDOWS)),.bat,)
 CDN_UPLOAD_SOCKET ?=
@@ -251,6 +253,9 @@ setup-installer:
 	@echo '    <Version>$(VERSION_TAG)</Version>' >> installer/config/meta/package.xml
 	@echo '    <ReleaseDate>$(BUILD_TIME)</ReleaseDate>' >> installer/config/meta/package.xml
 	@echo '    <Name>$(TARGET_PACKAGE)</Name>' >> installer/config/meta/package.xml
+	@if [ "$(LEGACY_PACKAGE)" != "$(TARGET_PACKAGE)" ]; then \
+		echo '    <Replaces>$(LEGACY_PACKAGE)</Replaces>' >> installer/config/meta/package.xml; \
+	fi
 	@echo '    <Licenses>' >> installer/config/meta/package.xml
 	@echo '        <License name="$(PROJECT_TITLE)'"'"'s Software License Agreement" file="license.txt" />' >> installer/config/meta/package.xml
 	@echo '    </Licenses>' >> installer/config/meta/package.xml

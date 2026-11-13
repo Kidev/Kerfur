@@ -1,4 +1,4 @@
-import Qt.labs.synchronizer
+import Core
 import QtMultimedia
 import QtQuick
 import QtQuick.Effects
@@ -249,7 +249,7 @@ Item {
     }
 
     // Synchronize eye angles with settings
-    Synchronizer {
+    PropertySynchronizer {
         id: leftRightSync
 
         sourceObject: root
@@ -262,7 +262,7 @@ Item {
         }
     }
 
-    Synchronizer {
+    PropertySynchronizer {
         id: upDownSync
 
         sourceObject: root

@@ -9,7 +9,7 @@ qt_add_qml_module(
               qml/Glow.qml
               qml/LedScreen.qml
               qml/Face.qml
-    DEPENDENCIES TARGET Tools Vision Skills
+    DEPENDENCIES TARGET KerfurCore Tools Vision Skills
 )
 
-target_link_libraries(${DISPLAY_MODULE} PRIVATE Skills)
+target_link_libraries(${DISPLAY_MODULE} PRIVATE KerfurCore Skills)
