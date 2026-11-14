@@ -35,7 +35,10 @@ class ResourceMonitor : public QObject
     Q_PROPERTY(qint64 uptimeSeconds READ uptimeSeconds NOTIFY sampled)
 
 public:
-    explicit ResourceMonitor(QObject *parent = nullptr);
+    /// No default argument. The QML engine builds a default constructible
+    /// singleton itself and never calls `create`, so QML would hold a second
+    /// instance that C++ cannot see.
+    explicit ResourceMonitor(QObject *parent);
 
     static ResourceMonitor &instance();
     static ResourceMonitor *create(QQmlEngine *engine, QJSEngine *scriptEngine);

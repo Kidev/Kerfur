@@ -6,13 +6,18 @@
 #include <QJSEngine>
 #include <QQmlEngine>
 
+#include <type_traits>
+
 namespace Kerfur {
 
 WorldModel::WorldModel(QObject *parent) : QObject{parent}, m_people{this} {}
 
+static_assert(!std::is_default_constructible_v<WorldModel>,
+              "QML would construct its own WorldModel instead of calling create()");
+
 WorldModel &WorldModel::instance()
 {
-    static WorldModel model;
+    static WorldModel model{nullptr};
     return model;
 }
 

@@ -46,7 +46,10 @@ class WorldModel : public QObject
     Q_PROPERTY(int cameraOrientation READ cameraOrientation NOTIFY cameraOrientationChanged)
 
 public:
-    explicit WorldModel(QObject *parent = nullptr);
+    /// No default argument. The QML engine builds a default constructible
+    /// singleton itself and never calls `create`, so QML would hold a second
+    /// instance that C++ cannot see.
+    explicit WorldModel(QObject *parent);
 
     /// The one instance, reachable from C++ producers as well as from QML.
     /// The QML singleton machinery alone would give the engine its own instance

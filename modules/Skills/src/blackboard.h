@@ -61,7 +61,10 @@ class Blackboard : public QObject
     Q_PROPERTY(QString storagePath READ storagePath CONSTANT)
 
 public:
-    explicit Blackboard(QObject *parent = nullptr);
+    /// No default argument. The QML engine builds a default constructible
+    /// singleton itself and never calls `create`, so QML would hold a second
+    /// instance that C++ cannot see.
+    explicit Blackboard(QObject *parent);
 
     /// The one instance, reachable from C++ as well as from QML, for the same
     /// reason WorldModel has one: the QML singleton machinery alone would give

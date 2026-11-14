@@ -69,6 +69,7 @@ target_compile_definitions(tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_S
 # process with no model directory. Their headers name Qt Multimedia types,
 # which both modules keep PRIVATE.
 kerfur_add_test(visioncapture Vision Qt6::Multimedia)
+kerfur_add_test(videoframeimage Vision Qt6::Multimedia)
 kerfur_add_test(speechcapture Hearing KerfurCore Qt6::Multimedia Qt6::Qml)
 target_include_directories(tst_speechcapture PRIVATE ${CMAKE_SOURCE_DIR}/modules/Hearing/src)
 

@@ -42,6 +42,12 @@ QStringList candidates(const QString &settingsKey, const QString &folderName)
 
     directories.append(QDir::cleanPath(QDir::currentPath() + QLatin1Char('/') + folderName));
 
+#ifdef Q_OS_WASM
+    // The root of Emscripten's virtual file system, where the link time preload
+    // rule mounts each bundled folder.
+    directories.append(QLatin1Char('/') + folderName);
+#endif
+
     directories.removeDuplicates();
     return directories;
 }

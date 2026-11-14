@@ -114,6 +114,12 @@ if (EMSCRIPTEN)
         message(WARNING "No models directory; the web build will start without perception")
     endif ()
 
+    # Skill files are read at run time, so they ship the same way as the models.
+    target_link_options(
+        ${PROJECT_NAME}
+        PRIVATE "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/skills@/skills"
+    )
+
     # IndexedDB backs the directory people enrolled at run time are kept in.
     target_link_options(${PROJECT_NAME} PRIVATE -lidbfs.js)
 endif ()

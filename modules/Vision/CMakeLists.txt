@@ -32,6 +32,8 @@ set(
     src/faceanalysis.cpp
     src/faceanalysisworker.h
     src/faceanalysisworker.cpp
+    src/videoframeimage.h
+    src/videoframeimage.cpp
 )
 
 # The headless graph that feeds WorldModel, on its own capture thread. Built
