@@ -5,6 +5,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -56,6 +57,10 @@ private slots:
     void ordersRecordsByRank();
     void acceptsAListInsteadOfAMap();
     void dropsAPathThatDoesNotExist();
+    void readsEverySampleInOrder();
+    void readsAnOlderSingleFileAsTheFirstSample();
+    void dropsOnlyTheSampleThatDoesNotExist();
+    void enrolsEverySampleUnderOneId();
     void fallsBackToScanningWhenThereIsNoManifest();
     void reportsAManifestThatIsNotJson();
     void splitsFaceAndVoiceEntries();
@@ -83,8 +88,10 @@ void TestIdentityRegistry::readsTheDeclaredLayout()
     QVERIFY(record.has_value());
     QCOMPARE(record->name, QStringLiteral("kidev"));
     QCOMPARE(record->priority, 0);
-    QVERIFY(record->facePath.endsWith(QStringLiteral("faces/kidev.png")));
-    QVERIFY(record->voicePath.endsWith(QStringLiteral("voices/kidev.mp3")));
+    QCOMPARE(record->facePaths.size(), 1);
+    QCOMPARE(record->voicePaths.size(), 1);
+    QVERIFY(record->facePaths.first().endsWith(QStringLiteral("faces/kidev.png")));
+    QVERIFY(record->voicePaths.first().endsWith(QStringLiteral("voices/kidev.mp3")));
 }
 
 void TestIdentityRegistry::toleratesAHandEditedTrailingComma()
@@ -126,8 +133,8 @@ void TestIdentityRegistry::resolvesPathsAgainstTheManifest()
     const std::optional<IdentityRecord> record{
         IdentityRegistry::load(directory).find(QStringLiteral("ada"))};
     QVERIFY(record.has_value());
-    QCOMPARE(record->facePath,
-             QDir{directory}.absoluteFilePath(QStringLiteral("portraits/ada.jpg")));
+    QCOMPARE(record->facePaths,
+             QStringList{QDir{directory}.absoluteFilePath(QStringLiteral("portraits/ada.jpg"))});
 }
 
 void TestIdentityRegistry::keepsAnAbsolutePath()
@@ -145,7 +152,7 @@ void TestIdentityRegistry::keepsAnAbsolutePath()
     const std::optional<IdentityRecord> record{
         IdentityRegistry::load(directory).find(QStringLiteral("ada"))};
     QVERIFY(record.has_value());
-    QCOMPARE(record->facePath, shared);
+    QCOMPARE(record->facePaths, QStringList{shared});
 }
 
 void TestIdentityRegistry::fillsInConventionalPathsWhenNoneAreDeclared()
@@ -159,8 +166,10 @@ void TestIdentityRegistry::fillsInConventionalPathsWhenNoneAreDeclared()
     const std::optional<IdentityRecord> record{
         IdentityRegistry::load(directory).find(QStringLiteral("kidev"))};
     QVERIFY(record.has_value());
-    QVERIFY(record->facePath.endsWith(QStringLiteral("faces/kidev.png")));
-    QVERIFY(record->voicePath.endsWith(QStringLiteral("voices/kidev.mp3")));
+    QCOMPARE(record->facePaths.size(), 1);
+    QCOMPARE(record->voicePaths.size(), 1);
+    QVERIFY(record->facePaths.first().endsWith(QStringLiteral("faces/kidev.png")));
+    QVERIFY(record->voicePaths.first().endsWith(QStringLiteral("voices/kidev.mp3")));
 }
 
 void TestIdentityRegistry::ranksAStrangerAfterEverybody()
@@ -216,7 +225,7 @@ void TestIdentityRegistry::dropsAPathThatDoesNotExist()
     QVERIFY(record.has_value());
     // Still a person, just one with nothing to enrol. Half a person is more
     // useful than none, and the problem says which half is missing.
-    QVERIFY(record->facePath.isEmpty());
+    QVERIFY(record->facePaths.isEmpty());
     QVERIFY(registry.problem().contains(QStringLiteral("does not exist")));
 }
 
@@ -352,6 +361,88 @@ void TestIdentityRegistry::mergedRecordsAreRankedTogether()
     QCOMPARE(records.at(0).id, QStringLiteral("bob"));
     QCOMPARE(records.at(1).id, QStringLiteral("zoe"));
     QCOMPARE(records.at(2).id, QStringLiteral("ada"));
+}
+
+/// A person taught several times is several samples, oldest first, each one
+/// resolved against the manifest.
+void TestIdentityRegistry::readsEverySampleInOrder()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"ada":{"faces":["faces/ada-2.png","faces/ada-1.png"],)"
+                                    R"("voices":["voices/ada-1.wav"]}})"),
+                     {QStringLiteral("faces/ada-1.png"),
+                      QStringLiteral("faces/ada-2.png"),
+                      QStringLiteral("voices/ada-1.wav")})};
+
+    const std::optional<IdentityRecord> record{
+        IdentityRegistry::load(directory).find(QStringLiteral("ada"))};
+    QVERIFY(record.has_value());
+    const QDir base{directory};
+    QCOMPARE(record->facePaths,
+             QStringList({base.absoluteFilePath(QStringLiteral("faces/ada-2.png")),
+                          base.absoluteFilePath(QStringLiteral("faces/ada-1.png"))}));
+    QCOMPARE(record->voicePaths,
+             QStringList{base.absoluteFilePath(QStringLiteral("voices/ada-1.wav"))});
+}
+
+void TestIdentityRegistry::readsAnOlderSingleFileAsTheFirstSample()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"ada":{"face":"faces/ada.png",)"
+                                    R"("faces":["faces/ada-1.png","faces/ada.png"]}})"),
+                     {QStringLiteral("faces/ada.png"), QStringLiteral("faces/ada-1.png")})};
+
+    const std::optional<IdentityRecord> record{
+        IdentityRegistry::load(directory).find(QStringLiteral("ada"))};
+    QVERIFY(record.has_value());
+    const QDir base{directory};
+    QCOMPARE(record->facePaths,
+             QStringList({base.absoluteFilePath(QStringLiteral("faces/ada.png")),
+                          base.absoluteFilePath(QStringLiteral("faces/ada-1.png"))}));
+}
+
+void TestIdentityRegistry::dropsOnlyTheSampleThatDoesNotExist()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"ada":{"faces":["faces/ada-1.png","faces/gone.png"]}})"),
+                     {QStringLiteral("faces/ada-1.png")})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    const std::optional<IdentityRecord> record{registry.find(QStringLiteral("ada"))};
+    QVERIFY(record.has_value());
+    QCOMPARE(record->facePaths,
+             QStringList{QDir{directory}.absoluteFilePath(QStringLiteral("faces/ada-1.png"))});
+    QVERIFY(registry.problem().contains(QStringLiteral("gone.png")));
+}
+
+/// Both galleries enrol one embedding per pair, so every sample has to reach
+/// them under the same id.
+void TestIdentityRegistry::enrolsEverySampleUnderOneId()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"ada":{"faces":["faces/ada-1.png","faces/ada-2.png"],)"
+                                    R"("voices":["voices/ada-1.wav","voices/ada-2.wav"]}})"),
+                     {QStringLiteral("faces/ada-1.png"),
+                      QStringLiteral("faces/ada-2.png"),
+                      QStringLiteral("voices/ada-1.wav"),
+                      QStringLiteral("voices/ada-2.wav")})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QCOMPARE(registry.size(), 1);
+    QCOMPARE(registry.faceEntries().size(), 2);
+    QCOMPARE(registry.voiceEntries().size(), 2);
+    for (const auto &[id, path] : registry.faceEntries() + registry.voiceEntries()) {
+        QCOMPARE(id, QStringLiteral("ada"));
+        QVERIFY(QFileInfo::exists(path));
+    }
 }
 
 QTEST_MAIN(TestIdentityRegistry)

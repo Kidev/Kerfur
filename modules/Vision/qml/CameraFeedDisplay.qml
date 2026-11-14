@@ -644,6 +644,8 @@ Rectangle {
                 return "orange";
             if (root.faceTracker.faceDetected)
                 return root.identityColor(root.faceTracker.faces[0]);
+            if (root.faceTracker.perceptionProblem !== "")
+                return "orange";
             return "cyan";
         }
 
@@ -656,6 +658,9 @@ Rectangle {
                 return "Error: " + root.faceTracker.errorString;
             if (!cameraView.hasFrame)
                 return "No Signal";
+            // The picture is live; what follows is about the analysis of it.
+            if (!root.faceTracker.faceDetected && root.faceTracker.perceptionProblem !== "")
+                return "Warning: " + root.faceTracker.perceptionProblem;
             if (!root.faceTracker.faceDetected)
                 return "Searching...";
             const name = root.faceTracker.identity !== "" ? root.faceTracker.identity : "Unknown face";

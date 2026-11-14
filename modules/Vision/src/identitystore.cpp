@@ -169,7 +169,7 @@ void IdentityStore::enrol(FacePipeline &pipeline,
     } else {
         m_entries = refreshed;
     }
-    qCInfo(identityLog) << "gallery holds" << m_entries.size() << "identities";
+    qCInfo(identityLog) << "gallery holds" << m_entries.size() << "face samples";
 }
 
 QString IdentityStore::match(const cv::Mat &embedding, double &similarity) const

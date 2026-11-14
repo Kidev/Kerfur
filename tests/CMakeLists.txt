@@ -65,6 +65,13 @@ endforeach ()
 
 target_compile_definitions(tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# Capture without models: the tracker and the recognizer themselves, in a
+# process with no model directory. Their headers name Qt Multimedia types,
+# which both modules keep PRIVATE.
+kerfur_add_test(visioncapture Vision Qt6::Multimedia)
+kerfur_add_test(speechcapture Hearing KerfurCore Qt6::Multimedia Qt6::Qml)
+target_include_directories(tst_speechcapture PRIVATE ${CMAKE_SOURCE_DIR}/modules/Hearing/src)
+
 # The skills suites. No camera, no microphone, no models and no QML engine: the
 # matcher is a function over strings and the blackboard is a map, which is what
 # makes the part that decides whether Kerfur obeys somebody testable at all.

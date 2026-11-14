@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFile>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -33,7 +34,8 @@ private slots:
     {
         // Its own organisation and application, so that the suite cannot read
         // or write the settings of a real installation on the machine running
-        // it.
+        // it. Test mode moves the writable gallery under ~/.qttest as well.
+        QStandardPaths::setTestModeEnabled(true);
         QCoreApplication::setOrganizationName(QStringLiteral("kidev"));
         QCoreApplication::setApplicationName(QStringLiteral("tst_identitydirectory"));
     }
@@ -47,6 +49,7 @@ private slots:
 
     void init()
     {
+        QDir{IdentityDirectory::writableDirectory()}.removeRecursively();
         QSettings settings;
         settings.remove(QStringLiteral("Paths/identitiesPath"));
         settings.sync();
@@ -137,6 +140,32 @@ private slots:
         const QString description{IdentityDirectory::describeSearchPath()};
         QVERIFY(!description.isEmpty());
         QVERIFY(description.contains(QStringLiteral("identities")));
+    }
+
+    /// Nothing ships, so an installation that has been taught nobody and has
+    /// no gallery configured enrols from nothing.
+    void aFreshInstallationHasNoGallery()
+    {
+        QVERIFY(IdentityDirectory::galleries().isEmpty());
+        QVERIFY(IdentityDirectory::resolve().isEmpty());
+    }
+
+    /// An `identities` directory in a checkout, or wherever Kerfur happens to
+    /// be started from, is somebody's personal data and never a gallery.
+    void aCheckoutGalleryIsNotSearched()
+    {
+        QTemporaryDir checkout;
+        QVERIFY(checkout.isValid());
+        writeFile(checkout.filePath(QStringLiteral("identities/kidev.png")));
+        const QString previous{QDir::currentPath()};
+        QVERIFY(QDir::setCurrent(checkout.path()));
+
+        const QStringList galleries{IdentityDirectory::galleries()};
+        const QString resolved{IdentityDirectory::resolve()};
+        QVERIFY(QDir::setCurrent(previous));
+
+        QVERIFY(galleries.isEmpty());
+        QVERIFY(resolved.isEmpty());
     }
 
     void candidatesAreNotRepeated()

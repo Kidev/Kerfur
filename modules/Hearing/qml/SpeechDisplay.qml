@@ -61,6 +61,8 @@ Rectangle {
             return "error";
         if (root.speechRecognizer.processing)
             return "transcribing";
+        if (root.speechRecognizer.listening && root.speechRecognizer.modelProblem !== "")
+            return "listening, no transcription";
         if (root.speechRecognizer.listening)
             return "listening";
         return "starting";

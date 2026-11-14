@@ -34,6 +34,10 @@ QStringList candidates(const QString &settingsKey, const QString &folderName)
         directories.append(executable + QLatin1Char('/') + folderName);
         directories.append(
             QDir::cleanPath(executable + QStringLiteral("/../") + folderName));
+#ifdef Q_OS_MACOS
+        directories.append(
+            QDir::cleanPath(executable + QStringLiteral("/../Resources/") + folderName));
+#endif
     }
 
     directories.append(QDir::cleanPath(QDir::currentPath() + QLatin1Char('/') + folderName));

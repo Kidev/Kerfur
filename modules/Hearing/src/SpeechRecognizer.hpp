@@ -69,7 +69,13 @@ class SpeechRecognizer : public QObject
     Q_PROPERTY(QStringList transcripts READ transcripts NOTIFY lastTextChanged)
 
     Q_PROPERTY(float confidence READ confidence NOTIFY confidenceChanged)
+    /// What stops the microphone: permission, device, capture. Empty while
+    /// audio arrives, whatever the speech model is doing.
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
+    /// Why nothing is transcribed: the speech model is missing or failed to
+    /// load. Capture, the level meter, the voice segmenter and speaker
+    /// recognition all run without it.
+    Q_PROPERTY(QString modelProblem READ modelProblem NOTIFY modelPathChanged)
     Q_PROPERTY(bool kerfurDetected READ kerfurDetected NOTIFY kerfurDetectedChanged)
     Q_PROPERTY(float volumeLevel READ volumeLevel NOTIFY volumeLevelChanged)
     Q_PROPERTY(bool processing READ processing NOTIFY processingChanged)
@@ -134,6 +140,7 @@ public:
     QStringList transcripts() const { return m_transcripts; }
     float confidence() const { return m_confidence; }
     QString errorString() const { return m_errorString; }
+    QString modelProblem() const { return m_modelError; }
     bool kerfurDetected() const { return m_kerfurDetected; }
     float volumeLevel() const { return m_volumeLevel; }
     bool processing() const { return m_processing; }

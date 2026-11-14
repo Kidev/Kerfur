@@ -78,7 +78,8 @@
             "license": "Apache-2.0",
             "profiles": [
                 "desktop",
-                "pi"
+                "pi",
+                "wasm"
             ]
         },
         {
@@ -118,7 +119,8 @@
             "license": "CC-BY-4.0",
             "profiles": [
                 "desktop",
-                "pi"
+                "pi",
+                "wasm"
             ]
         }
     ]

@@ -31,7 +31,15 @@ QStringList ModelDirectory::candidates()
         directories.append(appData + QStringLiteral("/models"));
     }
 
-    directories.append(QCoreApplication::applicationDirPath() + QStringLiteral("/models"));
+    // Beside the executable, then the top of an installed tree, which is where
+    // `make` puts the models it bundles: `bin/../models` on Linux and Windows,
+    // `Contents/Resources/models` inside a macOS bundle.
+    const QString executable{QCoreApplication::applicationDirPath()};
+    directories.append(executable + QStringLiteral("/models"));
+    directories.append(QDir::cleanPath(executable + QStringLiteral("/../models")));
+#ifdef Q_OS_MACOS
+    directories.append(QDir::cleanPath(executable + QStringLiteral("/../Resources/models")));
+#endif
 
 #ifdef Q_OS_WASM
     // Emscripten's virtual file system, where the link time preload rule mounts

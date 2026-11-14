@@ -24,8 +24,8 @@ namespace Kerfur {
 namespace AssetSearch {
 
 /// In order: the named setting, the application data location, a directory
-/// beside the executable, one directly above it, and one under the working
-/// directory.
+/// beside the executable, one directly above it (and in `Resources` on macOS),
+/// and one under the working directory.
 ///
 /// The last two are what make a build tree work without configuration: running
 /// `./build/kerfur` from a checkout puts the executable one level below the

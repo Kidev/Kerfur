@@ -21,7 +21,8 @@ class ModelDirectory
 public:
     /// In order: the `Paths/modelsPath` setting that KSettings writes, the
     /// application data location, a `models` directory beside the executable,
-    /// and on WebAssembly the preload mount point.
+    /// one directly above it (and in `Resources` on macOS), and on WebAssembly
+    /// the preload mount point.
     static QStringList candidates();
 
     /// The first candidate that exists, or empty when none does. Only that one

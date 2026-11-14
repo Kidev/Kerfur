@@ -24,6 +24,9 @@ You can download an archive and extract the files:
 - [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz)  
 - [Linux arm64 (RaspiOS Bookworm for RPI5)](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-bookworm-arm64-rpi.tar.gz)  
 
+## How to use ?
+`Tab` shows and hides the control panel. On a touch screen, or with the mouse, hold a finger or the left button on the face for five seconds to do the same. `Esc` quits when `allowEscapeShortcut` is set.
+
 ## How to build ?
 You can also chose to build the project. It is very straightforward.  
 
@@ -46,16 +49,17 @@ kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.8.3/gcc_64
     - `make web` to create a WASM build  
     - `make run-web` to start a localserver running the application (requires to have a WASM build first with `make web`)  
     - `make upload-web` to upload the WASM application to a web server. You will need to provide credentials (`WASM_UPLOAD_SOCKET` `WASM_UPLOAD_USERNAME` `WASM_UPLOAD_PASSWORD`). The application will be uploaded inside a folder `Kerfur` in the folder you are in upon connection.
-    - `make models` to fetch and checksum verify the perception models into the application data directory, which is where a desktop build looks for them
+    - `make models` to fetch and checksum verify the perception models into the application data directory, which a desktop build searches first
     - `make models-pi` to fetch the Raspberry Pi profile, which is the same set as the desktop one
-    - `make models-web` to fetch the smaller web profile into `models/` in the source tree, which `make web` bakes into the WebAssembly file system
+    - `make models-web` to fetch the smaller web profile into `models/` in the source tree, which `make web` runs on its own and bakes into the WebAssembly file system
+    - `make` bundles the `MODELS_PROFILE` profile (`desktop` by default, `pi` for a Pi) into `install/models`, so every archive, AppImage and installer made from that tree starts with its models. `MODELS_CACHE_DIR` (`~/.cache/kidev/Kerfur/models`) keeps the verified downloads, and a rebuild copies from it instead of fetching again
 
 ### Perception
 Kerfur sees and hears with models that are provisioned separately from the binary, because it has to boot without a network. `assets/models.json` is the manifest: it pins every file by SHA-256, and `make models` is what reads it. The desktop profile covers the five vision stages, speech recognition and speaker recognition; the web profile drops the ones a browser cannot afford.
 
 The Pi profile is the same set as the desktop one, because until the accelerator backend lands the Pi runs exactly the same CPU graph -- every stage above goes through OpenCV DNN and Whisper, neither of which is desktop-only. It exists as a separate profile name so that the day the two diverge it is a change to `assets/models.json` rather than to any code.
 
-Without them the face still runs; it simply has nothing to look at. Any stage whose model file is missing is disabled and logged at startup rather than failing the start.
+Without them the face, the camera preview and the microphone still run. The control panel names what is missing in amber, beside the picture and the level meter, and keeps red for a camera or microphone that cannot capture. Any stage whose model file is missing is disabled and logged at startup rather than failing the start.
 
 **How much of the frame the models get to see** is the one knob worth turning when detection is unreliable. The camera frame is reduced before any model runs -- to 960 pixels on the longer side by default -- and everything downstream sees only what survives that. A face across the room or a hand at arm's length is a few dozen pixels wide by then, which is where the detail goes. *Vision > Analysis detail* in the control panel raises it as far as 1920; the cost is superlinear and is printed next to the setting, in milliseconds per pass, so the trade is made against a number rather than a feeling. It is never enlarged past what the camera actually delivers, so if the panel reports a small camera resolution that is the thing to fix first.
 
@@ -66,44 +70,45 @@ Without them the face still runs; it simply has nothing to look at. Any stage wh
 The picture is held back until the pass measured on it comes home, so the boxes are always drawn on the frame they were measured in rather than on a later one.
 
 ### Knowing people
-`identities/` is the gallery of people Kerfur recognises, and `identities/ids.json` is what declares them:
+Kerfur ships knowing nobody. Every profile, the web one included, carries the two models that learn a person (face recognition and speaker recognition), and people are taught from the control panel.
+
+#### Teaching someone
+In the *People* section, stage a face (*Take from camera*, or a picture file) and a voice (*Use last sentence*, or a recording), give a name, a title and a rank, and press *Save*. Each save adds what was staged to that person as one more sample. Teaching the same person again in other light, from another angle or in a noisier room is what makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Up to ten pictures and ten recordings are kept per person, the oldest dropped first.
+
+Each person's row in the panel has *Teach*, which fills in their name, title and rank for the next save, *Forget faces* and *Forget voices*, which delete one kind of sample, and *Remove*. Saving a known name with nothing staged changes only the title and rank.
+
+Both recognisers re-enrol as soon as a person is saved or changed, with no restart. Everything taught is kept in `identities/` under the application data directory (`~/.local/share/kidev/Kerfur/identities` on Linux) and read back on the next start. On the web build that directory is kept in the browser's IndexedDB, so it survives a reload and never leaves the browser. Embeddings are cached against a hash of each file, so a new sample costs one inference and a restart costs none.
+
+Pictures are re-encoded as PNG at most 1920 pixels on the longer side, which also drops any metadata the original carried. A sentence used as a voice is stored as 16 bit WAV and has to last at least two seconds. Below that the measurement says more about the room than about the speaker, so Kerfur puts no name to it.
+
+#### Rank and title
+**Rank decides, and the title is what you read.** Nothing on screen says "rank 2" any more; it says "trusted", because a number under somebody's chin is the consequence of a decision rather than the decision itself. The rank still does all the deciding, and the panel still says out loud what it decided (for example "owner, may command"). A record that declares no title falls back to spelling the rank out.
+
+**Rank decides two things, and only two.** When several people are in the room, Kerfur's eyes follow the highest ranked one. And an utterance may only act on the world if the voice it came from is rank 0. Everybody is heard, transcribed, identified and shown; when several people speak at once the higher ranked one is answered first. A command from anybody else is reported as refused rather than silently dropped, because a command that was declined and one that was never heard look identical otherwise.
+
+#### The gallery format
+The directory holds an `ids.json` and the files it names:
 
 ```json
 {
     "kidev": {
         "name": "kidev",
-        "face": "faces/kidev.png",
-        "voice": "voices/kidev.mp3",
+        "faces": ["faces/kidev-1.png", "faces/kidev-2.png"],
+        "voices": ["voices/kidev-1.wav"],
         "priority": 0,
         "title": "owner"
     }
 }
 ```
 
-Paths are relative to the manifest, so the whole directory can be copied to a Pi or moved anywhere without a single path being rewritten. An absolute path is left alone, for a gallery shared between machines.
-
-- `face` is any reasonably lit photograph with one face in it
-- `voice` is at least a few seconds of them speaking alone
+- `faces` are photographs with one face each, reasonably lit
+- `voices` are recordings of them speaking alone, a few seconds each
 - `priority` is rank, zero being the top
 - `title` is what the interface calls them: "owner", "trusted", anything you like
 
-Either half on its own works: a person with only a photograph is recognised by sight and not by voice. Both are optional too -- omit them and the conventional locations, `faces/<id>.png` and `voices/<id>.mp3`, are used. A gallery with no manifest at all still works, by file stem, with everybody unranked.
+Paths are relative to the manifest, so the directory can be copied to another machine without a single path being rewritten; an absolute path is left alone. Either kind of sample works on its own: a person with only photographs is recognised by sight and not by voice. A single `face` or `voice` string, as older manifests write, is read as the first sample of that kind.
 
-**Rank decides, and the title is what you read.** Nothing on screen says "rank 2" any more; it says "trusted", because a number under somebody's chin is the consequence of a decision rather than the decision itself. The rank still does all the deciding, and the panel still says out loud what it decided -- "owner, may command". A manifest that declares no title falls back to spelling the rank out, so an older gallery loses nothing.
-
-**Rank decides two things, and only two.** When several people are in the room, Kerfur's eyes follow the highest ranked one. And an utterance may only act on the world if the voice it came from is rank 0. Everybody is heard, transcribed, identified and shown; when several people speak at once the higher ranked one is answered first. A command from anybody else is reported as refused rather than silently dropped, because a command that was declined and one that was never heard look identical otherwise.
-
-The directory is deliberately not committed: a face and a voice are personal data, and `.gitignore` keeps them out of the history. Enrolment happens at startup and is cached against a hash of each file, so adding somebody re-reads one file rather than all of them. The directory is looked for wherever `Paths/identitiesPath` says, next to the executable, one level above it, and under the working directory.
-
-#### Adding people while Kerfur runs
-
-The *People* section of the control panel enrols somebody without touching the source tree. Stage a face (*Take from camera*, or a picture file) and a voice (*Use last sentence*, or a recording), give a name, a title and a rank, and press *Save*. Saving a name that is already there updates that person: whatever was staged replaces their file, and the rest stays.
-
-People added this way live in `identities/` under the application data directory (`~/.local/share/kidev/Kerfur/identities` on Linux), in a gallery of the same shape as the one above. On the web build that directory is kept in the browser's IndexedDB, so it survives a reload and never leaves the browser. Both galleries are read together, the panel's last: a record there overrides a shipped record with the same id. Both recognisers re-enrol as soon as a person is saved or removed, with no restart.
-
-The panel writes its own `ids.json` and refuses to rewrite one edited by hand into the list or `identities` form. Pictures are re-encoded as PNG at most 1920 pixels on the longer side, which also drops any metadata the original carried. A sentence used as a voice is stored as 16 bit WAV and has to last at least two seconds.
-
-A voice needs about two seconds of continuous speech before Kerfur will put a name to it. Below that the measurement says more about the room than about the speaker, so it says nothing instead.
+A gallery written by hand, or copied from another machine, is read from wherever the `Paths/identitiesPath` setting points. The setting is unset by default. When it is set, that gallery is read first and the panel's records override it id by id; the panel lists and changes only its own records. A hand-written gallery may also skip the manifest, in which case files are matched by stem and everybody is unranked. The panel refuses to rewrite an `ids.json` edited by hand into the list or `identities` form.
 
 **Where a sentence appears** is the answer to who said it. When a voice is recognised and that person's face is in shot at the same time, the camera preview draws the sentence over their head, bordered in the colour their face box already carries. The two halves are matched by name, which is sound because one manifest enrols both galleries: a face and a voice belong to one person because it says so, not because two files happen to share a stem. When the speaker is recognised but not in shot, nothing is drawn -- the transcript is in the hearing panel either way, and a caption floating over a stranger, or over nobody, would be a claim rather than an observation.
 

@@ -29,6 +29,8 @@ Item {
 
     // Face tracking properties
     readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.faceDetected
+    // How long a press on the face lasts before it counts as `held`.
+    readonly property int holdDuration: 5000
     property bool isBlinking: false
     property bool isDoubleBlink: false
     property bool isTouched: false
@@ -59,6 +61,10 @@ Item {
     property real targetLeftRightAngle: 90
     property real targetUpDownAngle: 90
     property int winkType: Face.WinkType.None
+
+    // A press, touch or left button, kept on the face for `holdDuration`. The
+    // way to reach the control panel on a screen with no keyboard.
+    signal held
 
     function cancelDoubleBlink() {
         root.pendingDoubleBlink = false;
@@ -570,18 +576,30 @@ Item {
         }
     }
 
+    Timer {
+        id: holdTimer
+
+        interval: root.holdDuration
+        repeat: false
+
+        onTriggered: root.held()
+    }
+
     MultiPointTouchArea {
         id: touchArea
 
         anchors.fill: parent
 
+        onCanceled: holdTimer.stop()
         onPressed: {
             root.isTouched = true;
             root.cancelDoubleBlink();
             root.stopWinking();
+            holdTimer.restart();
         }
         onReleased: {
             root.isTouched = false;
+            holdTimer.stop();
         }
     }
 
@@ -598,6 +616,7 @@ Item {
         hoverEnabled: !useFaceTracking && !maintainPosition
         propagateComposedEvents: false
 
+        onCanceled: holdTimer.stop()
         onMouseXChanged: {
             if (!useFaceTracking && !maintainPosition && pupilTrackingArea.shouldTrack && pupilTrackingArea.containsMouse) {
                 root.targetLeftRightAngle = (pupilTrackingArea.mouseX / pupilTrackingArea.width) * 180;
@@ -611,6 +630,7 @@ Item {
         onPressed: mouse => {
             if (mouse.button === Qt.LeftButton) {
                 root.isTouched = true;
+                holdTimer.restart();
                 mouse.accepted = true;
             } else if (mouse.button === Qt.RightButton) {
                 var winkSide = Math.random() < 0.5 ? Face.WinkType.Left : Face.WinkType.Right;
@@ -621,6 +641,7 @@ Item {
         onReleased: mouse => {
             if (mouse.button === Qt.LeftButton) {
                 root.isTouched = false;
+                holdTimer.stop();
                 mouse.accepted = true;
             } else if (mouse.button === Qt.RightButton) {
                 root.stopWinking();

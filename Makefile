@@ -137,6 +137,17 @@ else ifeq ($(OS_NAME_UNAME),Darwin)
 else
   MODELS_DESKTOP_DIR ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)/$(MODELS_APP_SUFFIX)
 endif
+# Verified downloads, kept across `make clean` so a rebuild does not fetch again.
+MODELS_CACHE_DIR ?= $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/$(MODELS_APP_SUFFIX)
+# The profile a desktop build bundles; `make MODELS_PROFILE=pi` for a Pi.
+MODELS_PROFILE ?= desktop
+# Where an installed tree carries its models: its top level, or Resources inside
+# the macOS bundle.
+ifeq ($(OS_NAME_UNAME),Darwin)
+  BUNDLE_DATA_DIR := $(ABS_INSTALL_DIR)/$(PROJECT_BINARY).app/Contents/Resources
+else
+  BUNDLE_DATA_DIR := $(ABS_INSTALL_DIR)
+endif
 
 ifeq ($(DEBUG),1)
   BUILD_MODE := Debug
@@ -158,11 +169,11 @@ debug:
 
 web:
 	@echo "Building with MinSizeRel configuration for web"
-	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg web-build ensure-config
+	@$(MAKE) DEBUG=0 WEB=1 clean emsdk setup-vcpkg models-web web-build ensure-config
 
 web-debug:
 	@echo "Building with Debug configuration for web"
-	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg web-build ensure-config
+	@$(MAKE) DEBUG=1 WEB=1 clean emsdk setup-vcpkg models-web web-build ensure-config
 
 setup-vcpkg:
 	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
@@ -308,19 +319,22 @@ desktop-install:
 desktop-fast: desktop-build
 
 models:
-	@$(MODELS_SCRIPT) desktop "$(MODELS_DESKTOP_DIR)"
+	@$(MODELS_SCRIPT) desktop "$(MODELS_DESKTOP_DIR)" "$(MODELS_CACHE_DIR)"
 
 models-pi:
-	@$(MODELS_SCRIPT) pi "$(MODELS_DESKTOP_DIR)"
+	@$(MODELS_SCRIPT) pi "$(MODELS_DESKTOP_DIR)" "$(MODELS_CACHE_DIR)"
 
 models-web:
-	@$(MODELS_SCRIPT) wasm "$(MODELS_WEB_DIR)"
+	@$(MODELS_SCRIPT) wasm "$(MODELS_WEB_DIR)" "$(MODELS_CACHE_DIR)"
+
+desktop-bundle:
+	@$(MODELS_SCRIPT) $(MODELS_PROFILE) "$(BUNDLE_DATA_DIR)/models" "$(MODELS_CACHE_DIR)"
 
 test: deskop-configure
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)
 	cd $(BUILD_DIR) && ctest --output-on-failure
 
-desktop: setup-vcpkg deskop-configure desktop-build desktop-install shortcut
+desktop: setup-vcpkg deskop-configure desktop-build desktop-install desktop-bundle shortcut
 
 shortcut:
 ifeq ($(IS_WINDOWS),1)
@@ -414,6 +428,7 @@ web-build:
 	cp $(BUILD_DIR)/$(PROJECT_BINARY).html $(ABS_INSTALL_DIR)/index.html
 	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.wasm $(ABS_INSTALL_DIR)
+	find $(BUILD_DIR) -maxdepth 1 -name '*.data' -exec cp {} $(ABS_INSTALL_DIR) \;
 	cp $(BUILD_DIR)/*.svg $(ABS_INSTALL_DIR)
 	cp $(ASSETS_DIR)/logo.png $(ABS_INSTALL_DIR)/logo.png
 	cp $(ASSETS_DIR)/favicon.ico $(ABS_INSTALL_DIR)/favicon.ico
@@ -484,5 +499,5 @@ clean-env:
 
 clean-all: clean clean-vcpkg
 
-.PHONY: all debug web web-debug models models-pi models-web setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
+.PHONY: all debug web web-debug models models-pi models-web desktop-bundle setup-vcpkg repo upload-repo upload-web create-installer installer setup-installer desktop-build desktop shortcut emsdk web-build run-web ensure-config test clean clean-vcpkg clean-env clean-all
 .IGNORE: clean clean-vcpkg clean-env clean-all

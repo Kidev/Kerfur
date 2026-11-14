@@ -308,11 +308,13 @@ void FaceAnalysisWorker::enrolGallery()
 
     const QStringList galleries{IdentityDirectory::galleries()};
     capabilities.galleryDirectory = galleries.join(QStringLiteral(", "));
+    // Nobody taught yet is how every installation starts, so neither an absent
+    // gallery nor an empty one is a problem to report.
     if (galleries.isEmpty()) {
         m_registry = IdentityRegistry{};
         m_identities.clear();
-        problems.append(QStringLiteral("no identities gallery; searched %1")
-                            .arg(IdentityDirectory::describeSearchPath()));
+        qCInfo(analysisLog) << "nobody enrolled yet; looked in"
+                            << IdentityDirectory::describeSearchPath();
     } else {
         m_registry = IdentityRegistry::load(galleries);
         capabilities.enrolled = m_registry.names();
@@ -322,7 +324,7 @@ void FaceAnalysisWorker::enrolGallery()
         }
         if (m_registry.isEmpty()) {
             m_identities.clear();
-            problems.append(QStringLiteral("%1 declares nobody").arg(capabilities.galleryDirectory));
+            qCInfo(analysisLog) << capabilities.galleryDirectory << "declares nobody";
         } else if (capabilities.identityReady) {
             m_identities.enrol(m_faces, m_registry.faceEntries(), identityCachePath());
             qCInfo(analysisLog) << "enrolled" << m_identities.size() << "faces from"

@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QJSEngine>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QLoggingCategory>
@@ -41,6 +42,34 @@ const QStringList &voiceSuffixes()
                                       QStringLiteral("ogg"),
                                       QStringLiteral("m4a")};
     return suffixes;
+}
+
+/// The relative sample paths one manifest entry holds for one kind: the single
+/// file under `kind` (`face`, `voice`), which an older manifest writes, then
+/// the list under `folder` (`faces`, `voices`), in order and without repeats.
+QStringList samplesOf(const QJsonObject &entry, const QString &kind, const QString &folder)
+{
+    QStringList samples;
+    const QString single{entry.value(kind).toString()};
+    if (!single.isEmpty()) {
+        samples.append(single);
+    }
+    // Copy initialization: a braced QJsonArray from a QJsonValue picks the
+    // initializer list constructor and nests the array one level down.
+    const QJsonArray listed = entry.value(folder).toArray();
+    for (const QJsonValue &value : listed) {
+        const QString path{value.toString()};
+        if (!path.isEmpty() && !samples.contains(path)) {
+            samples.append(path);
+        }
+    }
+    return samples;
+}
+
+bool holdsSamples(const QJsonObject &entry)
+{
+    return !samplesOf(entry, QStringLiteral("face"), QStringLiteral("faces")).isEmpty() ||
+           !samplesOf(entry, QStringLiteral("voice"), QStringLiteral("voices")).isEmpty();
 }
 
 QString localPath(const QUrl &file)
@@ -404,28 +433,22 @@ bool IdentityLibrary::enrol(const QString &name, const QString &title, int prior
 
     QJsonObject entry{manifest->value(id).toObject()};
 
-    if (!m_stagedFace.isEmpty()) {
-        const QString face{QStringLiteral("faces/%1.png").arg(id)};
-        if (!writeInside(face, m_stagedFace)) {
-            return false;
-        }
-        const QString previous{entry.value(QStringLiteral("face")).toString()};
-        if (!previous.isEmpty() && previous != face) {
-            removeInside(previous);
-        }
-        entry.insert(QStringLiteral("face"), face);
+    if (!m_stagedFace.isEmpty() && !addSample(entry,
+                                              id,
+                                              QStringLiteral("face"),
+                                              QStringLiteral("faces"),
+                                              QStringLiteral("png"),
+                                              m_stagedFace)) {
+        return false;
     }
 
-    if (!m_stagedVoice.data.isEmpty()) {
-        const QString voice{QStringLiteral("voices/%1.%2").arg(id, m_stagedVoice.suffix)};
-        if (!writeInside(voice, m_stagedVoice.data)) {
-            return false;
-        }
-        const QString previous{entry.value(QStringLiteral("voice")).toString()};
-        if (!previous.isEmpty() && previous != voice) {
-            removeInside(previous);
-        }
-        entry.insert(QStringLiteral("voice"), voice);
+    if (!m_stagedVoice.data.isEmpty() && !addSample(entry,
+                                                    id,
+                                                    QStringLiteral("voice"),
+                                                    QStringLiteral("voices"),
+                                                    m_stagedVoice.suffix,
+                                                    m_stagedVoice.data)) {
+        return false;
     }
 
     entry.insert(QStringLiteral("name"), displayName);
@@ -468,8 +491,11 @@ bool IdentityLibrary::remove(const QString &id)
     }
 
     const QJsonObject entry{manifest->value(id).toObject()};
-    removeInside(entry.value(QStringLiteral("face")).toString());
-    removeInside(entry.value(QStringLiteral("voice")).toString());
+    const QStringList samples{samplesOf(entry, QStringLiteral("face"), QStringLiteral("faces")) +
+                              samplesOf(entry, QStringLiteral("voice"), QStringLiteral("voices"))};
+    for (const QString &sample : samples) {
+        removeInside(sample);
+    }
     manifest->remove(id);
 
     if (!writeManifest(*manifest)) {
@@ -479,6 +505,90 @@ bool IdentityLibrary::remove(const QString &id)
     qCInfo(libraryLog) << "removed" << id << "from" << m_directory;
     commit();
     succeed();
+    return true;
+}
+
+bool IdentityLibrary::forgetFaces(const QString &id)
+{
+    return forgetSamples(id, QStringLiteral("face"), QStringLiteral("faces"));
+}
+
+bool IdentityLibrary::forgetVoices(const QString &id)
+{
+    return forgetSamples(id, QStringLiteral("voice"), QStringLiteral("voices"));
+}
+
+bool IdentityLibrary::forgetSamples(const QString &id, const QString &kind, const QString &folder)
+{
+    if (m_directory.isEmpty() || !m_ready) {
+        return fail(QStringLiteral("Stored identities are not available yet."));
+    }
+
+    std::optional<QJsonObject> manifest{readManifest()};
+    if (!manifest.has_value()) {
+        return false;
+    }
+    if (id.isEmpty() || !manifest->contains(id)) {
+        return fail(QStringLiteral("%1 was not enrolled here.").arg(id));
+    }
+
+    QJsonObject entry{manifest->value(id).toObject()};
+    for (const QString &sample : samplesOf(entry, kind, folder)) {
+        removeInside(sample);
+    }
+    entry.remove(kind);
+    entry.remove(folder);
+
+    // A record with no sample left recognises nobody, and keeping it would
+    // list a person the panel can no longer teach anything about.
+    const bool emptied{!holdsSamples(entry)};
+    if (emptied) {
+        manifest->remove(id);
+    } else {
+        manifest->insert(id, entry);
+    }
+
+    if (!writeManifest(*manifest)) {
+        return false;
+    }
+
+    qCInfo(libraryLog) << "forgot every" << kind << "of" << id
+                       << (emptied ? "and the person with them" : "");
+    commit();
+    succeed();
+    return true;
+}
+
+bool IdentityLibrary::addSample(QJsonObject &entry,
+                                const QString &id,
+                                const QString &kind,
+                                const QString &folder,
+                                const QString &suffix,
+                                const QByteArray &data)
+{
+    QStringList samples{samplesOf(entry, kind, folder)};
+
+    // The first number nothing answers to, on disk or in the manifest, so a
+    // sample is never written over another one or over a file left behind.
+    QString file;
+    for (int number{1}; file.isEmpty(); ++number) {
+        const QString candidate{
+            QStringLiteral("%1/%2-%3.%4").arg(folder, id, QString::number(number), suffix)};
+        if (!samples.contains(candidate) && !QFileInfo::exists(resolveInside(candidate))) {
+            file = candidate;
+        }
+    }
+    if (!writeInside(file, data)) {
+        return false;
+    }
+    samples.append(file);
+
+    while (samples.size() > maximumSamples) {
+        removeInside(samples.takeFirst());
+    }
+
+    entry.remove(kind);
+    entry.insert(folder, QJsonArray::fromStringList(samples));
     return true;
 }
 
@@ -608,8 +718,10 @@ void IdentityLibrary::refreshPeople()
                 {QStringLiteral("title"), record.title},
                 {QStringLiteral("priority"), record.priority},
                 {QStringLiteral("standing"), registry.standingOf(record.id)},
-                {QStringLiteral("hasFace"), !record.facePath.isEmpty()},
-                {QStringLiteral("hasVoice"), !record.voicePath.isEmpty()},
+                {QStringLiteral("hasFace"), !record.facePaths.isEmpty()},
+                {QStringLiteral("hasVoice"), !record.voicePaths.isEmpty()},
+                {QStringLiteral("faceCount"), record.facePaths.size()},
+                {QStringLiteral("voiceCount"), record.voicePaths.size()},
             });
         }
     }

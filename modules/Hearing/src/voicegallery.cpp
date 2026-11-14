@@ -75,11 +75,14 @@ void VoiceGallery::insert(const QString &name, const QString &sourceHash, const 
 
 QStringList VoiceGallery::names() const
 {
+    // One entry per recording, so a person taught with several appears once
+    // per recording here and once in the answer.
     QStringList list;
     list.reserve(m_entries.size());
     for (const Entry &entry : m_entries) {
         list.append(entry.name);
     }
+    list.removeDuplicates();
     return list;
 }
 
@@ -186,7 +189,8 @@ void VoiceGallery::enrol(SpeakerEmbedder &embedder,
     } else {
         m_entries = refreshed;
     }
-    qCInfo(voiceLog) << "voice gallery holds" << m_entries.size() << "voices";
+    qCInfo(voiceLog) << "voice gallery holds" << m_entries.size() << "recordings of"
+                     << names().size() << "people";
 }
 
 bool VoiceGallery::loadFrom(const QString &cachePath)
