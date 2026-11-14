@@ -968,6 +968,19 @@ Rectangle {
                     value: root.faceTracker ? root.faceTracker.currentResolution : ""
                 }
 
+                Combo {
+                    id: cameraCombo
+
+                    currentIndex: root.faceTracker ? root.faceTracker.availableCameras.indexOf(root.faceTracker.currentCamera) : -1
+                    model: root.faceTracker ? root.faceTracker.availableCameras : []
+                    visible: root.faceTracker ? root.faceTracker.availableCameras.length > 0 : false
+
+                    onActivated: {
+                        if (root.faceTracker)
+                            KSettings.cameraId = root.faceTracker.cameraIdFor(cameraCombo.currentText);
+                    }
+                }
+
                 // A browser camera lists no modes at all: getUserMedia picks the
                 // size, and an empty drop down would read as a broken one.
                 Text {

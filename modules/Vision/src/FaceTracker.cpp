@@ -3,6 +3,7 @@
 
 #include "FaceTracker.hpp"
 
+#include "cameraselection.h"
 #include "faceanalysisworker.h"
 #include "identitylibrary.h"
 #include "videoframeimage.h"
@@ -255,42 +256,95 @@ void FaceTracker::startWorker()
                               Qt::QueuedConnection);
 }
 
-void FaceTracker::enumerateCameras()
+bool FaceTracker::enumerateCameras()
 {
     const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
-    const QCameraDevice previous{m_preferredCamera};
-
-    if (!m_preferredCamera.isNull() && !cameras.contains(m_preferredCamera)) {
-        m_preferredCamera = QCameraDevice{};
-    }
-
+    QList<Kerfur::CameraCandidate> candidates;
+    candidates.reserve(cameras.size());
     for (const QCameraDevice &camera : cameras) {
-        if (camera.position() == QCameraDevice::FrontFace && m_preferredCamera.isNull()) {
-            m_preferredCamera = camera;
-        }
+        candidates.append(Kerfur::CameraCandidate{camera.id(),
+                                                  camera.description(),
+                                                  camera.position()
+                                                      == QCameraDevice::FrontFace});
     }
 
-    if (m_preferredCamera.isNull() && !cameras.isEmpty()) {
-        m_preferredCamera = QMediaDevices::defaultVideoInput();
-    }
+    const qsizetype chosen{Kerfur::chooseCamera(candidates,
+                                                m_wantedCamera,
+                                                m_preferredCamera.id(),
+                                                QMediaDevices::defaultVideoInput().id())};
+    const QCameraDevice previous{m_preferredCamera};
+    m_preferredCamera = chosen >= 0 ? cameras.at(chosen) : QCameraDevice{};
 
+    const QStringList labels{Kerfur::cameraLabels(candidates)};
+    const bool listChanged{cameras != m_cameras || labels != m_cameraLabels};
+    m_cameras = cameras;
+    m_cameraLabels = labels;
+
+    const bool switched{m_preferredCamera != previous};
+    if (listChanged || switched) {
+        emit availableCamerasChanged();
+    }
     // The resolutions are the chosen device's, and the browser backend only
     // has a device to choose some time after start up.
-    if (m_preferredCamera != previous) {
+    if (switched) {
         emit availableResolutionsChanged();
     }
+    return switched;
 }
 
 void FaceTracker::handleVideoInputsChanged()
 {
+    const QByteArray running{m_camera.cameraDevice().id()};
     enumerateCameras();
-    qCInfo(trackerLog) << QMediaDevices::videoInputs().size() << "camera(s) available";
+    qCInfo(trackerLog) << m_cameras.size() << "camera(s) available";
 
     // A running camera keeps its stream even when the entry it was opened from
-    // is replaced, which the browser does once permission is granted.
+    // is replaced, which the browser does once permission is granted. The one
+    // exception is the chosen camera coming back while a fallback is open.
     if (m_enabled && !m_isInitializing && !m_camera.isActive()) {
         initializeCamera();
+    } else if (m_enabled && m_camera.isActive() && !m_wantedCamera.isEmpty()
+               && m_preferredCamera.id() == m_wantedCamera && running != m_wantedCamera) {
+        qCInfo(trackerLog) << "chosen camera" << m_preferredCamera.description() << "is back";
+        restartCamera();
     }
+}
+
+QString FaceTracker::currentCamera() const
+{
+    const qsizetype index{m_cameras.indexOf(m_preferredCamera)};
+    return index >= 0 && index < m_cameraLabels.size() ? m_cameraLabels.at(index) : QString{};
+}
+
+QString FaceTracker::cameraIdFor(const QString &label) const
+{
+    const qsizetype index{m_cameraLabels.indexOf(label)};
+    return index >= 0 && index < m_cameras.size() ? QString::fromUtf8(m_cameras.at(index).id())
+                                                  : QString{};
+}
+
+void FaceTracker::setCameraId(const QString &id)
+{
+    const QByteArray wanted{id.toUtf8()};
+    if (m_wantedCamera == wanted) {
+        return;
+    }
+    m_wantedCamera = wanted;
+    emit cameraIdChanged();
+
+    if (enumerateCameras() && m_enabled) {
+        qCInfo(trackerLog) << "switching to camera" << m_preferredCamera.description();
+        restartCamera();
+    }
+}
+
+void FaceTracker::restartCamera()
+{
+    // initializeCamera() refuses while an open is pending; the pending open's
+    // handlers are disconnected by uninitializeCamera(), so dropping the flag
+    // here cannot let a stale activeChanged land on the new device.
+    m_isInitializing = false;
+    initializeCamera();
 }
 
 void FaceTracker::setEnabled(bool enabled)

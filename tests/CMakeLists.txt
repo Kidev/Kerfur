@@ -65,6 +65,8 @@ endforeach ()
 
 target_compile_definitions(tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+kerfur_add_test(cameraselection Vision)
+
 # Capture without models: the tracker and the recognizer themselves, in a
 # process with no model directory. Their headers name Qt Multimedia types,
 # which both modules keep PRIVATE.

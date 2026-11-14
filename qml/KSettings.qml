@@ -14,6 +14,9 @@ QtObject {
     readonly property string appDataPath: StandardPaths.writableLocation(StandardPaths.AppDataLocation)
     property bool autoPaddingEnabled: true
     property real blurMultiplier: 1
+    /// The camera chosen in the panel, by device id. Empty means automatic: a
+    /// front facing camera, otherwise the system default.
+    property string cameraId: ""
     property real eyeMovementRange: 1.0
     property bool faceTrackingDebug: false
     property bool faceTrackingEnabled: false
@@ -41,6 +44,7 @@ QtObject {
         id: settingsPerception
 
         property alias analysisMaxSide: root.analysisMaxSide
+        property alias cameraId: root.cameraId
         property alias previewMaxSide: root.previewMaxSide
         property alias visionUpdateHz: root.visionUpdateHz
 

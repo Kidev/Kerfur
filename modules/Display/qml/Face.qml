@@ -317,6 +317,7 @@ Item {
         id: faceTracker
 
         analysisMaxSide: KSettings.analysisMaxSide
+        cameraId: KSettings.cameraId
         enabled: KSettings.faceTrackingEnabled
         previewMaxSide: KSettings.previewMaxSide
         updateHz: KSettings.visionUpdateHz

@@ -6,9 +6,11 @@
 #include "capturepermission.h"
 #include "faceanalysis.h"
 
+#include <QByteArray>
 #include <QCamera>
 #include <QCameraDevice>
 #include <QImage>
+#include <QList>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QObject>
@@ -129,6 +131,15 @@ class FaceTracker : public QObject
     Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY
                    availableResolutionsChanged)
 
+    /// The video inputs, one distinct label each, and the label of the one in
+    /// use. `cameraId` is the choice that persists: a device id, or empty for
+    /// the automatic rule (front facing, then the system default). A chosen
+    /// camera that is unplugged falls back to that rule and is taken back as
+    /// soon as it returns.
+    Q_PROPERTY(QStringList availableCameras READ availableCameras NOTIFY availableCamerasChanged)
+    Q_PROPERTY(QString currentCamera READ currentCamera NOTIFY availableCamerasChanged)
+    Q_PROPERTY(QString cameraId READ cameraId WRITE setCameraId NOTIFY cameraIdChanged)
+
     /// The longer side the analysis image is reduced to before the models see
     /// it, which is the one knob that trades detail for latency. Raising it
     /// lets a face across the room and a hand at arm's length survive the
@@ -219,6 +230,12 @@ public:
     QString analysisResolution() const;
     int analysisMs() const { return static_cast<int>(m_analysisMs); }
     QStringList availableResolutions() const;
+    QStringList availableCameras() const { return m_cameraLabels; }
+    QString currentCamera() const;
+    QString cameraId() const { return QString::fromUtf8(m_wantedCamera); }
+    /// The id behind one of `availableCameras`, or empty for a label that is
+    /// not listed.
+    Q_INVOKABLE QString cameraIdFor(const QString &label) const;
     int analysisMaxSide() const { return m_analysisMaxSide; }
     int previewMaxSide() const { return m_previewMaxSide; }
     int updateHz() const { return m_updateHz; }
@@ -238,6 +255,7 @@ public:
 
 public slots:
     void setResolution(const QString &resolution);
+    void setCameraId(const QString &id);
     void setDetectionConfidence(qreal confidence);
     void setTrackingSmoothing(qreal smoothing);
     void setAnalysisMaxSide(int side);
@@ -255,6 +273,8 @@ signals:
     void analysisChanged();
     void capabilitiesChanged();
     void availableResolutionsChanged();
+    void availableCamerasChanged();
+    void cameraIdChanged();
     void currentResolutionChanged();
     void detectionConfidenceChanged();
     void trackingSmoothingChanged();
@@ -278,7 +298,12 @@ private:
     void startWorker();
     void initializeCamera();
     void uninitializeCamera();
-    void enumerateCameras();
+    /// Reopens on `m_preferredCamera`, also while a previous open is still
+    /// waiting for the camera to report active.
+    void restartCamera();
+    /// Refreshes the device list and applies the choice rule. Returns whether
+    /// the camera to use changed.
+    bool enumerateCameras();
     void handleVideoInputsChanged();
     void selectCameraFormat();
 
@@ -313,6 +338,9 @@ private:
     QMediaCaptureSession m_captureSession;
     QVideoSink m_videoSink;
     QCameraDevice m_preferredCamera;
+    QList<QCameraDevice> m_cameras;
+    QStringList m_cameraLabels;
+    QByteArray m_wantedCamera;
     /// The browser backend fills its device list after start-up, so a camera
     /// that did not exist when the tracker was enabled can still arrive.
     QMediaDevices m_mediaDevices;

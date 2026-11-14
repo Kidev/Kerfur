@@ -3,6 +3,7 @@
 
 #include "cameraframesource.h"
 
+#include "cameraselection.h"
 #include "videoframeimage.h"
 
 #include <QCamera>
@@ -11,6 +12,7 @@
 #include <QDateTime>
 #include <QImage>
 #include <QLoggingCategory>
+#include <QSettings>
 #include <QVideoFrame>
 
 #include <opencv2/core.hpp>
@@ -128,11 +130,24 @@ void CameraFrameSource::openCamera()
         return;
     }
 
-    const QCameraDevice device{QMediaDevices::defaultVideoInput()};
-    if (device.isNull()) {
+    // The camera chosen in the control panel, read at every open.
+    const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
+    QList<CameraCandidate> candidates;
+    candidates.reserve(cameras.size());
+    for (const QCameraDevice &camera : cameras) {
+        candidates.append(CameraCandidate{camera.id(),
+                                          camera.description(),
+                                          camera.position() == QCameraDevice::FrontFace});
+    }
+    const QByteArray wanted{
+        QSettings{}.value(QStringLiteral("Perception/cameraId")).toString().toUtf8()};
+    const qsizetype chosen{
+        chooseCamera(candidates, wanted, {}, QMediaDevices::defaultVideoInput().id())};
+    if (chosen < 0) {
         qCInfo(cameraLog) << "no video input yet";
         return;
     }
+    const QCameraDevice device{cameras.at(chosen)};
 
     m_camera = std::make_unique<QCamera>(device);
     const QCameraFormat format{nearestFormat(device.videoFormats())};
