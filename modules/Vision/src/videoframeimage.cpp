@@ -7,9 +7,35 @@
 
 namespace Kerfur {
 
+PlaneFill firstPlaneFill(const QVideoFrame &source)
+{
+    if (!source.isValid() || source.handleType() != QVideoFrame::NoHandle
+        || source.pixelFormat() == QVideoFrameFormat::Format_Jpeg
+        || source.pixelFormat() == QVideoFrameFormat::Format_Invalid) {
+        return {};
+    }
+
+    QVideoFrame frame{source};
+    if (!frame.map(QVideoFrame::ReadOnly)) {
+        return {};
+    }
+    const qsizetype stride{frame.bytesPerLine(0)};
+    const PlaneFill fill{static_cast<qsizetype>(frame.mappedBytes(0)),
+                         stride > 0 ? stride * frame.height() : 0};
+    frame.unmap();
+    return fill;
+}
+
 QImage imageFromVideoFrame(const QVideoFrame &source)
 {
     if (!source.isValid()) {
+        return {};
+    }
+
+    // Before either path below: the converter trusts the stride and height and
+    // reads that many bytes whatever the frame holds.
+    const PlaneFill fill{firstPlaneFill(source)};
+    if (fill.held < fill.needed) {
         return {};
     }
 

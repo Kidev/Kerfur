@@ -68,6 +68,39 @@ private:
     std::vector<uchar> m_bytes;
 };
 
+/// A YUYV frame of which only the first `rows` rows arrived: what a camera
+/// that delivers part of each frame hands over, size and stride intact.
+class TruncatedYuyvBuffer : public QAbstractVideoBuffer
+{
+public:
+    TruncatedYuyvBuffer(const QSize &size, int rows)
+        : m_size{size}
+        , m_bytes(static_cast<std::size_t>(size.width()) * 2U * static_cast<std::size_t>(rows),
+                  uchar{0x80})
+    {
+    }
+
+    MapData map(QVideoFrame::MapMode mode) override
+    {
+        Q_UNUSED(mode)
+        MapData data;
+        data.planeCount = 1;
+        data.bytesPerLine[0] = m_size.width() * 2;
+        data.data[0] = m_bytes.data();
+        data.dataSize[0] = static_cast<int>(m_bytes.size());
+        return data;
+    }
+
+    QVideoFrameFormat format() const override
+    {
+        return QVideoFrameFormat{m_size, QVideoFrameFormat::Format_YUYV};
+    }
+
+private:
+    QSize m_size;
+    std::vector<uchar> m_bytes;
+};
+
 } // namespace
 
 /// How a camera frame becomes the picture every model and the preview see.
@@ -78,6 +111,8 @@ class TestVideoFrameImage : public QObject
 private slots:
     void packedFrameIsReadDirectly();
     void mislabelledFrameIsRefused();
+    void truncatedFrameIsRefused();
+    void completeYuyvFrameIsConverted();
     void mirroredFrameIsConverted();
     void invalidFrameIsNull();
 };
@@ -110,6 +145,27 @@ void TestVideoFrameImage::mislabelledFrameIsRefused()
     QVERIFY(frame.isValid());
 
     QVERIFY(Kerfur::imageFromVideoFrame(frame).isNull());
+}
+
+void TestVideoFrameImage::truncatedFrameIsRefused()
+{
+    const QVideoFrame frame{std::make_unique<TruncatedYuyvBuffer>(QSize{16, 8}, 2)};
+    QVERIFY(frame.isValid());
+
+    const Kerfur::PlaneFill fill{Kerfur::firstPlaneFill(frame)};
+    QCOMPARE(fill.held, qsizetype{64});
+    QCOMPARE(fill.needed, qsizetype{256});
+    QVERIFY(Kerfur::imageFromVideoFrame(frame).isNull());
+}
+
+void TestVideoFrameImage::completeYuyvFrameIsConverted()
+{
+    const QVideoFrame frame{std::make_unique<TruncatedYuyvBuffer>(QSize{16, 8}, 8)};
+    QVERIFY(frame.isValid());
+
+    const Kerfur::PlaneFill fill{Kerfur::firstPlaneFill(frame)};
+    QCOMPARE(fill.held, fill.needed);
+    QCOMPARE(Kerfur::imageFromVideoFrame(frame).size(), QSize(16, 8));
 }
 
 void TestVideoFrameImage::mirroredFrameIsConverted()

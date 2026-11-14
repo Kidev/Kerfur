@@ -588,10 +588,21 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
 
     const QImage captured{Kerfur::imageFromVideoFrame(frame)};
     if (captured.isNull()) {
-        setErrorString(QStringLiteral("Camera frames arrive as %1 %2x%3 and cannot be read")
-                           .arg(QVideoFrameFormat::pixelFormatToString(frame.pixelFormat()))
-                           .arg(frame.width())
-                           .arg(frame.height()));
+        const Kerfur::PlaneFill fill{Kerfur::firstPlaneFill(frame)};
+        if (fill.held < fill.needed) {
+            setErrorString(QStringLiteral("Camera frames are incomplete: %1 KB of the %2 KB a %3 "
+                                          "%4x%5 frame needs; try another mode or camera")
+                               .arg(fill.held / 1024)
+                               .arg(fill.needed / 1024)
+                               .arg(QVideoFrameFormat::pixelFormatToString(frame.pixelFormat()))
+                               .arg(frame.width())
+                               .arg(frame.height()));
+        } else {
+            setErrorString(QStringLiteral("Camera frames arrive as %1 %2x%3 and cannot be read")
+                               .arg(QVideoFrameFormat::pixelFormatToString(frame.pixelFormat()))
+                               .arg(frame.width())
+                               .arg(frame.height()));
+        }
         return;
     }
 

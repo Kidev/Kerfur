@@ -23,8 +23,21 @@ namespace Kerfur {
 ///
 /// A frame whose rows are shorter than its pixel format needs is labelled with
 /// the wrong format. Reading it as that format would run off the end of every
-/// row, so it comes back null.
+/// row, so it comes back null. So does a frame that holds fewer bytes than its
+/// size and stride need (a camera that delivers part of each frame), which
+/// would otherwise be converted from whatever memory follows it.
 QImage imageFromVideoFrame(const QVideoFrame &frame);
+
+/// How many bytes the first plane of a frame in memory holds, and how many its
+/// stride and height need. Every uncompressed format keeps a full height first
+/// plane, so `held < needed` means the frame is incomplete. Both are zero for a
+/// frame that is invalid, compressed, texture backed or cannot be mapped.
+struct PlaneFill
+{
+    qsizetype held{0};
+    qsizetype needed{0};
+};
+PlaneFill firstPlaneFill(const QVideoFrame &frame);
 
 } // namespace Kerfur
 
