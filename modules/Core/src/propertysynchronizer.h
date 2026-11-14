@@ -23,8 +23,7 @@ namespace Kerfur {
 
 /// Keeps up to three properties equal, whichever of them changes.
 ///
-/// The contract is that of `Synchronizer` from Qt.labs.synchronizer, which
-/// Qt only ships from 6.10, and the project still builds on Qt 6.7. A
+/// The contract is that of `Synchronizer` from Qt.labs.synchronizer. A
 /// property takes part when it is named in one of three ways: the `on`
 /// syntax, the `sourceObject`/`sourceProperty` pair, or the
 /// `targetObject`/`targetProperty` pair. Aliases declared inside the element

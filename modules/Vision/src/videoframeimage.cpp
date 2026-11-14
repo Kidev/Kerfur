@@ -18,12 +18,10 @@ QImage imageFromVideoFrame(const QVideoFrame &source)
     const QImage::Format format{
         QVideoFrameFormat::imageFormatFromPixelFormat(frame.pixelFormat())};
 
-    bool direct{format != QImage::Format_Invalid && frame.handleType() == QVideoFrame::NoHandle
-                && !surface.isMirrored()
-                && surface.scanLineDirection() == QVideoFrameFormat::TopToBottom};
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-    direct = direct && surface.rotation() == QtVideo::Rotation::None;
-#endif
+    const bool direct{format != QImage::Format_Invalid
+                      && frame.handleType() == QVideoFrame::NoHandle && !surface.isMirrored()
+                      && surface.scanLineDirection() == QVideoFrameFormat::TopToBottom
+                      && surface.rotation() == QtVideo::Rotation::None};
     if (!direct || !frame.map(QVideoFrame::ReadOnly)) {
         return frame.toImage();
     }

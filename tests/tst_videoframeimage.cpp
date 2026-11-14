@@ -3,13 +3,9 @@
 
 #include "videoframeimage.h"
 
+#include <QAbstractVideoBuffer>
 #include <QTest>
 #include <QVideoFrameFormat>
-#include <QtGlobal>
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-#include <QAbstractVideoBuffer>
-#endif
 
 #include <memory>
 #include <vector>
@@ -39,7 +35,6 @@ QVideoFrame packedFrame(const QSize &size, const QList<QRgb> &pixels, bool mirro
     return frame;
 }
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
 /// One plane of single byte rows labelled RGBA: what arrives when the luma
 /// plane of a YUV frame is handed over under a packed format's name.
 class MislabelledBuffer : public QAbstractVideoBuffer
@@ -72,7 +67,6 @@ private:
     QSize m_size;
     std::vector<uchar> m_bytes;
 };
-#endif
 
 } // namespace
 
@@ -112,14 +106,10 @@ void TestVideoFrameImage::packedFrameIsReadDirectly()
 
 void TestVideoFrameImage::mislabelledFrameIsRefused()
 {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     const QVideoFrame frame{std::make_unique<MislabelledBuffer>(QSize{16, 8})};
     QVERIFY(frame.isValid());
 
     QVERIFY(Kerfur::imageFromVideoFrame(frame).isNull());
-#else
-    QSKIP("A custom QAbstractVideoBuffer needs Qt 6.8");
-#endif
 }
 
 void TestVideoFrameImage::mirroredFrameIsConverted()

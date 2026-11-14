@@ -15,7 +15,7 @@ Please configure QT_ROOT_DIR before running `make`. Either:
       make QT_ROOT_DIR=/path/to/Qt <target>
 
 The folder /path/to/Qt must point to the appropriate version and architecture for `host`.
-For example, for Qt 6.8.3 `gcc_64` (on Linux): `/opt/Qt/6.8.3/gcc_64`
+For example, for Qt 6.12.0 `gcc_64` (on Linux): `/opt/Qt/6.12.0/gcc_64`
 
 You must fix this
 endef
@@ -364,16 +364,6 @@ endif
 emsdk:
 	@EMSDK_VERSION=""; \
 	case "$(QT_VERSION)" in \
-		6.2*) EMSDK_VERSION="2.0.14" ;; \
-		6.3*) EMSDK_VERSION="3.0.0" ;; \
-		6.4*) EMSDK_VERSION="3.1.14" ;; \
-		6.5*) EMSDK_VERSION="3.1.25" ;; \
-		6.6*) EMSDK_VERSION="3.1.37" ;; \
-		6.7*) EMSDK_VERSION="3.1.50" ;; \
-		6.8*) EMSDK_VERSION="3.1.56" ;; \
-		6.9*) EMSDK_VERSION="3.1.70" ;; \
-		6.10*) EMSDK_VERSION="3.1.70" ;; \
-		6.11*) EMSDK_VERSION="4.0.7" ;; \
 		6.12*) EMSDK_VERSION="5.0.5" ;; \
 		*) \
 			echo "Error: Unsupported Qt version: $(QT_VERSION)"; \
