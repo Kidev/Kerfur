@@ -16,6 +16,8 @@
 #include <QQmlEngine>
 #include <QUrl>
 
+#include <type_traits>
+
 namespace Kerfur {
 
 namespace {
@@ -45,9 +47,12 @@ SkillRegistry::SkillRegistry(QObject *parent) : QObject{parent}, m_confirmationT
 
 SkillRegistry::~SkillRegistry() = default;
 
+static_assert(!std::is_default_constructible_v<SkillRegistry>,
+              "QML would construct its own SkillRegistry instead of calling create()");
+
 SkillRegistry &SkillRegistry::instance()
 {
-    static SkillRegistry registry;
+    static SkillRegistry registry{nullptr};
     return registry;
 }
 

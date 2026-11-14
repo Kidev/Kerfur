@@ -270,6 +270,7 @@ signals:
 private slots:
     void processVideoFrame(const QVideoFrame &frame);
     void retryCameraInitialization();
+    void checkCameraStarted();
     void applyResult(const Kerfur::AnalysisResult &result);
     void applyCapabilities(const Kerfur::AnalysisCapabilities &capabilities);
 
@@ -344,6 +345,9 @@ private:
 
     QTimer m_frameThrottleTimer;
     QTimer m_cameraRetryTimer;
+    /// Restarted by every start. When it fires the camera has either not
+    /// started or started without a picture, and the error string says which.
+    QTimer m_startWatchdog;
 
     /// Frames a second, by default: taken from the camera, put through every
     /// model and published. Six, because this is a robot's perception and not a

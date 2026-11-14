@@ -5,6 +5,7 @@
 
 #include "faceanalysisworker.h"
 #include "identitylibrary.h"
+#include "videoframeimage.h"
 
 #include <QCameraFormat>
 #include <QDebug>
@@ -12,6 +13,7 @@
 #include <QMediaDevices>
 #include <QSet>
 #include <QVariantMap>
+#include <QVideoFrameFormat>
 
 #include <algorithm>
 
@@ -184,6 +186,7 @@ FaceTracker::FaceTracker(QObject *parent)
     , m_videoSink{this}
     , m_frameThrottleTimer{this}
     , m_cameraRetryTimer{this}
+    , m_startWatchdog{this}
 {
     Kerfur::ensureFaceAnalysisMetaTypesRegistered();
 
@@ -193,6 +196,10 @@ FaceTracker::FaceTracker(QObject *parent)
     m_cameraRetryTimer.setSingleShot(true);
     m_cameraRetryTimer.setInterval(2000);
     connect(&m_cameraRetryTimer, &QTimer::timeout, this, &FaceTracker::retryCameraInitialization);
+
+    m_startWatchdog.setSingleShot(true);
+    m_startWatchdog.setInterval(5000);
+    connect(&m_startWatchdog, &QTimer::timeout, this, &FaceTracker::checkCameraStarted);
 
     connect(&m_mediaDevices,
             &QMediaDevices::videoInputsChanged,
@@ -251,6 +258,11 @@ void FaceTracker::startWorker()
 void FaceTracker::enumerateCameras()
 {
     const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
+    const QCameraDevice previous{m_preferredCamera};
+
+    if (!m_preferredCamera.isNull() && !cameras.contains(m_preferredCamera)) {
+        m_preferredCamera = QCameraDevice{};
+    }
 
     for (const QCameraDevice &camera : cameras) {
         if (camera.position() == QCameraDevice::FrontFace && m_preferredCamera.isNull()) {
@@ -261,16 +273,18 @@ void FaceTracker::enumerateCameras()
     if (m_preferredCamera.isNull() && !cameras.isEmpty()) {
         m_preferredCamera = QMediaDevices::defaultVideoInput();
     }
+
+    // The resolutions are the chosen device's, and the browser backend only
+    // has a device to choose some time after start up.
+    if (m_preferredCamera != previous) {
+        emit availableResolutionsChanged();
+    }
 }
 
 void FaceTracker::handleVideoInputsChanged()
 {
-    const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
-    if (!m_preferredCamera.isNull() && !cameras.contains(m_preferredCamera)) {
-        m_preferredCamera = QCameraDevice{};
-    }
     enumerateCameras();
-    qCInfo(trackerLog) << cameras.size() << "camera(s) available";
+    qCInfo(trackerLog) << QMediaDevices::videoInputs().size() << "camera(s) available";
 
     // A running camera keeps its stream even when the entry it was opened from
     // is replaced, which the browser does once permission is granted.
@@ -430,13 +444,24 @@ void FaceTracker::initializeCamera()
     m_captureSession.setCamera(&m_camera);
     m_captureSession.setVideoSink(&m_videoSink);
     m_camera.start();
+    m_startWatchdog.start();
+}
 
-    QTimer::singleShot(5000, this, [this]() {
-        if (m_enabled && !m_camera.isActive()) {
-            setErrorString(QStringLiteral("Camera failed to start within 5 seconds"));
-            m_isInitializing = false;
-        }
-    });
+void FaceTracker::checkCameraStarted()
+{
+    if (!m_enabled) {
+        return;
+    }
+    if (!m_camera.isActive()) {
+        setErrorString(QStringLiteral("Camera failed to start within 5 seconds"));
+        m_isInitializing = false;
+        return;
+    }
+    // The browser backend reports the camera active before its stream has
+    // produced a frame, and keeps reporting it when the stream never does.
+    if (m_captureResolution.isEmpty() && m_errorString.isEmpty()) {
+        setErrorString(QStringLiteral("Camera is running but no picture has arrived"));
+    }
 }
 
 void FaceTracker::retryCameraInitialization()
@@ -452,6 +477,7 @@ void FaceTracker::uninitializeCamera()
 {
     m_frameThrottleTimer.stop();
     m_cameraRetryTimer.stop();
+    m_startWatchdog.stop();
 
     disconnect(&m_videoSink, &QVideoSink::videoFrameChanged, this, nullptr);
     disconnect(&m_camera, &QCamera::errorOccurred, this, nullptr);
@@ -506,10 +532,18 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     }
     m_frameThrottleTimer.start();
 
-    const QImage captured{frame.toImage()};
+    const QImage captured{Kerfur::imageFromVideoFrame(frame)};
     if (captured.isNull()) {
+        setErrorString(QStringLiteral("Camera frames arrive as %1 %2x%3 and cannot be read")
+                           .arg(QVideoFrameFormat::pixelFormatToString(frame.pixelFormat()))
+                           .arg(frame.width())
+                           .arg(frame.height()));
         return;
     }
+
+    // A picture is the end of every error this class reports about the
+    // camera, whichever of them was standing.
+    setErrorString(QString{});
 
     // The truth about the resolution, taken from a frame that actually arrived
     // rather than from the format that was asked for.

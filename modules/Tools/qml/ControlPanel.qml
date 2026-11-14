@@ -968,11 +968,22 @@ Rectangle {
                     value: root.faceTracker ? root.faceTracker.currentResolution : ""
                 }
 
+                // A browser camera lists no modes at all: getUserMedia picks the
+                // size, and an empty drop down would read as a broken one.
+                Text {
+                    color: root.colorDim
+                    font.pixelSize: 9
+                    text: "This camera does not list its capture modes, so it delivers its own default size."
+                    visible: root.faceTracker ? (root.faceTracker.enabled && !resolutionCombo.visible) : false
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                }
+
                 Combo {
                     id: resolutionCombo
 
-                    enabled: root.faceTracker && root.faceTracker.availableResolutions.length > 0
                     model: root.faceTracker ? root.faceTracker.availableResolutions : []
+                    visible: root.faceTracker ? root.faceTracker.availableResolutions.length > 0 : false
                     // What was asked for, not what arrived: a device that
                     // substitutes a smaller mode should show the request that
                     // it ignored, next to the delivered size above.

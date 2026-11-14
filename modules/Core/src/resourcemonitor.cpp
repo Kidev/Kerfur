@@ -12,6 +12,8 @@
 #include <QQmlEngine>
 #include <QString>
 
+#include <type_traits>
+
 #if defined(Q_OS_LINUX)
 #include <unistd.h>
 #endif
@@ -33,9 +35,12 @@ ResourceMonitor::ResourceMonitor(QObject *parent) : QObject{parent}
     connect(&m_timer, &QTimer::timeout, this, &ResourceMonitor::sampleNow);
 }
 
+static_assert(!std::is_default_constructible_v<ResourceMonitor>,
+              "QML would construct its own ResourceMonitor instead of calling create()");
+
 ResourceMonitor &ResourceMonitor::instance()
 {
-    static ResourceMonitor monitor;
+    static ResourceMonitor monitor{nullptr};
     return monitor;
 }
 

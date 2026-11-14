@@ -76,7 +76,10 @@ class SkillRegistry : public QObject
     Q_PROPERTY(QStringList activity READ activity NOTIFY activityChanged)
 
 public:
-    explicit SkillRegistry(QObject *parent = nullptr);
+    /// No default argument. The QML engine builds a default constructible
+    /// singleton itself and never calls `create`, so QML would hold a second
+    /// instance that C++ cannot see.
+    explicit SkillRegistry(QObject *parent);
     ~SkillRegistry() override;
 
     static SkillRegistry &instance();

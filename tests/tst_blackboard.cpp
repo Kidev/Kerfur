@@ -29,7 +29,7 @@ private slots:
 
 void TestBlackboard::declaresAValueWithADefault()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.declare(QStringLiteral("count"), 0);
     QCOMPARE(board.number(QStringLiteral("count")), 0.0);
     QVERIFY(board.keys().contains(QStringLiteral("count")));
@@ -37,7 +37,7 @@ void TestBlackboard::declaresAValueWithADefault()
 
 void TestBlackboard::keepsAValueThatWasAlreadySet()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("count"), 42);
     // Declaring afterwards is what a restored value meets when the skill that
     // owns it loads. Yesterday's count must not be replaced by the default.
@@ -47,7 +47,7 @@ void TestBlackboard::keepsAValueThatWasAlreadySet()
 
 void TestBlackboard::addsToANumber()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.declare(QStringLiteral("count"), 0);
     QCOMPARE(board.add(QStringLiteral("count"), 300), 300.0);
     QCOMPARE(board.add(QStringLiteral("count"), 150), 450.0);
@@ -56,7 +56,7 @@ void TestBlackboard::addsToANumber()
 
 void TestBlackboard::resetsToTheDeclaredDefault()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.declare(QStringLiteral("count"), 7);
     board.set(QStringLiteral("count"), 900);
     board.reset(QStringLiteral("count"));
@@ -65,7 +65,7 @@ void TestBlackboard::resetsToTheDeclaredDefault()
 
 void TestBlackboard::removesAnUndeclaredKeyOnReset()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("scratch"), 1);
     board.reset(QStringLiteral("scratch"));
     QVERIFY(!board.value(QStringLiteral("scratch")).isValid());
@@ -73,7 +73,7 @@ void TestBlackboard::removesAnUndeclaredKeyOnReset()
 
 void TestBlackboard::announcesEveryChangeOnce()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     QSignalSpy spy{&board, &Blackboard::changed};
     board.set(QStringLiteral("count"), 1);
     QCOMPARE(spy.count(), 1);
@@ -84,7 +84,7 @@ void TestBlackboard::announcesEveryChangeOnce()
 
 void TestBlackboard::staysQuietWhenNothingChanged()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("count"), 1);
     QSignalSpy spy{&board, &Blackboard::changed};
     board.set(QStringLiteral("count"), 1);
@@ -93,7 +93,7 @@ void TestBlackboard::staysQuietWhenNothingChanged()
 
 void TestBlackboard::expandsBothPlaceholderSpellings()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("caloriesOfTheDay"), 450);
     board.set(QStringLiteral("maxCaloriesPerDay"), 2000);
     QCOMPARE(board.expand(QStringLiteral("You are at <caloriesOfTheDay> of {maxCaloriesPerDay}")),
@@ -102,7 +102,7 @@ void TestBlackboard::expandsBothPlaceholderSpellings()
 
 void TestBlackboard::prefersSuppliedValuesOverStoredOnes()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("amount"), 1);
     // The confirmation question has to read the amount from the request being
     // confirmed, which is precisely the value not yet written down.
@@ -113,13 +113,13 @@ void TestBlackboard::prefersSuppliedValuesOverStoredOnes()
 
 void TestBlackboard::leavesAnUnknownPlaceholderAlone()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     QCOMPARE(board.expand(QStringLiteral("hello {nobody}")), QStringLiteral("hello {nobody}"));
 }
 
 void TestBlackboard::exposesValuesThroughTheMap()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("count"), 5);
     QVERIFY(board.values() != nullptr);
     QCOMPARE(board.values()->value(QStringLiteral("count")).toInt(), 5);
@@ -127,7 +127,7 @@ void TestBlackboard::exposesValuesThroughTheMap()
 
 void TestBlackboard::snapshotsEverything()
 {
-    Blackboard board;
+    Blackboard board{nullptr};
     board.set(QStringLiteral("a"), 1);
     board.set(QStringLiteral("b"), QStringLiteral("two"));
     const QVariantMap snapshot{board.snapshot()};

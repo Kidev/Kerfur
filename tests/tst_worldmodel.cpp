@@ -37,7 +37,7 @@ private slots:
 
 void TestWorldModel::startsWithNobodyPresent()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     QCOMPARE(model.personCount(), 0);
     QVERIFY(!model.isPersonPresent());
     QVERIFY(!model.hasNearestPerson());
@@ -46,7 +46,7 @@ void TestWorldModel::startsWithNobodyPresent()
 
 void TestWorldModel::reportsPresenceAndCount()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     PerceptionFrame frame;
     frame.setPeople({makePerson(1, 0.2, QPointF{0.4, 0.3}), makePerson(2, 0.5, QPointF{0.6, 0.35})});
     model.applyPerceptionFrame(frame);
@@ -58,7 +58,7 @@ void TestWorldModel::reportsPresenceAndCount()
 
 void TestWorldModel::picksTheNearestPersonByProximity()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     PerceptionFrame frame;
     frame.setPeople({makePerson(1, 0.2, QPointF{0.4, 0.3}),
                      makePerson(2, 0.5, QPointF{0.6, 0.35}),
@@ -72,7 +72,7 @@ void TestWorldModel::picksTheNearestPersonByProximity()
 
 void TestWorldModel::emitsPerceptionChangedOncePerFrame()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     QSignalSpy spy{&model, &WorldModel::perceptionChanged};
 
     PerceptionFrame frame;
@@ -86,7 +86,7 @@ void TestWorldModel::emitsPerceptionChangedOncePerFrame()
 
 void TestWorldModel::clearsTheNearestPersonWhenEverybodyLeaves()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     PerceptionFrame occupied;
     occupied.setPeople({makePerson(1, 0.2, QPointF{0.4, 0.3})});
     model.applyPerceptionFrame(occupied);
@@ -102,7 +102,7 @@ void TestWorldModel::clearsTheNearestPersonWhenEverybodyLeaves()
 
 void TestWorldModel::onlyNotifiesHeardTextOnAChange()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     QSignalSpy spy{&model, &WorldModel::heardTextChanged};
 
     model.setHeardText(QStringLiteral("hello kerfur"));
@@ -114,7 +114,7 @@ void TestWorldModel::onlyNotifiesHeardTextOnAChange()
 
 void TestWorldModel::tracksCameraAndMicrophoneAvailability()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     QVERIFY(!model.isCameraOnline());
     QVERIFY(!model.isMicrophoneOnline());
 
@@ -129,7 +129,7 @@ void TestWorldModel::tracksCameraAndMicrophoneAvailability()
 
 void TestWorldModel::notifiesWhenAFrameChangesCameraOrientation()
 {
-    WorldModel model;
+    WorldModel model{nullptr};
     QSignalSpy spy{&model, &WorldModel::cameraOrientationChanged};
 
     PerceptionFrame frame;

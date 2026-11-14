@@ -3,6 +3,8 @@
 
 #include "cameraframesource.h"
 
+#include "videoframeimage.h"
+
 #include <QCamera>
 #include <QCameraDevice>
 #include <QCameraFormat>
@@ -158,7 +160,7 @@ void CameraFrameSource::handleVideoFrame(const QVideoFrame &frame)
         return;
     }
 
-    QImage image{frame.toImage()};
+    QImage image{imageFromVideoFrame(frame)};
     if (image.isNull()) {
         return;
     }

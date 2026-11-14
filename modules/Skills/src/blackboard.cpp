@@ -16,6 +16,7 @@
 #include <QStandardPaths>
 
 #include <algorithm>
+#include <type_traits>
 
 namespace Kerfur {
 
@@ -72,9 +73,12 @@ Blackboard::Blackboard(QObject *parent)
     load();
 }
 
+static_assert(!std::is_default_constructible_v<Blackboard>,
+              "QML would construct its own Blackboard instead of calling create()");
+
 Blackboard &Blackboard::instance()
 {
-    static Blackboard blackboard;
+    static Blackboard blackboard{nullptr};
     return blackboard;
 }
 

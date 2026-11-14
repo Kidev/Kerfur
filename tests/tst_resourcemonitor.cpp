@@ -30,7 +30,7 @@ void TestResourceMonitor::samplesTheProcessFootprint()
 #if !defined(Q_OS_LINUX)
     QSKIP("The process footprint is read from /proc, which only Linux has");
 #endif
-    ResourceMonitor monitor;
+    ResourceMonitor monitor{nullptr};
     monitor.sampleNow();
 
     QVERIFY(monitor.residentSetSizeKb() > 0);
@@ -44,7 +44,7 @@ void TestResourceMonitor::seesResidentMemoryGrow()
 #if !defined(Q_OS_LINUX)
     QSKIP("The process footprint is read from /proc, which only Linux has");
 #endif
-    ResourceMonitor monitor;
+    ResourceMonitor monitor{nullptr};
     monitor.sampleNow();
     const qint64 before{monitor.residentSetSizeKb()};
 
@@ -71,7 +71,7 @@ void TestResourceMonitor::seesResidentMemoryGrow()
 
 void TestResourceMonitor::reportsRegisteredQueues()
 {
-    ResourceMonitor monitor;
+    ResourceMonitor monitor{nullptr};
     BoundedQueue<int> queue{2, QStringLiteral("watched")};
     queue.push(1);
     queue.push(2);
@@ -87,7 +87,7 @@ void TestResourceMonitor::reportsRegisteredQueues()
 
 void TestResourceMonitor::forgetsAnUnregisteredQueue()
 {
-    ResourceMonitor monitor;
+    ResourceMonitor monitor{nullptr};
     BoundedQueue<int> queue{2, QStringLiteral("temporary")};
     monitor.registerQueue(&queue);
     monitor.unregisterQueue(&queue);
@@ -99,7 +99,7 @@ void TestResourceMonitor::forgetsAnUnregisteredQueue()
 
 void TestResourceMonitor::emitsSampledOnEverySample()
 {
-    ResourceMonitor monitor;
+    ResourceMonitor monitor{nullptr};
     QSignalSpy spy{&monitor, &ResourceMonitor::sampled};
 
     monitor.sampleNow();
