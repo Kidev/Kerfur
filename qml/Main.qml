@@ -2,6 +2,7 @@ import Display
 import QtQuick
 import QtQuick.Window
 import Tools
+import qml 1.0
 
 Window {
     id: root
