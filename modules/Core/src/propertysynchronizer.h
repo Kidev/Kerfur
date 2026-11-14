@@ -24,10 +24,11 @@ namespace Kerfur {
 /// Keeps up to three properties equal, whichever of them changes.
 ///
 /// The contract is that of `Synchronizer` from Qt.labs.synchronizer, which
-/// Qt only ships from 6.10; the Bookworm build runs on 6.7. A property takes
-/// part when it is named in one of three ways: the `on` syntax, the
-/// `sourceObject`/`sourceProperty` pair, or the `targetObject`/`targetProperty`
-/// pair. Aliases declared inside the element are left alone.
+/// Qt only ships from 6.10, and the project still builds on Qt 6.7. A
+/// property takes part when it is named in one of three ways: the `on`
+/// syntax, the `sourceObject`/`sourceProperty` pair, or the
+/// `targetObject`/`targetProperty` pair. Aliases declared inside the element
+/// are left alone.
 ///
 /// When the component completes, the source pair (or, without one, the `on`
 /// property) is copied into the others. From then on a change to any of them

@@ -35,18 +35,6 @@ jobs:
             build_command: 'make'
             installer_command: ''
 
-          - name: 'Linux ARM64 (Bookworn GLIBC)'
-            os: ubuntu-22.04-arm
-            qt_version: '6.7.0'
-            qt_host: linux_arm64
-            qt_target: desktop
-            qt_arch: linux_gcc_arm64
-            artifact_name: bookworm-arm64-rpi
-            build_name: '-arm64-rpi'
-            qt_tools: 'tools_ifw'
-            build_command: 'make'
-            installer_command: 'make installer'
-
           - name: 'Windows x64'
             os: windows-2025
             qt_version: '6.12.0'

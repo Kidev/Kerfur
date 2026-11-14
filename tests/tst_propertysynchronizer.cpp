@@ -66,8 +66,8 @@ private:
     double m_unobservable{0.0};
 };
 
-/// The stand-in for Qt.labs.synchronizer that lets the Bookworm build, on
-/// Qt 6.7, load the face and the settings sliders.
+/// The stand-in for Qt.labs.synchronizer that lets a Qt 6.7 build load the
+/// face and the settings sliders.
 ///
 /// The fixtures are QML documents, created the way the application creates
 /// the face and the control panel, so the `on` syntax, the order of
