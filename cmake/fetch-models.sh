@@ -80,7 +80,8 @@ checksum() {
 # be discarded and this script would report success after a failed download.
 list="$(mktemp)"
 trap 'rm -f "$list"' EXIT INT TERM
-printf '%s\n' "$entries" > "$list"
+# Python on Windows ends its lines with CRLF; the CR would stick to the sha256.
+printf '%s\n' "$entries" | tr -d '\r' > "$list"
 
 failures=0
 while IFS="$(printf '\t')" read -r id file url expected; do
