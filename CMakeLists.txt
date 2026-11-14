@@ -22,6 +22,20 @@ find_package(
                QuickControls2
 )
 
+# At the top so that the executables, which link the static modules, see the
+# imported targets those modules link. Each module still finds its own subset.
+find_package(
+    OpenCV 4.8 REQUIRED
+    COMPONENTS calib3d
+               core
+               dnn
+               imgcodecs
+               imgproc
+               objdetect
+)
+find_package(whisper CONFIG REQUIRED)
+find_package(ggml CONFIG REQUIRED)
+
 qt_standard_project_setup()
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
