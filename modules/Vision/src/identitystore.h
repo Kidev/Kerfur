@@ -31,7 +31,7 @@ public:
 
     /// Embeds every face `identities/ids.json` declares that the cache does
     /// not already cover, and rewrites the cache. Silently does nothing useful
-    /// when the pipeline has no recognition model, which is the wasm case.
+    /// when the pipeline has no recognition model.
     void enrol(FacePipeline &pipeline, const QString &galleryDirectory, const QString &cachePath);
 
     /// The same, from an explicit `(name, imagePath)` list. This is the form
@@ -44,7 +44,8 @@ public:
 
     /// The closest gallery entry, or an empty name when nothing clears the
     /// threshold. `similarity` is written in both cases so a caller can log how
-    /// near a miss was.
+    /// near a miss was. A person taught with several pictures has one entry for
+    /// each, and the best of them is their score.
     QString match(const cv::Mat &embedding, double &similarity) const;
 
     qsizetype size() const { return m_entries.size(); }

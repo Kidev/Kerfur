@@ -93,9 +93,28 @@ Rectangle {
             return "error";
         if (root.speechRecognizer.processing)
             return "transcribing";
+        if (root.speechRecognizer.listening && root.speechRecognizer.modelProblem !== "")
+            return "listening, no transcription";
         if (root.speechRecognizer.listening)
             return "listening";
         return "starting";
+    }
+
+    // Red for what stops a device, amber for what the device runs without.
+    function hearingColor() {
+        if (!root.speechRecognizer)
+            return root.colorDim;
+        if (root.speechRecognizer.errorString !== "")
+            return root.colorBad;
+        return root.speechRecognizer.modelProblem !== "" ? root.colorWarn : root.colorDim;
+    }
+
+    function visionColor() {
+        if (!root.faceTracker)
+            return root.colorDim;
+        if (root.faceTracker.errorString !== "")
+            return root.colorBad;
+        return root.faceTracker.perceptionProblem !== "" ? root.colorWarn : root.colorDim;
     }
 
     function peopleSummary() {
@@ -105,10 +124,22 @@ Rectangle {
         return known + " known, " + Identities.people.length + " added here";
     }
 
-    function enrolledHalves(person) {
-        if (person.hasFace && person.hasVoice)
-            return "face and voice";
-        return person.hasFace ? "face only" : (person.hasVoice ? "voice only" : "no files");
+    function enrolledSamples(person) {
+        const parts = [];
+        if (person.faceCount > 0)
+            parts.push(person.faceCount + (person.faceCount === 1 ? " face" : " faces"));
+        if (person.voiceCount > 0)
+            parts.push(person.voiceCount + (person.voiceCount === 1 ? " voice" : " voices"));
+        return parts.length > 0 ? parts.join(", ") : "no samples";
+    }
+
+    // Fills the form with somebody already taught, so the next save adds to
+    // them rather than starting somebody new.
+    function teach(person) {
+        personName.text = person.name;
+        personTitle.text = person.title;
+        const rank = root.rankValues.indexOf(person.priority);
+        personRank.currentIndex = rank >= 0 ? rank : root.defaultRankIndex;
     }
 
     // The browser has no file system for a QML dialog to show, so on the web
@@ -892,7 +923,7 @@ Rectangle {
                 id: visionSection
 
                 summary: root.visionSummary()
-                summaryColor: root.faceTracker && root.faceTracker.errorString !== "" ? root.colorBad : root.colorDim
+                summaryColor: root.visionColor()
                 title: "Vision"
 
                 Toggle {
@@ -921,6 +952,15 @@ Rectangle {
                         height: previewSlot.width * 0.75
                         sourceComponent: cameraPreviewComponent
                     }
+                }
+
+                Text {
+                    color: root.colorWarn
+                    font.pixelSize: 9
+                    text: root.faceTracker ? root.faceTracker.perceptionProblem : ""
+                    visible: text !== ""
+                    width: parent.width
+                    wrapMode: Text.WordWrap
                 }
 
                 Caption {
@@ -1036,7 +1076,7 @@ Rectangle {
                 id: hearingSection
 
                 summary: root.hearingSummary()
-                summaryColor: root.speechRecognizer && root.speechRecognizer.errorString !== "" ? root.colorBad : root.colorDim
+                summaryColor: root.hearingColor()
                 title: "Hearing"
 
                 Toggle {
@@ -1082,6 +1122,15 @@ Rectangle {
                     }
                 }
 
+                Text {
+                    color: root.colorWarn
+                    font.pixelSize: 9
+                    text: root.speechRecognizer ? root.speechRecognizer.modelProblem : ""
+                    visible: text !== ""
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                }
+
                 Loader {
                     active: hearingSection.expanded
                     sourceComponent: speechDisplayComponent
@@ -1099,33 +1148,51 @@ Rectangle {
                 Repeater {
                     model: Identities.people
 
-                    delegate: Item {
+                    delegate: Column {
                         id: personRow
 
                         required property var modelData
 
-                        height: 20
+                        spacing: 3
                         width: parent ? parent.width : 0
 
                         Text {
-                            anchors.left: parent.left
-                            anchors.right: removeButton.left
-                            anchors.rightMargin: 6
-                            anchors.verticalCenter: parent.verticalCenter
                             color: root.colorText
                             elide: Text.ElideRight
                             font.pixelSize: 10
-                            text: personRow.modelData.name + " (" + personRow.modelData.standing + "): " + root.enrolledHalves(personRow.modelData)
+                            text: personRow.modelData.name + " (" + personRow.modelData.standing + "): " + root.enrolledSamples(personRow.modelData)
+                            width: parent.width
                         }
 
-                        SmallButton {
-                            id: removeButton
+                        Flow {
+                            spacing: 4
+                            width: parent.width
 
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            label: "Remove"
+                            SmallButton {
+                                label: "Teach"
 
-                            onClicked: Identities.remove(personRow.modelData.id)
+                                onClicked: root.teach(personRow.modelData)
+                            }
+
+                            SmallButton {
+                                enabled: personRow.modelData.faceCount > 0
+                                label: "Forget faces"
+
+                                onClicked: Identities.forgetFaces(personRow.modelData.id)
+                            }
+
+                            SmallButton {
+                                enabled: personRow.modelData.voiceCount > 0
+                                label: "Forget voices"
+
+                                onClicked: Identities.forgetVoices(personRow.modelData.id)
+                            }
+
+                            SmallButton {
+                                label: "Remove"
+
+                                onClicked: Identities.remove(personRow.modelData.id)
+                            }
                         }
                     }
                 }
@@ -1133,12 +1200,12 @@ Rectangle {
                 Text {
                     color: root.colorDim
                     font.pixelSize: 9
-                    text: "Nobody has been added here yet."
+                    text: "Kerfur knows nobody yet. Stage a face or a voice below, name them and save."
                     visible: Identities.people.length === 0
                 }
 
                 Caption {
-                    label: "Add or update someone"
+                    label: "Teach someone"
                     value: Identities.ready ? "" : "loading"
                 }
 
@@ -1214,13 +1281,9 @@ Rectangle {
                         enabled: Identities.ready && personName.text.trim() !== ""
                         label: "Save"
 
-                        onClicked: {
-                            if (Identities.enrol(personName.text, personTitle.text, root.rankValues[personRank.currentIndex])) {
-                                personName.text = "";
-                                personTitle.text = "";
-                                personRank.currentIndex = root.defaultRankIndex;
-                            }
-                        }
+                        // The form keeps the person, so another picture or
+                        // sentence for them is one capture and one save away.
+                        onClicked: Identities.enrol(personName.text, personTitle.text, root.rankValues[personRank.currentIndex])
                     }
 
                     SmallButton {
@@ -1243,7 +1306,7 @@ Rectangle {
                 Text {
                     color: root.colorDim
                     font.pixelSize: 9
-                    text: (Identities.browserFiles ? "Kept in this browser's storage." : "Kept in " + Identities.directory + ", outside the source tree.") + " Saving a name that is already here replaces whatever was staged for it and keeps the rest. A voice needs a sentence of at least " + (root.speechRecognizer ? root.speechRecognizer.minimumVoiceSeconds : 2) + " seconds."
+                    text: (Identities.browserFiles ? "Kept in this browser's storage." : "Kept in " + Identities.directory + ", outside the source tree.") + " Saving a name that is already here adds what is staged as one more sample, up to " + Identities.sampleLimit + " pictures and " + Identities.sampleLimit + " recordings each, the oldest dropped first. A voice needs a sentence of at least " + (root.speechRecognizer ? root.speechRecognizer.minimumVoiceSeconds : 2) + " seconds."
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }

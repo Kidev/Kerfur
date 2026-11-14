@@ -76,7 +76,7 @@ void VoiceIdentifier::enrolGallery()
         m_gallery.clear();
         emit ready(true,
                    {},
-                   QStringLiteral("No identities gallery; searched %1")
+                   QStringLiteral("Nobody enrolled yet; looked in %1")
                        .arg(IdentityDirectory::describeSearchPath()));
         return;
     }

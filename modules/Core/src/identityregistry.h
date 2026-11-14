@@ -39,11 +39,13 @@ struct IdentityRecord
     /// already knew the word for it.
     QString title;
 
-    /// Absolute, resolved against the directory holding the manifest. Empty
-    /// when this person has no enrolled face, which is allowed: a voice alone
-    /// is still a person.
-    QString facePath;
-    QString voicePath;
+    /// Every picture and every recording this person was taught with, oldest
+    /// first, absolute and resolved against the directory holding the
+    /// manifest. Each one is enrolled on its own and a match against any of
+    /// them is a match against the person, so a face seen in two lights is two
+    /// samples. Either list may be empty: a voice alone is still a person.
+    QStringList facePaths;
+    QStringList voicePaths;
 
     /// Rank, zero being the top. Kerfur looks at the lowest ranked person in
     /// the room and takes commands only from rank zero, so this is the field
@@ -80,7 +82,7 @@ public:
 
     /// Every directory in turn, merged by id. A later directory replaces an
     /// earlier one's record of the same id rather than adding a second person,
-    /// which is how a record enrolled at run time overrides a shipped one.
+    /// which is how a record taught at run time overrides a configured one.
     /// `directory()` is the first of them; problems from all are joined.
     static IdentityRegistry load(const QStringList &directories);
 
@@ -128,9 +130,10 @@ public:
     /// The ids, sorted.
     QStringList names() const;
 
-    /// The `(name, path)` pairs the face gallery enrols, skipping records
-    /// without a face file. `name` is the id, so both galleries key on the same
-    /// string and a person recognised by either is the same person.
+    /// The `(name, path)` pairs the face gallery enrols, one per sample, so a
+    /// person taught with four pictures appears four times. `name` is the id,
+    /// so both galleries key on the same string and a person recognised by
+    /// either is the same person.
     QList<QPair<QString, QString>> faceEntries() const;
     QList<QPair<QString, QString>> voiceEntries() const;
 

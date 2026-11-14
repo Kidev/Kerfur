@@ -21,18 +21,22 @@ class QJSEngine;
 
 namespace Kerfur {
 
-/// People enrolled while the application runs, kept in
-/// `IdentityDirectory::writableDirectory()`.
+/// Everybody Kerfur has been taught, kept in
+/// `IdentityDirectory::writableDirectory()`. A fresh installation knows nobody.
 ///
 /// The directory is an ordinary gallery: an `ids.json` that this class writes,
 /// with `faces/` and `voices/` beside it. The two galleries read it through
-/// `IdentityDirectory::galleries()`, merged after the shipped one, and
-/// re-enrol whenever `galleryChanged` is emitted.
+/// `IdentityDirectory::galleries()` and re-enrol whenever `galleryChanged` is
+/// emitted, so a person saved here is recognised without a restart, and the
+/// directory is what carries them into the next session.
 ///
-/// Adding somebody is two steps. A face and a voice are staged first (from the
-/// camera, from the last sentence heard, or from a file), then `enrol` writes
-/// both under one name. Nothing reaches the disk until `enrol`, so a picture
-/// taken by mistake is discarded by staging another one.
+/// Teaching somebody is two steps. A face and a voice are staged first (from
+/// the camera, from the last sentence heard, or from a file), then `enrol`
+/// adds both to that person as one more sample each. Nothing reaches the disk
+/// until `enrol`, so a picture taken by mistake is discarded by staging
+/// another one. Every sample is enrolled on its own, so teaching the same
+/// person again in other light, from another angle or in a noisier room is
+/// what makes them easier to recognise.
 ///
 /// On the web build the directory is an IndexedDB mount. It is read
 /// asynchronously after start up, `ready` stays false until it has been, and
@@ -50,12 +54,15 @@ class IdentityLibrary : public QObject
     /// FileDialog, which on the web build has no file system to show.
     Q_PROPERTY(bool browserFiles READ browserFiles CONSTANT)
     /// One map per person enrolled here: `id`, `name`, `title`, `priority`,
-    /// `standing`, `hasFace`, `hasVoice`. People from the shipped gallery are
-    /// not listed: they cannot be removed from here.
+    /// `standing`, `hasFace`, `hasVoice`, `faceCount`, `voiceCount`. People
+    /// from a gallery configured by hand are not listed: they cannot be
+    /// changed from here.
     Q_PROPERTY(QVariantList people READ people NOTIFY peopleChanged)
     /// What is staged, described for a person, or empty.
     Q_PROPERTY(QString stagedFace READ stagedFace NOTIFY stagedChanged)
     Q_PROPERTY(QString stagedVoice READ stagedVoice NOTIFY stagedChanged)
+    /// `maximumSamples`, for the panel to quote.
+    Q_PROPERTY(int sampleLimit READ sampleLimit CONSTANT)
     /// The last refusal or failure, cleared by the next call that succeeds.
     Q_PROPERTY(QString problem READ problem NOTIFY problemChanged)
 
@@ -70,6 +77,10 @@ public:
     /// Ranks accepted by `enrol`. Anything above is clamped, so a record
     /// written here always sorts before a stranger.
     static constexpr int maximumPriority{999};
+    /// Pictures, and separately recordings, kept per person. Past this the
+    /// oldest is deleted, so a person taught every day keeps their recent
+    /// samples and the directory stays bounded.
+    static constexpr qsizetype maximumSamples{10};
 
     /// `directory` is created on the first write. The web build mounts it on
     /// IndexedDB here, which is why the application has one instance.
@@ -92,6 +103,7 @@ public:
     QString stagedFace() const { return m_stagedFaceLabel; }
     QString stagedVoice() const { return m_stagedVoiceLabel; }
     QString problem() const { return m_problem; }
+    int sampleLimit() const { return static_cast<int>(maximumSamples); }
 
     /// A picture already in memory, such as the camera frame. `origin` is how
     /// the panel describes it.
@@ -117,14 +129,21 @@ public:
 
     Q_INVOKABLE void clearStaged();
 
-    /// Writes the staged face and voice under `idFor(name)` and records the
-    /// person in the manifest. An id already enrolled here is updated: what is
-    /// staged replaces its file, and what is not keeps the old one. A new id
-    /// needs at least one of the two staged.
+    /// Adds the staged face and voice to `idFor(name)` as one more sample each
+    /// and records the person in the manifest. An id already enrolled here
+    /// keeps every earlier sample (up to `maximumSamples` of each, oldest
+    /// dropped first) and takes the new name, title and rank. A new id needs at
+    /// least one of the two staged; a known one may be saved with neither, to
+    /// change only its title or rank.
     Q_INVOKABLE bool enrol(const QString &name, const QString &title, int priority);
 
     /// Forgets somebody enrolled here, and deletes their files.
     Q_INVOKABLE bool remove(const QString &id);
+
+    /// Deletes every picture, or every recording, of somebody enrolled here.
+    /// A person left with neither is forgotten entirely.
+    Q_INVOKABLE bool forgetFaces(const QString &id);
+    Q_INVOKABLE bool forgetVoices(const QString &id);
 
 signals:
     void readyChanged();
@@ -153,6 +172,19 @@ private:
     /// Such a file was written by hand and is left alone.
     std::optional<QJsonObject> readManifest();
     bool writeManifest(const QJsonObject &manifest);
+
+    /// Writes `data` as a new sample of `id` under `folder` and appends it to
+    /// `entry[folder]`, folding an older single `kind` file into the list and
+    /// deleting the oldest samples past `maximumSamples`.
+    bool addSample(QJsonObject &entry,
+                   const QString &id,
+                   const QString &kind,
+                   const QString &folder,
+                   const QString &suffix,
+                   const QByteArray &data);
+
+    /// The shared body of `forgetFaces` and `forgetVoices`.
+    bool forgetSamples(const QString &id, const QString &kind, const QString &folder);
 
     /// Writes `data` to `relative` inside the directory, atomically.
     bool writeInside(const QString &relative, const QByteArray &data);

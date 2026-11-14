@@ -133,6 +133,31 @@ QString resolvePath(const QDir &base, const QString &declared)
     return info.absoluteFilePath();
 }
 
+/// The samples one manifest entry declares: the single file under `single`,
+/// which is what an older manifest writes, followed by the list under `list`,
+/// in order and without repeats.
+QStringList readSamples(const QDir &base,
+                        const QJsonObject &entry,
+                        const QString &single,
+                        const QString &list)
+{
+    QStringList paths;
+    const QString one{resolvePath(base, entry.value(single).toString())};
+    if (!one.isEmpty()) {
+        paths.append(one);
+    }
+    // Copy initialization: a braced QJsonArray from a QJsonValue picks the
+    // initializer list constructor and nests the array one level down.
+    const QJsonArray many = entry.value(list).toArray();
+    for (const QJsonValue &value : many) {
+        const QString path{resolvePath(base, value.toString())};
+        if (!path.isEmpty() && !paths.contains(path)) {
+            paths.append(path);
+        }
+    }
+    return paths;
+}
+
 /// The first existing file matching `stem` under `directory` with any of
 /// `filters`. Used only by the fallback scan and by the manifest's implicit
 /// paths, so that a record may omit `face` when the file sits where convention
@@ -178,27 +203,33 @@ bool readRecord(const QDir &base,
 
     record.title = entry.value(QStringLiteral("title")).toString().trimmed();
 
-    record.facePath = resolvePath(base, entry.value(QStringLiteral("face")).toString());
-    record.voicePath = resolvePath(base, entry.value(QStringLiteral("voice")).toString());
+    record.facePaths = readSamples(base, entry, QStringLiteral("face"), QStringLiteral("faces"));
+    record.voicePaths = readSamples(base, entry, QStringLiteral("voice"), QStringLiteral("voices"));
 
     // The conventional locations, for a record that names neither. Both the
     // subdirectory layout and the flat one, because the flat one is what every
     // gallery written before this manifest looks like.
-    if (record.facePath.isEmpty()) {
-        record.facePath = findByStem(QDir{base.absoluteFilePath(QStringLiteral("faces"))},
-                                     record.id,
-                                     faceFilters());
+    if (record.facePaths.isEmpty()) {
+        QString found{findByStem(QDir{base.absoluteFilePath(QStringLiteral("faces"))},
+                                 record.id,
+                                 faceFilters())};
+        if (found.isEmpty()) {
+            found = findByStem(base, record.id, faceFilters());
+        }
+        if (!found.isEmpty()) {
+            record.facePaths.append(found);
+        }
     }
-    if (record.facePath.isEmpty()) {
-        record.facePath = findByStem(base, record.id, faceFilters());
-    }
-    if (record.voicePath.isEmpty()) {
-        record.voicePath = findByStem(QDir{base.absoluteFilePath(QStringLiteral("voices"))},
-                                      record.id,
-                                      voiceFilters());
-    }
-    if (record.voicePath.isEmpty()) {
-        record.voicePath = findByStem(base, record.id, voiceFilters());
+    if (record.voicePaths.isEmpty()) {
+        QString found{findByStem(QDir{base.absoluteFilePath(QStringLiteral("voices"))},
+                                 record.id,
+                                 voiceFilters())};
+        if (found.isEmpty()) {
+            found = findByStem(base, record.id, voiceFilters());
+        }
+        if (!found.isEmpty()) {
+            record.voicePaths.append(found);
+        }
     }
 
     bool priorityOk{true};
@@ -209,18 +240,19 @@ bool readRecord(const QDir &base,
     }
 
     // A declared file that is not there is worth saying out loud. It is not
-    // fatal: the other half of the person may still enrol, and half a person is
-    // more useful than none.
-    if (!record.facePath.isEmpty() && !QFileInfo::exists(record.facePath)) {
-        problem = QStringLiteral("%1 declares a face at %2 which does not exist")
-                      .arg(record.id, record.facePath);
-        record.facePath.clear();
-    }
-    if (!record.voicePath.isEmpty() && !QFileInfo::exists(record.voicePath)) {
-        problem = QStringLiteral("%1 declares a voice at %2 which does not exist")
-                      .arg(record.id, record.voicePath);
-        record.voicePath.clear();
-    }
+    // fatal: the other samples may still enrol, and part of a person is more
+    // useful than none.
+    const auto dropMissing = [&record, &problem](QStringList &paths, const QString &kind) {
+        for (qsizetype index{paths.size() - 1}; index >= 0; --index) {
+            if (!QFileInfo::exists(paths.at(index))) {
+                problem = QStringLiteral("%1 declares a %2 at %3 which does not exist")
+                              .arg(record.id, kind, paths.at(index));
+                paths.removeAt(index);
+            }
+        }
+    };
+    dropMissing(record.facePaths, QStringLiteral("face"));
+    dropMissing(record.voicePaths, QStringLiteral("voice"));
 
     return true;
 }
@@ -411,13 +443,19 @@ IdentityRegistry IdentityRegistry::scanDirectory(const QString &directory)
         record.id = stem;
         record.name = stem;
         record.priority = unknownPriority;
-        record.facePath = findByStem(faces, stem, faceFilters());
-        if (record.facePath.isEmpty()) {
-            record.facePath = findByStem(base, stem, faceFilters());
+        QString face{findByStem(faces, stem, faceFilters())};
+        if (face.isEmpty()) {
+            face = findByStem(base, stem, faceFilters());
         }
-        record.voicePath = findByStem(voices, stem, voiceFilters());
-        if (record.voicePath.isEmpty()) {
-            record.voicePath = findByStem(base, stem, voiceFilters());
+        if (!face.isEmpty()) {
+            record.facePaths.append(face);
+        }
+        QString voice{findByStem(voices, stem, voiceFilters())};
+        if (voice.isEmpty()) {
+            voice = findByStem(base, stem, voiceFilters());
+        }
+        if (!voice.isEmpty()) {
+            record.voicePaths.append(voice);
         }
         registry.m_records.append(record);
     }
@@ -483,8 +521,8 @@ QList<QPair<QString, QString>> IdentityRegistry::faceEntries() const
 {
     QList<QPair<QString, QString>> entries;
     for (const IdentityRecord &record : m_records) {
-        if (!record.facePath.isEmpty()) {
-            entries.append({record.id, record.facePath});
+        for (const QString &path : record.facePaths) {
+            entries.append({record.id, path});
         }
     }
     return entries;
@@ -494,8 +532,8 @@ QList<QPair<QString, QString>> IdentityRegistry::voiceEntries() const
 {
     QList<QPair<QString, QString>> entries;
     for (const IdentityRecord &record : m_records) {
-        if (!record.voicePath.isEmpty()) {
-            entries.append({record.id, record.voicePath});
+        for (const QString &path : record.voicePaths) {
+            entries.append({record.id, path});
         }
     }
     return entries;

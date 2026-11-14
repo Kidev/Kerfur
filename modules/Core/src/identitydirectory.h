@@ -12,6 +12,12 @@ namespace Kerfur {
 /// Where the enrolled people live: an `ids.json` naming each of them, and the
 /// face and voice files it points at.
 ///
+/// Nothing ships with the application. People are taught at run time and kept
+/// in `writableDirectory()`; the one other gallery is a directory named by hand
+/// in the `Paths/identitiesPath` setting, which is unset by default. A source
+/// checkout or an install tree is never searched, so a build carries nobody's
+/// face or voice.
+///
 /// Face recognition and speaker recognition resolve through here rather than
 /// each carrying its own search order, because a person enrolled for one and
 /// not the other is a configuration mistake that is far easier to see when both
@@ -20,16 +26,14 @@ namespace Kerfur {
 class IdentityDirectory
 {
 public:
-    /// In order: the `Paths/identitiesPath` setting, the application data
-    /// location, an `identities` directory beside the executable, one directly
-    /// above it, and one under the working directory.
+    /// In order: the `Paths/identitiesPath` setting when it is set, then
+    /// `writableDirectory()`.
     static QStringList candidates();
 
     /// The first candidate that holds a manifest or at least one enrolled file,
-    /// or empty. Existence alone is not enough: an empty `identities` directory
-    /// left behind by an uninstall would otherwise mask a populated one further
-    /// down the list, and report as "nobody is enrolled" rather than as "the
-    /// wrong directory was found".
+    /// or empty. Existence alone is not enough: an empty configured directory
+    /// would otherwise mask the populated store behind it, and report as
+    /// "nobody is enrolled" rather than as "the wrong directory was found".
     static QString resolve();
 
     /// The candidates joined for a log line, so an empty gallery says where it
@@ -44,14 +48,11 @@ public:
     /// shared without anybody's face or voice in it.
     static QString writableDirectory();
 
-    /// Every gallery to enrol from, in merge order: the first candidate other
-    /// than the writable directory that holds identities, then the writable
-    /// directory when it holds any. Feed this to `IdentityRegistry::load`, so a
-    /// person enrolled at run time overrides a shipped record of the same id.
-    ///
-    /// The writable directory is excluded from the search for the first one,
-    /// because otherwise enrolling a single person at run time would mask a
-    /// populated gallery further down the candidate list.
+    /// Every gallery to enrol from, in merge order: the configured directory
+    /// when it holds identities, then the writable directory when it holds
+    /// any. Empty on a fresh installation. Feed this to
+    /// `IdentityRegistry::load`, so a person taught at run time overrides a
+    /// configured record of the same id.
     static QStringList galleries();
 
     /// The ids of every declared person. Reads the manifest, so this is the

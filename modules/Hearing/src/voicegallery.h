@@ -47,9 +47,11 @@ public:
 
     /// The closest enrolled voice, or an empty name when nothing clears the
     /// threshold. `similarity` is written either way, so a near miss can be
-    /// logged rather than merely denied.
+    /// logged rather than merely denied. A person taught with several
+    /// recordings has one entry for each, and the best of them is their score.
     QString match(const cv::Mat &embedding, double &similarity) const;
 
+    /// Each enrolled person once, however many recordings they have.
     QStringList names() const;
     qsizetype size() const { return m_entries.size(); }
     bool isEmpty() const { return m_entries.isEmpty(); }

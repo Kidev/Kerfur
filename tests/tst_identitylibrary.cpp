@@ -162,9 +162,10 @@ private slots:
         QCOMPARE(ada->name, QStringLiteral("Ada Lovelace"));
         QCOMPARE(ada->title, QStringLiteral("trusted"));
         QCOMPARE(ada->priority, 2);
-        QCOMPARE(ada->facePath, directory.filePath(QStringLiteral("faces/ada-lovelace.png")));
-        QVERIFY(ada->voicePath.isEmpty());
-        QVERIFY(!QImage{ada->facePath}.isNull());
+        QCOMPARE(ada->facePaths,
+                 QStringList{directory.filePath(QStringLiteral("faces/ada-lovelace-1.png"))});
+        QVERIFY(ada->voicePaths.isEmpty());
+        QVERIFY(!QImage{ada->facePaths.first()}.isNull());
 
         QCOMPARE(library.people().size(), 1);
         const QVariantMap person{library.people().first().toMap()};
@@ -172,6 +173,8 @@ private slots:
         QCOMPARE(person.value(QStringLiteral("standing")).toString(), QStringLiteral("trusted"));
         QVERIFY(person.value(QStringLiteral("hasFace")).toBool());
         QVERIFY(!person.value(QStringLiteral("hasVoice")).toBool());
+        QCOMPARE(person.value(QStringLiteral("faceCount")).toInt(), 1);
+        QCOMPARE(person.value(QStringLiteral("voiceCount")).toInt(), 0);
     }
 
     void aLargePictureIsReduced()
@@ -183,7 +186,7 @@ private slots:
 
         QVERIFY(library.stageFaceImage(large, QStringLiteral("photo")));
         QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
-        const QImage stored{directory.filePath(QStringLiteral("faces/ada.png"))};
+        const QImage stored{directory.filePath(QStringLiteral("faces/ada-1.png"))};
         QCOMPARE(stored.width(), IdentityLibrary::maximumFaceSide);
         QCOMPARE(stored.height(), 1440);
     }
@@ -202,7 +205,7 @@ private slots:
         QVERIFY(ada.has_value());
         QCOMPARE(ada->title, QStringLiteral("owner"));
         QCOMPARE(ada->priority, 0);
-        QCOMPARE(ada->facePath, directory.filePath(QStringLiteral("faces/ada.png")));
+        QCOMPARE(ada->facePaths, QStringList{directory.filePath(QStringLiteral("faces/ada-1.png"))});
     }
 
     void aRankIsClampedIntoTheDeclarableRange()
@@ -228,9 +231,9 @@ private slots:
         QCOMPARE(library.stagedVoice(), QStringLiteral("last sentence, 2.5 s"));
         QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
 
-        const QString path{directory.filePath(QStringLiteral("voices/ada.wav"))};
-        QCOMPARE(IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))->voicePath,
-                 path);
+        const QString path{directory.filePath(QStringLiteral("voices/ada-1.wav"))};
+        QCOMPARE(IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))->voicePaths,
+                 QStringList{path});
 
         QFile file{path};
         QVERIFY(file.open(QIODevice::ReadOnly));
@@ -267,7 +270,7 @@ private slots:
         QVERIFY(library.stageVoiceData(QByteArrayLiteral("ID3"), QStringLiteral("MP3"),
                                        QStringLiteral("ada.MP3")));
         QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
-        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada.mp3"))));
+        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada-1.mp3"))));
     }
 
     void anOversizedFileIsRefused()
@@ -308,10 +311,124 @@ private slots:
         QVERIFY(library.remove(QStringLiteral("ada")));
 
         QCOMPARE(changed.count(), 1);
-        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada.png"))));
-        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada.wav"))));
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada-1.png"))));
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada-1.wav"))));
         QVERIFY(!manifestIn(directory.path()).contains(QStringLiteral("ada")));
         QVERIFY(library.people().isEmpty());
+    }
+
+    void everySaveAddsASample()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.stageVoiceSamples(sentence(2.5), 16000, QStringLiteral("sentence")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+
+        const std::optional<IdentityRecord> ada{
+            IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))};
+        QVERIFY(ada.has_value());
+        QCOMPARE(ada->facePaths,
+                 QStringList({directory.filePath(QStringLiteral("faces/ada-1.png")),
+                              directory.filePath(QStringLiteral("faces/ada-2.png"))}));
+        QCOMPARE(ada->voicePaths,
+                 QStringList{directory.filePath(QStringLiteral("voices/ada-1.wav"))});
+
+        const QVariantMap person{library.people().first().toMap()};
+        QCOMPARE(person.value(QStringLiteral("faceCount")).toInt(), 2);
+        QCOMPARE(person.value(QStringLiteral("voiceCount")).toInt(), 1);
+    }
+
+    void theOldestSamplePastTheLimitIsDeleted()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+
+        for (qsizetype save{0}; save <= IdentityLibrary::maximumSamples; ++save) {
+            QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+            QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        }
+
+        const std::optional<IdentityRecord> ada{
+            IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))};
+        QVERIFY(ada.has_value());
+        QCOMPARE(ada->facePaths.size(), IdentityLibrary::maximumSamples);
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada-1.png"))));
+        QCOMPARE(ada->facePaths.first(), directory.filePath(QStringLiteral("faces/ada-2.png")));
+        QCOMPARE(ada->facePaths.last(),
+                 directory.filePath(
+                     QStringLiteral("faces/ada-%1.png").arg(IdentityLibrary::maximumSamples + 1)));
+    }
+
+    void anOlderSingleFileBecomesTheFirstSample()
+    {
+        QTemporaryDir directory;
+        writeFile(directory.filePath(QStringLiteral("faces/ada.png")), QByteArrayLiteral("x"));
+        writeFile(directory.filePath(IdentityRegistry::manifestFileName()),
+                  QByteArrayLiteral(
+                      R"({"ada":{"name":"Ada","face":"faces/ada.png","priority":2}})"));
+
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+
+        const QJsonObject entry{
+            manifestIn(directory.path()).value(QStringLiteral("ada")).toObject()};
+        QVERIFY(!entry.contains(QStringLiteral("face")));
+        const std::optional<IdentityRecord> ada{
+            IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))};
+        QVERIFY(ada.has_value());
+        QCOMPARE(ada->facePaths,
+                 QStringList({directory.filePath(QStringLiteral("faces/ada.png")),
+                              directory.filePath(QStringLiteral("faces/ada-1.png"))}));
+    }
+
+    void forgettingFacesKeepsTheVoices()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.stageVoiceSamples(sentence(2.5), 16000, QStringLiteral("sentence")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        QSignalSpy changed{&library, &IdentityLibrary::galleryChanged};
+
+        QVERIFY(library.forgetFaces(QStringLiteral("ada")));
+
+        QCOMPARE(changed.count(), 1);
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada-1.png"))));
+        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada-1.wav"))));
+        const std::optional<IdentityRecord> ada{
+            IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))};
+        QVERIFY(ada.has_value());
+        QVERIFY(ada->facePaths.isEmpty());
+        QCOMPARE(ada->voicePaths.size(), 1);
+    }
+
+    void forgettingTheLastKindForgetsThePerson()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+
+        QVERIFY(library.forgetFaces(QStringLiteral("ada")));
+
+        QVERIFY(!manifestIn(directory.path()).contains(QStringLiteral("ada")));
+        QVERIFY(library.people().isEmpty());
+    }
+
+    void forgettingSomebodyUnknownIsRefused()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QSignalSpy changed{&library, &IdentityLibrary::galleryChanged};
+
+        QVERIFY(!library.forgetVoices(QStringLiteral("nobody")));
+        QVERIFY(!library.problem().isEmpty());
+        QCOMPARE(changed.count(), 0);
     }
 
     void removingSomebodyUnknownIsRefused()
@@ -356,17 +473,17 @@ private slots:
         QFile file{directory.filePath(IdentityRegistry::manifestFileName())};
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), handWritten);
-        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/bob.png"))));
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/bob-1.png"))));
     }
 
     void theWritableGalleryIsMergedLast()
     {
-        QTemporaryDir shipped;
-        writeFile(shipped.filePath(IdentityRegistry::manifestFileName()),
+        QTemporaryDir configured;
+        writeFile(configured.filePath(IdentityRegistry::manifestFileName()),
                   QByteArrayLiteral(R"({"bob":{"priority":3}})"));
         {
             QSettings settings;
-            settings.setValue(QStringLiteral("Paths/identitiesPath"), shipped.path());
+            settings.setValue(QStringLiteral("Paths/identitiesPath"), configured.path());
             settings.sync();
         }
 
@@ -376,7 +493,7 @@ private slots:
 
         const QStringList galleries{IdentityDirectory::galleries()};
         QCOMPARE(galleries,
-                 QStringList({QDir{shipped.path()}.absolutePath(),
+                 QStringList({QDir{configured.path()}.absolutePath(),
                               IdentityDirectory::writableDirectory()}));
 
         const IdentityRegistry registry{IdentityRegistry::load(galleries)};
@@ -385,24 +502,24 @@ private slots:
 
     void anEmptyWritableGalleryIsNotListed()
     {
-        QTemporaryDir shipped;
-        writeFile(shipped.filePath(IdentityRegistry::manifestFileName()),
+        QTemporaryDir configured;
+        writeFile(configured.filePath(IdentityRegistry::manifestFileName()),
                   QByteArrayLiteral(R"({"bob":{"priority":3}})"));
         {
             QSettings settings;
-            settings.setValue(QStringLiteral("Paths/identitiesPath"), shipped.path());
+            settings.setValue(QStringLiteral("Paths/identitiesPath"), configured.path());
             settings.sync();
         }
         QDir{}.mkpath(IdentityDirectory::writableDirectory());
 
         QCOMPARE(IdentityDirectory::galleries(),
-                 QStringList({QDir{shipped.path()}.absolutePath()}));
+                 QStringList({QDir{configured.path()}.absolutePath()}));
     }
 
-    void theWritableGalleryDoesNotMaskTheShippedOne()
+    void theWritableGalleryIsListedOnce()
     {
         // Pointed at the writable directory itself, the setting must not let
-        // it stand in for the shipped gallery; it is listed once, last.
+        // it stand in for a configured gallery; it is listed once, last.
         IdentityLibrary library{IdentityDirectory::writableDirectory()};
         QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
         QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));

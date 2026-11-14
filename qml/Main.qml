@@ -10,6 +10,10 @@ Window {
         Qt.quit();
     }
 
+    function toggleControls() {
+        KSettings.showControls = !KSettings.showControls;
+    }
+
     color: "black"
     visibility: Window.FullScreen
     visible: true
@@ -25,7 +29,7 @@ Window {
         enabled: true
         sequence: "Tab"
 
-        onActivated: KSettings.showControls = !KSettings.showControls
+        onActivated: root.toggleControls()
     }
 
     Face {
@@ -33,6 +37,8 @@ Window {
 
         anchors.fill: parent
         visible: true
+
+        onHeld: root.toggleControls()
     }
 
     ControlPanel {

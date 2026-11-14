@@ -44,6 +44,7 @@ private slots:
     void locateReportsNothingForAnAbsentFile();
     void locateReportsNothingWithoutADirectory();
     void searchPathDescriptionNamesTheCandidates();
+    void installedTreeIsSearched();
 
 private:
     void configure(const QString &path);
@@ -153,6 +154,16 @@ void TestModelDirectory::searchPathDescriptionNamesTheCandidates()
 {
     configure(m_models.path());
     QVERIFY(ModelDirectory::describeSearchPath().contains(m_models.path()));
+}
+
+void TestModelDirectory::installedTreeIsSearched()
+{
+    // `make` bundles the models at the top of the install tree, one level above
+    // the executable in `bin/`. A search that stops beside the executable
+    // reports an installed build as having no models at all.
+    const QString installed{
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../models"))};
+    QVERIFY(ModelDirectory::candidates().contains(installed));
 }
 
 QTEST_MAIN(TestModelDirectory)

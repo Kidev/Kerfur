@@ -413,13 +413,9 @@ void FaceTracker::initializeCamera()
 
     connect(&m_camera, &QCamera::activeChanged, this, [this](bool active) {
         if (active) {
-            // Only the model problem survives a successful start. Anything else
-            // was about the camera, and the camera is now running.
-            if (m_capabilities.problem.isEmpty()) {
-                setErrorString(QString{});
-            } else {
-                setErrorString(m_capabilities.problem);
-            }
+            // Every error this property carries is about the camera, and the
+            // camera is now running.
+            setErrorString(QString{});
             m_cameraRetryTimer.stop();
             m_isInitializing = false;
             emit currentResolutionChanged();
@@ -542,10 +538,13 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
             ? image
             : image.scaled(previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation)};
 
-    if (!m_analysisReady || m_worker == nullptr) {
+    // A worker that loaded nothing has no measurement to hold the picture
+    // for, so the preview runs at the capture cadence on its own.
+    const bool analysing{m_worker != nullptr && (!m_analysisReady || canAnalyse())};
+    if (!m_analysisReady || !analysing) {
         setCameraFrame(preview);
     }
-    if (m_analysisBusy || m_worker == nullptr) {
+    if (m_analysisBusy || !analysing) {
         return;
     }
 
@@ -577,21 +576,30 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
 void FaceTracker::applyCapabilities(const Kerfur::AnalysisCapabilities &capabilities)
 {
     m_capabilities = capabilities;
-    // Whatever loaded and whatever did not, the worker is now answering, so
-    // from here a picture waits for the pass measured on it.
+    // The worker is now answering, so from here a picture waits for the pass
+    // measured on it whenever a model loaded to measure it with.
     m_analysisReady = true;
     emit capabilitiesChanged();
 
+    // A pass queued behind the load comes back empty, and the picture it holds
+    // is older than the ones the preview is about to show directly.
+    if (!canAnalyse()) {
+        m_pendingPreview = QImage{};
+    }
+
+    // Published as `perceptionProblem`, never as the error string: the camera
+    // and the preview work the same with no model at all.
     if (!capabilities.problem.isEmpty()) {
         qCWarning(trackerLog) << capabilities.problem;
-        setErrorString(capabilities.problem);
     } else {
         qCInfo(trackerLog) << "analysis ready; gallery" << capabilities.galleryDirectory
                            << "holds" << capabilities.enrolled;
-        if (m_errorString.isEmpty() || m_camera.isActive()) {
-            setErrorString(QString{});
-        }
     }
+}
+
+bool FaceTracker::canAnalyse() const
+{
+    return m_capabilities.faceReady || m_capabilities.poseReady;
 }
 
 void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)

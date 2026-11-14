@@ -49,7 +49,13 @@ class FaceTracker : public QObject
     Q_PROPERTY(bool faceDetected READ faceDetected NOTIFY faceDetectedChanged)
     Q_PROPERTY(QPointF faceCenter READ faceCenter NOTIFY faceCenterChanged)
     Q_PROPERTY(QRectF faceBox READ faceBox NOTIFY facesChanged)
+    /// What stops the camera: permission, device, start-up. Empty while frames
+    /// arrive, whatever the models are doing.
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
+    /// What the analysis is missing: models, gallery, enrolment. The preview
+    /// runs without any of it, so this is a warning beside the picture and
+    /// never a reason to withhold one.
+    Q_PROPERTY(QString perceptionProblem READ perceptionProblem NOTIFY capabilitiesChanged)
     /// The preview picture, as an image rather than as an encoded string. It
     /// is handed straight to a CameraFrameView, which uploads it to a texture:
     /// there is no JPEG and no base64 anywhere in this path, because both used
@@ -186,6 +192,7 @@ public:
     QPointF faceCenter() const { return m_faceCenter; }
     QRectF faceBox() const;
     QString errorString() const { return m_errorString; }
+    QString perceptionProblem() const { return m_capabilities.problem; }
     QImage cameraFrame() const { return m_cameraFrame; }
 
     QVariantList faces() const { return m_faces; }
@@ -273,6 +280,10 @@ private:
     void enumerateCameras();
     void handleVideoInputsChanged();
     void selectCameraFormat();
+
+    /// Whether a pass can measure anything: a face detector or a pose model
+    /// loaded. Without either, frames go straight to the preview.
+    bool canAnalyse() const;
 
     void setFaceDetected(bool detected);
     void setFaceCenter(const QPointF &center);

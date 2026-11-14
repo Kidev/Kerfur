@@ -202,10 +202,11 @@ void SpeechRecognizer::applyModelPath()
                            .arg(m_modelPath, m_whisperEngine->getLastError());
     }
 
+    // Published as `modelProblem`, never as the error string: the microphone
+    // works the same without a transcriber behind it.
     if (m_modelError.isEmpty()) {
         qCInfo(speechLog) << "whisper ready with" << m_modelPath;
     } else {
-        setErrorString(m_modelError);
         qCWarning(speechLog) << m_modelError;
     }
     emit modelPathChanged();
@@ -314,13 +315,6 @@ void SpeechRecognizer::setEnabled(bool enabled)
 
 void SpeechRecognizer::initializeAudio()
 {
-    if (!m_whisperEngine->isInitialized()) {
-        setErrorString(m_modelError.isEmpty()
-                           ? QStringLiteral("Speech recognition engine not initialized")
-                           : m_modelError);
-        return;
-    }
-
     const auto retry{[this]() {
         if (m_enabled && !m_audioSource) {
             initializeAudio();
@@ -375,9 +369,7 @@ void SpeechRecognizer::initializeAudio()
     connect(m_audioSource.get(), &QAudioSource::stateChanged, this, [this](QAudio::State state) {
         if (state == QAudio::ActiveState) {
             setListening(true);
-            if (m_modelError.isEmpty()) {
-                setErrorString(QString{});
-            }
+            setErrorString(QString{});
             m_volumeUpdateTimer.start();
         } else if (state == QAudio::StoppedState) {
             setListening(false);
@@ -457,8 +449,11 @@ void SpeechRecognizer::submitUtterance(const Kerfur::VoiceActivitySegmenter::Utt
 
     // The same audio to both. Transcription and speaker identification want
     // exactly the same segment, and cutting it twice would be two answers to
-    // the question of when somebody stopped talking.
-    m_whisperEngine->submit(utterance.samples, sequence);
+    // the question of when somebody stopped talking. Without a speech model
+    // only the speaker half runs; the utterance is still kept for enrolment.
+    if (m_whisperEngine->isInitialized()) {
+        m_whisperEngine->submit(utterance.samples, sequence);
+    }
     emit identificationRequested(utterance.samples, sequence);
 
     m_lastUtterance = utterance.samples;
@@ -592,11 +587,6 @@ void SpeechRecognizer::handleKeywordDetected(const QString &keyword)
 void SpeechRecognizer::handleSpeaker(
     const QString &name, double similarity, int priority, const QString &title, quint64 sequence)
 {
-    PendingUtterance &pending{pendingFor(sequence)};
-    pending.speaker = name;
-    pending.priority = priority;
-    pending.identified = true;
-
     // The live readout updates immediately and independently of the join. It
     // answers "who is talking", which is true the moment the voice is
     // recognised; the join answers "who said this sentence", which is not.
@@ -611,6 +601,17 @@ void SpeechRecognizer::handleSpeaker(
         m_speakerTitle = title;
         emit speakerChanged();
     }
+
+    // Without a speech model no transcript will ever join this answer, and an
+    // entry left waiting for one would only age out of the queue.
+    if (!m_whisperEngine->isInitialized()) {
+        return;
+    }
+
+    PendingUtterance &pending{pendingFor(sequence)};
+    pending.speaker = name;
+    pending.priority = priority;
+    pending.identified = true;
 
     drainPending(false);
     m_joinTimer.start();

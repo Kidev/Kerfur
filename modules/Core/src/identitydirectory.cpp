@@ -3,11 +3,12 @@
 
 #include "identitydirectory.h"
 
-#include "assetsearch.h"
 #include "identityregistry.h"
+#include "settingspath.h"
 
 #include <QDir>
 #include <QFileInfo>
+#include <QSettings>
 #include <QStandardPaths>
 
 namespace Kerfur {
@@ -43,7 +44,19 @@ bool holdsFiles(const QDir &directory)
 
 QStringList IdentityDirectory::candidates()
 {
-    return AssetSearch::candidates(QString{settingsKey}, QString{folderName});
+    QStringList directories;
+
+    const QSettings settings;
+    const QString configured{settingsDirectoryPath(settings.value(QString{settingsKey}).toString())};
+    if (!configured.isEmpty()) {
+        directories.append(configured);
+    }
+
+    const QString writable{writableDirectory()};
+    if (!writable.isEmpty() && !directories.contains(writable)) {
+        directories.append(writable);
+    }
+    return directories;
 }
 
 bool IdentityDirectory::holdsIdentities(const QString &directory)
@@ -105,7 +118,7 @@ QStringList IdentityDirectory::galleries()
 
 QString IdentityDirectory::describeSearchPath()
 {
-    return AssetSearch::describe(QString{settingsKey}, QString{folderName});
+    return candidates().join(QStringLiteral(", "));
 }
 
 QStringList IdentityDirectory::enrolledNames(const QString &directory)
