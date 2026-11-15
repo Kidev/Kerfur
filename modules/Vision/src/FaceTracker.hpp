@@ -126,6 +126,9 @@ class FaceTracker : public QObject
     Q_PROPERTY(QString currentResolution READ currentResolution NOTIFY currentResolutionChanged)
     Q_PROPERTY(QString requestedResolution READ requestedResolution NOTIFY
                    currentResolutionChanged)
+    /// The longer side of the frames that arrive, or 0 before the first one.
+    /// Neither the preview nor the analysis is ever enlarged past it.
+    Q_PROPERTY(int captureMaxSide READ captureMaxSide NOTIFY currentResolutionChanged)
     Q_PROPERTY(QString analysisResolution READ analysisResolution NOTIFY analysisChanged)
     Q_PROPERTY(int analysisMs READ analysisMs NOTIFY analysisChanged)
     Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY
@@ -226,6 +229,10 @@ public:
     qreal headRoll() const;
 
     QString currentResolution() const;
+    int captureMaxSide() const
+    {
+        return std::max(m_captureResolution.width(), m_captureResolution.height());
+    }
     QString requestedResolution() const;
     QString analysisResolution() const;
     int analysisMs() const { return static_cast<int>(m_analysisMs); }
@@ -359,7 +366,7 @@ private:
     quint64 m_peopleRevision{0};
 
     qreal m_detectionConfidence{0.6};
-    qreal m_trackingSmoothing{0.7};
+    qreal m_trackingSmoothing{0.0};
     int m_analysisMaxSide{defaultAnalysisMaxSide};
     int m_previewMaxSide{defaultPreviewMaxSide};
     int m_updateHz{defaultUpdateHz};

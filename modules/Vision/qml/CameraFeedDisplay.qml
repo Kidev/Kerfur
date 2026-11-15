@@ -831,7 +831,7 @@ Rectangle {
                             from: 0.0
                             height: 22
                             to: 1.0
-                            value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.7
+                            value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.0
                             width: 150
 
                             onMoved: {

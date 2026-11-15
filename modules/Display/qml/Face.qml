@@ -512,7 +512,8 @@ Item {
 
         anchors.fill: displayContainer
         autoPaddingEnabled: KSettings.autoPaddingEnabled
-        layer.enabled: true
+        // No layer: the LED screen captures this item with hideSource, and a
+        // layered item stays drawn underneath the capture.
         maskEnabled: !root.isBlinking && !root.isTouched
         maskInverted: true
         maskSpreadAtMax: KSettings.maskSpreadAtMax
@@ -533,8 +534,9 @@ Item {
     LedScreen {
         id: ledScreen
 
-        anchors.fill: maskedDisplayImage
+        anchors.fill: parent
         source: maskedDisplayImage
+        sourceRect: Qt.rect(maskedDisplayImage.x, maskedDisplayImage.y, maskedDisplayImage.width, maskedDisplayImage.height)
     }
 
     Timer {

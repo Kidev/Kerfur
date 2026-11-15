@@ -22,6 +22,8 @@ private slots:
 
     void missingModelIsNotACaptureError();
     void captureStartsWithoutAModel();
+    void firstBufferStartsListening();
+    void emptyBufferIsNotAStart();
 };
 
 void TestSpeechCapture::initTestCase()
@@ -51,6 +53,34 @@ void TestSpeechCapture::captureStartsWithoutAModel()
     QVERIFY(recognizer.errorString() != recognizer.modelProblem());
 
     recognizer.setEnabled(false);
+}
+
+void TestSpeechCapture::firstBufferStartsListening()
+{
+    // The browser's audio source delivers buffers without ever reporting
+    // ActiveState. Audio arriving is what says the capture is live.
+    SpeechRecognizer recognizer;
+    QVERIFY(!recognizer.listening());
+
+    const QByteArray silence(3200, '\0');
+    QVERIFY(QMetaObject::invokeMethod(&recognizer,
+                                      "processAudioData",
+                                      Qt::DirectConnection,
+                                      Q_ARG(QByteArray, silence)));
+
+    QVERIFY(recognizer.listening());
+}
+
+void TestSpeechCapture::emptyBufferIsNotAStart()
+{
+    SpeechRecognizer recognizer;
+
+    QVERIFY(QMetaObject::invokeMethod(&recognizer,
+                                      "processAudioData",
+                                      Qt::DirectConnection,
+                                      Q_ARG(QByteArray, QByteArray{})));
+
+    QVERIFY(!recognizer.listening());
 }
 
 QTEST_GUILESS_MAIN(TestSpeechCapture)

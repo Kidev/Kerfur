@@ -46,11 +46,10 @@ qt_add_qml_module(
 
 target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Gui Qt6::Qml)
 
-# The browser's file picker is reached through QFileDialog::getOpenFileContent,
-# which on the web build needs no QApplication.
+# The browser's file picker is Qt's private QWasmLocalFileAccess.
 if (EMSCRIPTEN)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
-    target_link_libraries(${CORE_MODULE} PRIVATE Qt6::Widgets)
+    find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
+    target_link_libraries(${CORE_MODULE} PRIVATE Qt6::GuiPrivate)
 endif ()
 
 # PUBLIC so that consumers and the test tree can include these headers by their

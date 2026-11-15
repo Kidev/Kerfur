@@ -3,6 +3,7 @@
 
 #include "identitystore.h"
 
+#include "bgrimage.h"
 #include "facepipeline.h"
 
 #include "identityregistry.h"
@@ -11,13 +12,13 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QSaveFile>
 
-#include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -147,7 +148,13 @@ void IdentityStore::enrol(FacePipeline &pipeline,
             continue;
         }
 
-        const cv::Mat picture{cv::imread(path.toStdString(), cv::IMREAD_COLOR)};
+        // Decoded by Qt, which reads every format the enrolment side writes or
+        // accepts; OpenCV's codecs would add four image libraries to the web
+        // build for this one call. Turned upright from its EXIF orientation,
+        // as a phone photo is stored on its side.
+        QImageReader reader{path};
+        reader.setAutoTransform(true);
+        const cv::Mat picture{qImageToBgr(reader.read())};
         if (picture.empty()) {
             qCWarning(identityLog) << "cannot decode" << path;
             continue;

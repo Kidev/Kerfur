@@ -86,6 +86,20 @@ Rectangle {
     property string spokenBy: ""
     property string spokenText: ""
 
+    /// Whether a preview or analysis size can be had from the camera: neither
+    /// is ever enlarged past the frames it delivers. Every size is offered
+    /// until the first frame says how large those are.
+    function detailAvailable(side) {
+        const limit = root.faceTracker ? root.faceTracker.captureMaxSide : 0;
+        return limit <= 0 || side <= limit;
+    }
+
+    /// The closed drop down's text: the chosen size, or the camera's own when
+    /// the choice is larger than what the camera delivers.
+    function cappedDetailText(side, label) {
+        return root.detailAvailable(side) ? label : root.faceTracker.captureMaxSide + " - camera size";
+    }
+
     function hearingSummary() {
         if (!root.speechRecognizer || !root.speechRecognizer.enabled)
             return "off";
@@ -537,6 +551,10 @@ Rectangle {
     component Combo: ComboBox {
         id: combo
 
+        /// Whether the option at an index can be chosen. A disabled option is
+        /// listed, dimmed, and ignored when picked.
+        property var optionEnabled: index => true
+
         font.pixelSize: 10
         implicitHeight: 26
         width: parent ? parent.width : 0
@@ -561,15 +579,22 @@ Rectangle {
 
             required property int index
 
+            // Pinned, because the default comes from the style: Basic (the
+            // browser's) pads by 12 on every side, which leaves a 24 pixel row
+            // no height for its text, and an elided Text drops every line that
+            // does not fit.
+            enabled: combo.optionEnabled(option.index)
             height: 24
-            highlighted: combo.highlightedIndex === option.index
+            horizontalPadding: 6
+            verticalPadding: 0
+            highlighted: option.enabled && combo.highlightedIndex === option.index
             width: combo.width
 
             background: Rectangle {
                 color: option.highlighted ? "#3a3f47" : "transparent"
             }
             contentItem: Text {
-                color: root.colorText
+                color: option.enabled ? root.colorText : "#5a606b"
                 elide: Text.ElideRight
                 font.pixelSize: 10
                 leftPadding: 6
@@ -981,17 +1006,6 @@ Rectangle {
                     }
                 }
 
-                // A browser camera lists no modes at all: getUserMedia picks the
-                // size, and an empty drop down would read as a broken one.
-                Text {
-                    color: root.colorDim
-                    font.pixelSize: 9
-                    text: "This camera does not list its capture modes, so it delivers its own default size."
-                    visible: root.faceTracker ? (root.faceTracker.enabled && !resolutionCombo.visible) : false
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                }
-
                 Combo {
                     id: resolutionCombo
 
@@ -1036,9 +1050,15 @@ Rectangle {
                     id: previewCombo
 
                     currentIndex: root.previewPresetSides.indexOf(KSettings.previewMaxSide)
+                    displayText: root.cappedDetailText(KSettings.previewMaxSide, previewCombo.currentText)
                     model: root.previewPresetLabels
+                    optionEnabled: index => root.detailAvailable(root.previewPresetSides[index])
 
-                    onActivated: KSettings.previewMaxSide = root.previewPresetSides[previewCombo.currentIndex]
+                    onActivated: index => {
+                        if (previewCombo.optionEnabled(index))
+                            KSettings.previewMaxSide = root.previewPresetSides[index];
+                        previewCombo.currentIndex = Qt.binding(() => root.previewPresetSides.indexOf(KSettings.previewMaxSide));
+                    }
                 }
 
                 Caption {
@@ -1050,17 +1070,15 @@ Rectangle {
                     id: analysisCombo
 
                     currentIndex: root.analysisPresetSides.indexOf(KSettings.analysisMaxSide)
+                    displayText: root.cappedDetailText(KSettings.analysisMaxSide, analysisCombo.currentText)
                     model: root.analysisPresetLabels
+                    optionEnabled: index => root.detailAvailable(root.analysisPresetSides[index])
 
-                    onActivated: KSettings.analysisMaxSide = root.analysisPresetSides[analysisCombo.currentIndex]
-                }
-
-                Text {
-                    color: root.colorDim
-                    font.pixelSize: 9
-                    text: "The update rate is how often all of this happens: one frame, one pass of every model, one picture. The preview is the picture on this panel; the analysis is what the models are shown. Neither is ever enlarged past what the camera delivers, so both are capped by the camera line above. A larger analysis frame is what lets a face across the room, or a hand at arm's length, survive the downscale, and its cost is the milliseconds beside the rate."
-                    width: parent.width
-                    wrapMode: Text.WordWrap
+                    onActivated: index => {
+                        if (analysisCombo.optionEnabled(index))
+                            KSettings.analysisMaxSide = root.analysisPresetSides[index];
+                        analysisCombo.currentIndex = Qt.binding(() => root.analysisPresetSides.indexOf(KSettings.analysisMaxSide));
+                    }
                 }
 
                 ValueSlider {
@@ -1079,7 +1097,7 @@ Rectangle {
                     label: "Tracking smoothing"
                     from: 0.0
                     to: 1.0
-                    value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.7
+                    value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.0
 
                     onMoved: value => {
                         if (root.faceTracker)
@@ -1323,14 +1341,6 @@ Rectangle {
                     font.pixelSize: 9
                     text: Identities.problem
                     visible: Identities.problem !== ""
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                }
-
-                Text {
-                    color: root.colorDim
-                    font.pixelSize: 9
-                    text: (Identities.browserFiles ? "Kept in this browser's storage." : "Kept in " + Identities.directory + ", outside the source tree.") + " Saving a name that is already here adds what is staged as one more sample, up to " + Identities.sampleLimit + " pictures and " + Identities.sampleLimit + " recordings each, the oldest dropped first. A voice needs a sentence of at least " + (root.speechRecognizer ? root.speechRecognizer.minimumVoiceSeconds : 2) + " seconds."
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }

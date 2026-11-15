@@ -41,7 +41,7 @@ find_package(OpenCV 4.8 REQUIRED COMPONENTS core dnn)
 # geometry, the gallery and the frontend, none of which need a camera, a
 # microphone, a model file or an accelerator, which is what makes them runnable
 # in CI.
-set(VISION_SUITES visiondecode modelcatalog identitystore headpose handgeometry
+set(VISION_SUITES visiondecode modelcatalog identitystore headpose handgeometry bgrimage
                   handlandmarker)
 foreach (SUITE ${VISION_SUITES})
     kerfur_add_test(${SUITE} Vision)

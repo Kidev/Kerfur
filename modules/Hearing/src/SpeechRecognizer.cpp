@@ -239,7 +239,12 @@ void SpeechRecognizer::enumerateAudioDevices()
     }
 
     if (m_audioDevices.isEmpty()) {
+#ifdef Q_OS_WASM
+        qCInfo(speechLog) << "no audio input devices yet; the browser lists them once "
+                             "microphone access is granted";
+#else
         qCWarning(speechLog) << "no audio input devices; is PipeWire or PulseAudio running?";
+#endif
         names.append(QStringLiteral("System Audio (no devices detected)"));
     }
 
@@ -366,12 +371,10 @@ void SpeechRecognizer::initializeAudio()
     m_audioSource = std::make_unique<QAudioSource>(device, format, this);
     m_audioSource->setBufferSize(format.bytesForDuration(captureBufferMs * 1000));
 
+    // Only the end of a capture is taken from here. The browser backend never
+    // emits ActiveState, so the start is the first buffer that arrives.
     connect(m_audioSource.get(), &QAudioSource::stateChanged, this, [this](QAudio::State state) {
-        if (state == QAudio::ActiveState) {
-            setListening(true);
-            setErrorString(QString{});
-            m_volumeUpdateTimer.start();
-        } else if (state == QAudio::StoppedState) {
+        if (state == QAudio::StoppedState) {
             setListening(false);
             if (m_audioSource && m_audioSource->error() != QAudio::NoError) {
                 setErrorString(QStringLiteral("Audio capture stopped with an error"));
@@ -420,8 +423,15 @@ void SpeechRecognizer::uninitializeAudio()
 
 void SpeechRecognizer::processAudioData(const QByteArray &data)
 {
-    if (!m_listening || data.isEmpty()) {
+    if (data.isEmpty()) {
         return;
+    }
+    // Connected to the running capture alone and cut on teardown, so a buffer
+    // here means the microphone is live.
+    if (!m_listening) {
+        setListening(true);
+        setErrorString(QString{});
+        m_volumeUpdateTimer.start();
     }
 
     m_volumeSample = data;

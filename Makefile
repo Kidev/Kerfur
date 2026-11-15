@@ -73,7 +73,7 @@ BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
 BUILD_QUALIFIER := $(OS_NAME)$(BUILD_NAME)
 BUILD_MODE ?= Release
 BUILD_MODE_WEB_RELEASE ?= MinSizeRel
-BROTLI_EXTENSIONS ?= js css html wasm png ico wav mp3
+BROTLI_EXTENSIONS ?= js css html wasm svg png ico wav mp3
 ABS_INSTALL_DIR := $(abspath $(INSTALL_DIR))
 QT_ROOT_DIR_TARGET ?= $(abspath $(QT_ROOT_DIR)/../$(WASM_ARCH))
 QT_ROOT_DIR_HOST ?= $(abspath $(QT_ROOT_DIR))
@@ -415,7 +415,6 @@ web-build:
 	mkdir -p $(ABS_INSTALL_DIR)
 	cp -r $(ASSETS_DIR) $(ABS_INSTALL_DIR)
 
-	cp $(BUILD_DIR)/$(PROJECT_BINARY).html $(ABS_INSTALL_DIR)/index.html
 	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.wasm $(ABS_INSTALL_DIR)
 	find $(BUILD_DIR) -maxdepth 1 -name '*.data' -exec cp {} $(ABS_INSTALL_DIR) \;
@@ -423,15 +422,19 @@ web-build:
 	cp $(ASSETS_DIR)/logo.png $(ABS_INSTALL_DIR)/logo.png
 	cp $(ASSETS_DIR)/favicon.ico $(ABS_INSTALL_DIR)/favicon.ico
 
-	sed -i 's#<title>$(PROJECT_BINARY)</title>#<title>$(PROJECT_TITLE) | Kidev.org<\/title><link rel="icon" href="favicon.ico" type="image/x-icon">#g' $(ABS_INSTALL_DIR)/index.html
-	sed -i "s#<strong>Qt for WebAssembly: $(PROJECT_BINARY)</strong>#<h1 style='color:\#ffffff;'><strong>$(PROJECT_TITLE)</strong></h1><span style='color:\#ffffff;'>Written by Kidev using Qt</span><br><br><img src='qtlogo.svg' width='160' height='100' style='display:block'>#g" $(ABS_INSTALL_DIR)/index.html
-	sed -i "s# height: 100% }# height: 100%; background-color:\#01010c; }#g" $(ABS_INSTALL_DIR)/index.html
-	sed -i 's#<img src="qtlogo.svg" width="320" height="200" style="display:block"></img>#<img src="logo.png" width="260" height="260" style="display:block">#g' $(ABS_INSTALL_DIR)/index.html
-	sed -i 's#<div id="qtstatus">#<div id="qtstatus" style="color:\#ffffff; font-weight:bold">#g' $(ABS_INSTALL_DIR)/index.html
-	sed -i 's#undefined ? ` with code ` :#undefined ? ` with code ${exitData.code}` :#g' $(ABS_INSTALL_DIR)/index.html
-	sed -i 's#undefined ? ` ()` :#undefined ? `<br><span style="color:\#ff0000">Error: ${exitData.text}</span>` :#g' $(ABS_INSTALL_DIR)/index.html
-	sed -i 's/\/\*.*\*\///g' $(ABS_INSTALL_DIR)/index.html
-	sed -i '/<!--/,/-->/d' $(ABS_INSTALL_DIR)/index.html
+	@wasm="$(BUILD_DIR)/$(PROJECT_BINARY).wasm"; data="$(BUILD_DIR)/$(PROJECT_BINARY).data"; \
+	wasm_bytes=$$(wc -c < "$$wasm" | tr -d ' '); data_bytes=0; data_hash=; \
+	if [ -f "$$data" ]; then \
+		data_bytes=$$(wc -c < "$$data" | tr -d ' '); \
+		data_hash=$$( (sha256sum "$$data" 2>/dev/null || shasum -a 256 "$$data") | cut -d' ' -f1); \
+	fi; \
+	sed -e 's#@PROJECT_TITLE@#$(PROJECT_TITLE)#g' -e 's#@PROJECT_BINARY@#$(PROJECT_BINARY)#g' \
+		-e "s#@WASM_BYTES@#$$wasm_bytes#g" -e "s#@DATA_BYTES@#$$data_bytes#g" \
+		-e "s#@DATA_HASH@#$$data_hash#g" web/index.html > $(ABS_INSTALL_DIR)/index.html; \
+	if grep -q '@[A-Z_]*@' $(ABS_INSTALL_DIR)/index.html; then \
+		echo "Error: unfilled placeholder in $(ABS_INSTALL_DIR)/index.html"; exit 1; \
+	fi; \
+	echo "index.html: wasm $$wasm_bytes bytes, data $$data_bytes bytes, sha256 $$data_hash"
 
 	@extensions_expr=""; \
 	for ext in $(BROTLI_EXTENSIONS); do \
@@ -444,6 +447,22 @@ web-build:
 	cmd="find $(ABS_INSTALL_DIR)/ -type f \( $$extensions_expr \) -exec brotli --best --force {} \;"; \
 	echo "Compressing files with extensions: $(BROTLI_EXTENSIONS)"; \
 	eval $$cmd
+
+	# The data file changes only with the models, so its compressed copy is kept by hash.
+	@data="$(ABS_INSTALL_DIR)/$(PROJECT_BINARY).data"; \
+	if [ -f "$$data" ]; then \
+		hash=$$( (sha256sum "$$data" 2>/dev/null || shasum -a 256 "$$data") | cut -d' ' -f1); \
+		cached="$(MODELS_CACHE_DIR)/$(PROJECT_BINARY).data.$$hash.br"; \
+		if [ -f "$$cached" ]; then \
+			echo "Reusing $$cached"; \
+		else \
+			echo "Compressing $$data into $$cached"; \
+			mkdir -p "$(MODELS_CACHE_DIR)" && \
+			brotli --best --force -o "$$cached.partial" "$$data" && \
+			mv "$$cached.partial" "$$cached" || exit 1; \
+		fi; \
+		cp "$$cached" "$$data.br"; \
+	fi
 
 run-web:
 	@if [ ! -f "$(ABS_INSTALL_DIR)/index.html" ]; then \

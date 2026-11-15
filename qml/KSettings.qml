@@ -17,7 +17,7 @@ QtObject {
     /// The camera chosen in the panel, by device id. Empty means automatic: a
     /// front facing camera, otherwise the system default.
     property string cameraId: ""
-    property real eyeMovementRange: 1.0
+    property real eyeMovementRange: 3.0
     property bool faceTrackingDebug: false
     property bool faceTrackingEnabled: false
     property string facesGalleryPath: root.appDataPath + "/faces/"
@@ -29,10 +29,10 @@ QtObject {
         category: "General"
     }
     property int glowBlendMode: 1
-    property real glowBloom: 1.0
-    property real glowBlurAmount: 0.4
+    property real glowBloom: 0.35
+    property real glowBlurAmount: 0.2
     property color glowColor: "magenta"
-    property real glowMaxBrightness: 0.6
+    property real glowMaxBrightness: 0.25
     property int ledScreenLedSize: 9
     property real leftRightAngle: 90
     property real maskSpreadAtMax: 0

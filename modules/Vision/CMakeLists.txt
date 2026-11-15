@@ -13,6 +13,8 @@ set(
     VISION_STAGE_SOURCES
     src/visiontypes.h
     src/visiontypes.cpp
+    src/bgrimage.h
+    src/bgrimage.cpp
     src/visionconfig.h
     src/modelcatalog.h
     src/modelcatalog.cpp
@@ -82,7 +84,6 @@ find_package(
     COMPONENTS calib3d
                core
                dnn
-               imgcodecs
                imgproc
                objdetect
 )

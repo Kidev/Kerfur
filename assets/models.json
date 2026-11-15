@@ -25,7 +25,8 @@
             "license": "Apache-2.0",
             "profiles": [
                 "desktop",
-                "pi"
+                "pi",
+                "wasm"
             ]
         },
         {
@@ -38,7 +39,8 @@
             "license": "Apache-2.0",
             "profiles": [
                 "desktop",
-                "pi"
+                "pi",
+                "wasm"
             ]
         },
         {
@@ -51,7 +53,8 @@
             "license": "Apache-2.0",
             "profiles": [
                 "desktop",
-                "pi"
+                "pi",
+                "wasm"
             ]
         },
         {

@@ -3,6 +3,7 @@
 
 #include "faceanalysisworker.h"
 
+#include "bgrimage.h"
 #include "headpose.h"
 #include "identitydirectory.h"
 #include "modelcatalog.h"
@@ -151,32 +152,6 @@ constexpr double trackOverlap{0.3};
 // cadence this is a second or two: long enough to survive a turned head, short
 // enough that the next person to sit down does not inherit the last one's name.
 constexpr quint64 trackExpiry{20};
-
-cv::Mat qImageToBgr(const QImage &image)
-{
-    if (image.isNull()) {
-        return {};
-    }
-
-    // Format_BGR888 rather than a convert to RGB followed by a cvtColor: the
-    // conversion has to happen anyway, and asking Qt for the byte order OpenCV
-    // already wants makes it one pass instead of two.
-    const QImage source{image.format() == QImage::Format_BGR888
-                            ? image
-                            : image.convertToFormat(QImage::Format_BGR888)};
-    if (source.isNull()) {
-        return {};
-    }
-
-    const cv::Mat view{source.height(),
-                       source.width(),
-                       CV_8UC3,
-                       const_cast<uchar *>(source.constBits()),
-                       static_cast<size_t>(source.bytesPerLine())};
-    // Cloned because `source` may be the caller's implicitly shared buffer and
-    // will be gone before the stages that read this are done with it.
-    return view.clone();
-}
 
 QRectF normalize(const cv::Rect2f &box, const cv::Size &frame)
 {

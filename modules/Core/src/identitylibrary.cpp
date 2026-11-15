@@ -23,9 +23,15 @@
 #include <algorithm>
 
 #ifdef Q_OS_WASM
-#include <QFileDialog>
+#include <QtGui/private/qwasmlocalfileaccess_p.h>
 
 #include <emscripten.h>
+
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
 #endif
 
 namespace Kerfur {
@@ -89,6 +95,42 @@ QString localPath(const QUrl &file)
 /// mount is started, because a mount that fails reports synchronously, from
 /// inside the constructor, where `instance()` is not yet safe to call.
 IdentityLibrary *storageOwner{nullptr};
+
+/// The browser's file picker, then `done` with the chosen file's name and
+/// bytes, or with an empty name when the picker was cancelled.
+///
+/// The call `QFileDialog::getOpenFileContent` makes on the web, made directly:
+/// the dialog class is the only thing this build needs from Qt Widgets, and
+/// linking it brings in most of the module.
+void openLocalFile(const QString &nameFilter,
+                   std::function<void(const QString &, const QByteArray &)> done)
+{
+    struct Pending
+    {
+        QString name;
+        QByteArray content;
+        std::function<void(const QString &, const QByteArray &)> done;
+    };
+    const auto pending{std::make_shared<Pending>()};
+    pending->done = std::move(done);
+
+    QWasmLocalFileAccess::openFile(
+        nameFilter.toStdString(),
+        [pending](bool fileSelected) {
+            if (!fileSelected) {
+                pending->done(QString{}, QByteArray{});
+            }
+        },
+        [pending](std::uint64_t size, const std::string &name) -> char * {
+            if (size > static_cast<std::uint64_t>(QByteArray::maxSize())) {
+                return nullptr;
+            }
+            pending->name = QString::fromStdString(name);
+            pending->content.resize(static_cast<qsizetype>(size));
+            return pending->content.data();
+        },
+        [pending]() { pending->done(pending->name, pending->content); });
+}
 #endif
 
 } // namespace
@@ -125,6 +167,83 @@ EM_JS(void, kerfurPersistIdentityStorage, (), {
         _kerfurIdentityStoragePersisted(error ? 0 : 1);
     });
 })
+
+// Asks the browser to stop clearing this site's storage under disk pressure.
+// Firefox asks the user, so it is requested once there is somebody to lose:
+// the stored models alone are fetched again on the next visit. A browser that
+// already granted it is not asked again.
+EM_JS(void, kerfurRequestDurableStorage, (), {
+    if (typeof navigator === "undefined" || !navigator.storage || !navigator.storage.persist) {
+        return;
+    }
+    navigator.storage.persisted()
+        .then(function(persisted) { return persisted || navigator.storage.persist(); })
+        .then(function(granted) {
+            console.info("identities: browser storage is "
+                         + (granted ? "persistent" : "best effort and may be cleared under disk pressure"));
+        })
+        .catch(function(error) { console.warn("identities: cannot request persistent storage: " + error); });
+})
+
+// Qt has no audio decoder in the browser, so a recording in any container the
+// browser can play is decoded by Web Audio. The offline context resamples it
+// to `rate` on the way, and the channels are averaged to mono.
+EM_JS(void, kerfurDecodeVoice, (const char *bytes, int size, int request, int rate), {
+    const copy = new Uint8Array(size);
+    copy.set(new Uint8Array(wasmMemory.buffer, bytes, size));
+    const fail = function(error) {
+        console.warn("identities: the browser cannot decode this recording: " + error);
+        _kerfurVoiceDecoded(request, 0, 0);
+    };
+    let context;
+    try {
+        context = new OfflineAudioContext(1, 1, rate);
+    } catch (error) {
+        fail(error);
+        return;
+    }
+    context.decodeAudioData(copy.buffer).then(function(audio) {
+        const frames = audio.length;
+        const target = _kerfurDecodedVoiceBuffer(frames);
+        const mono = new Float32Array(wasmMemory.buffer, target, frames);
+        for (let channel = 0; channel < audio.numberOfChannels; ++channel) {
+            const data = audio.getChannelData(channel);
+            for (let i = 0; i < frames; ++i) {
+                mono[i] += data[i] / audio.numberOfChannels;
+            }
+        }
+        _kerfurVoiceDecoded(request, frames, audio.sampleRate);
+    }, fail);
+})
+
+namespace {
+/// Filled by the browser between `kerfurDecodedVoiceBuffer` and
+/// `kerfurVoiceDecoded`, which it calls in one go on the main thread.
+std::vector<float> decodedVoice;
+} // namespace
+
+extern "C" EMSCRIPTEN_KEEPALIVE float *kerfurDecodedVoiceBuffer(int frames)
+{
+    decodedVoice.assign(static_cast<std::size_t>(std::max(frames, 0)), 0.0F);
+    return decodedVoice.data();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void kerfurVoiceDecoded(int request, int frames, int sampleRate)
+{
+    QList<float> samples;
+    if (frames > 0 && static_cast<std::size_t>(frames) <= decodedVoice.size()) {
+        samples = QList<float>(decodedVoice.cbegin(), decodedVoice.cbegin() + frames);
+    }
+    decodedVoice = {};
+    if (Kerfur::storageOwner != nullptr) {
+        QMetaObject::invokeMethod(Kerfur::storageOwner,
+                                  "applyDecodedVoice",
+                                  Qt::QueuedConnection,
+                                  Q_ARG(int, request),
+                                  Q_ARG(QList<float>, samples),
+                                  Q_ARG(int, sampleRate));
+    }
+}
 
 extern "C" EMSCRIPTEN_KEEPALIVE void kerfurIdentityStorageLoaded(int loaded)
 {
@@ -319,6 +438,20 @@ bool IdentityLibrary::stageVoiceData(const QByteArray &data,
                         .arg(maximumVoiceBytes / (1024 * 1024)));
     }
 
+#ifdef Q_OS_WASM
+    // Only WAV is read back without a decoder, so anything else is staged as
+    // the WAV the browser decodes it to, once that arrives.
+    if (container != QStringLiteral("wav")) {
+        m_decodingVoiceLabel = origin;
+        kerfurDecodeVoice(data.constData(),
+                          static_cast<int>(data.size()),
+                          ++m_voiceDecodeRequest,
+                          voiceSampleRate);
+        succeed();
+        return true;
+    }
+#endif
+
     m_stagedVoice = StagedVoice{data, container};
     m_stagedVoiceLabel = origin;
     emit stagedChanged();
@@ -369,13 +502,13 @@ bool IdentityLibrary::stageVoiceSamples(const std::vector<float> &samples,
 void IdentityLibrary::browseFace()
 {
 #ifdef Q_OS_WASM
-    QFileDialog::getOpenFileContent(QStringLiteral("Pictures (*.png *.jpg *.jpeg *.bmp)"),
-                                    [this](const QString &fileName, const QByteArray &content) {
-                                        // An empty name is a cancelled dialog.
-                                        if (!fileName.isEmpty()) {
-                                            stageFaceData(content, QFileInfo{fileName}.fileName());
-                                        }
-                                    });
+    openLocalFile(QStringLiteral("Pictures (*.png *.jpg *.jpeg *.bmp)"),
+                  [this](const QString &fileName, const QByteArray &content) {
+                      // An empty name is a cancelled dialog.
+                      if (!fileName.isEmpty()) {
+                          stageFaceData(content, QFileInfo{fileName}.fileName());
+                      }
+                  });
 #else
     fail(QStringLiteral("Choose the picture with the file dialog."));
 #endif
@@ -384,7 +517,7 @@ void IdentityLibrary::browseFace()
 void IdentityLibrary::browseVoice()
 {
 #ifdef Q_OS_WASM
-    QFileDialog::getOpenFileContent(
+    openLocalFile(
         QStringLiteral("Recordings (*.wav *.mp3 *.flac *.ogg *.m4a)"),
         [this](const QString &fileName, const QByteArray &content) {
             if (!fileName.isEmpty()) {
@@ -472,6 +605,9 @@ bool IdentityLibrary::enrol(const QString &name, const QString &title, int prior
     m_stagedVoiceLabel.clear();
     emit stagedChanged();
     commit();
+#ifdef Q_OS_WASM
+    kerfurRequestDurableStorage();
+#endif
     succeed();
     return true;
 }
@@ -604,6 +740,21 @@ void IdentityLibrary::applyStorageLoaded(bool loaded)
     emit readyChanged();
     refreshPeople();
     emit galleryChanged();
+}
+
+void IdentityLibrary::applyDecodedVoice(int request, const QList<float> &samples, int sampleRate)
+{
+    if (request != m_voiceDecodeRequest) {
+        return;
+    }
+    if (samples.isEmpty()) {
+        fail(QStringLiteral("This browser cannot decode %1. Try a WAV recording.")
+                 .arg(m_decodingVoiceLabel));
+        return;
+    }
+    stageVoiceSamples(std::vector<float>(samples.cbegin(), samples.cend()),
+                      sampleRate,
+                      m_decodingVoiceLabel);
 }
 
 void IdentityLibrary::applyStoragePersisted(bool persisted)

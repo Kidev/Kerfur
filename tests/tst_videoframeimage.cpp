@@ -7,7 +7,9 @@
 #include <QTest>
 #include <QVideoFrameFormat>
 
+#include <cstdlib>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -101,6 +103,49 @@ private:
     std::vector<uchar> m_bytes;
 };
 
+/// Bytes as a browser hands them over: any layout, labelled RGBA, with the
+/// first plane stride `copyTo` reported.
+class BrowserBuffer : public QAbstractVideoBuffer
+{
+public:
+    BrowserBuffer(const QSize &size, int stride, std::vector<uchar> bytes)
+        : m_size{size}
+        , m_stride{stride}
+        , m_bytes{std::move(bytes)}
+    {
+    }
+
+    MapData map(QVideoFrame::MapMode mode) override
+    {
+        Q_UNUSED(mode)
+        MapData data;
+        data.planeCount = 1;
+        data.bytesPerLine[0] = m_stride;
+        data.data[0] = m_bytes.data();
+        data.dataSize[0] = static_cast<int>(m_bytes.size());
+        return data;
+    }
+
+    QVideoFrameFormat format() const override
+    {
+        return QVideoFrameFormat{m_size, QVideoFrameFormat::Format_RGBA8888};
+    }
+
+private:
+    QSize m_size;
+    int m_stride{0};
+    std::vector<uchar> m_bytes;
+};
+
+/// Within two levels on every channel: the fixed point arithmetic rounds, and
+/// a reference colour quantised to 8 bit YUV does not come back exact.
+bool closeTo(QRgb actual, QRgb expected)
+{
+    const auto near{[](int a, int b) { return std::abs(a - b) <= 2; }};
+    return near(qRed(actual), qRed(expected)) && near(qGreen(actual), qGreen(expected))
+           && near(qBlue(actual), qBlue(expected)) && qAlpha(actual) == 255;
+}
+
 } // namespace
 
 /// How a camera frame becomes the picture every model and the preview see.
@@ -115,6 +160,11 @@ private slots:
     void completeYuyvFrameIsConverted();
     void mirroredFrameIsConverted();
     void invalidFrameIsNull();
+    void browserI420FrameIsDecoded();
+    void browserNv12FrameIsDecoded();
+    void browserBt709FrameIsDecoded();
+    void browserBgrxFrameIsSwapped();
+    void browserFrameShorterThanItsLayoutIsRefused();
 };
 
 void TestVideoFrameImage::packedFrameIsReadDirectly()
@@ -185,6 +235,76 @@ void TestVideoFrameImage::mirroredFrameIsConverted()
 void TestVideoFrameImage::invalidFrameIsNull()
 {
     QVERIFY(Kerfur::imageFromVideoFrame(QVideoFrame{}).isNull());
+}
+
+void TestVideoFrameImage::browserI420FrameIsDecoded()
+{
+    // A red 2x2 block beside a green one, in limited range BT.601: the Y
+    // plane, then U (90, 54), then V (240, 34).
+    std::vector<uchar> bytes{81, 81, 145, 145, 81, 81, 145, 145, 90, 54, 240, 34};
+    const QVideoFrame frame{std::make_unique<BrowserBuffer>(QSize{4, 2}, 4, std::move(bytes))};
+
+    const QImage image{
+        Kerfur::imageFromBrowserFrame(frame, {Kerfur::BrowserFrameLayout::Format::I420})};
+
+    QCOMPARE(image.size(), QSize(4, 2));
+    QVERIFY(closeTo(image.pixel(0, 0), qRgb(255, 0, 0)));
+    QVERIFY(closeTo(image.pixel(1, 1), qRgb(255, 0, 0)));
+    QVERIFY(closeTo(image.pixel(2, 0), qRgb(0, 255, 0)));
+    QVERIFY(closeTo(image.pixel(3, 1), qRgb(0, 255, 0)));
+}
+
+void TestVideoFrameImage::browserNv12FrameIsDecoded()
+{
+    // The same red and green blocks, with U and V interleaved: (90, 240) for
+    // red, (54, 34) for green.
+    std::vector<uchar> bytes{81, 81, 145, 145, 81, 81, 145, 145, 90, 240, 54, 34};
+    const QVideoFrame frame{std::make_unique<BrowserBuffer>(QSize{4, 2}, 4, std::move(bytes))};
+
+    const QImage image{
+        Kerfur::imageFromBrowserFrame(frame, {Kerfur::BrowserFrameLayout::Format::Nv12})};
+
+    QCOMPARE(image.size(), QSize(4, 2));
+    QVERIFY(closeTo(image.pixel(0, 0), qRgb(255, 0, 0)));
+    QVERIFY(closeTo(image.pixel(3, 1), qRgb(0, 255, 0)));
+}
+
+void TestVideoFrameImage::browserBt709FrameIsDecoded()
+{
+    // Red in limited range BT.709 is (63, 102, 240); read as BT.601 it would
+    // come back orange.
+    std::vector<uchar> bytes{63, 63, 63, 63, 102, 240};
+    const QVideoFrame frame{std::make_unique<BrowserBuffer>(QSize{2, 2}, 2, std::move(bytes))};
+
+    const QImage image{Kerfur::imageFromBrowserFrame(
+        frame, {Kerfur::BrowserFrameLayout::Format::I420, true, false})};
+
+    QCOMPARE(image.size(), QSize(2, 2));
+    QVERIFY(closeTo(image.pixel(1, 1), qRgb(255, 0, 0)));
+}
+
+void TestVideoFrameImage::browserBgrxFrameIsSwapped()
+{
+    // Red then blue, in BGRX order with junk in the unused byte.
+    std::vector<uchar> bytes{0, 0, 255, 0, 255, 0, 0, 7};
+    const QVideoFrame frame{std::make_unique<BrowserBuffer>(QSize{2, 1}, 8, std::move(bytes))};
+
+    const QImage image{
+        Kerfur::imageFromBrowserFrame(frame, {Kerfur::BrowserFrameLayout::Format::Bgrx})};
+
+    QCOMPARE(image.size(), QSize(2, 1));
+    QCOMPARE(image.pixel(0, 0), qRgb(255, 0, 0));
+    QCOMPARE(image.pixel(1, 0), qRgb(0, 0, 255));
+}
+
+void TestVideoFrameImage::browserFrameShorterThanItsLayoutIsRefused()
+{
+    // The luma plane alone: I420 needs half as much again behind it.
+    const QVideoFrame frame{std::make_unique<MislabelledBuffer>(QSize{16, 8})};
+
+    QVERIFY(
+        Kerfur::imageFromBrowserFrame(frame, {Kerfur::BrowserFrameLayout::Format::I420}).isNull());
+    QVERIFY(Kerfur::imageFromBrowserFrame(frame, {}).isNull());
 }
 
 QTEST_GUILESS_MAIN(TestVideoFrameImage)

@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, user-scalable=0">
+  <title>@PROJECT_TITLE@ | Kidev.org</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    :root {
+      --background: #01010c;
+      --surface: #11131a;
+      --text: #e6e9ef;
+      --dim: #8a93a3;
+      --accent: #8ad8ff;
+      --done: #7cff5a;
+      --bad: #ff6b6b;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--background);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    #screen { width: 100%; height: 100%; display: none; }
+    #loader {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+      padding: 24px 16px;
+    }
+    #loader[hidden] { display: none; }
+    #loader img.logo { width: 180px; height: 180px; }
+    #loader h1 { margin: 12px 0 0; font-size: 28px; }
+    .byline { margin: 4px 0 24px; color: var(--dim); }
+    .byline img { width: 40px; height: 25px; vertical-align: middle; }
+    #steps { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 440px; }
+    .step { margin: 0 0 16px; }
+    .step .label { display: flex; justify-content: space-between; gap: 12px; }
+    .step .name { font-weight: 600; }
+    .step .detail { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
+    .step[data-state="waiting"] .name { color: var(--dim); }
+    .step[data-state="failed"] .detail { color: var(--bad); }
+    .bar {
+      position: relative;
+      height: 6px;
+      margin-top: 6px;
+      overflow: hidden;
+      border-radius: 3px;
+      background: var(--surface);
+    }
+    .fill {
+      width: 0;
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width 120ms linear;
+    }
+    .step[data-state="done"] .fill { width: 100%; background: var(--done); }
+    .step[data-state="failed"] .fill { background: var(--bad); }
+    .bar.busy .fill {
+      width: 30%;
+      animation: sweep 1.2s ease-in-out infinite;
+    }
+    @keyframes sweep {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(340%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bar.busy .fill { width: 100%; opacity: 0.5; animation: none; }
+    }
+    #note { min-height: 1.45em; margin: 4px 0 0; max-width: 440px; color: var(--dim); text-align: center; }
+    #failure { max-width: 440px; margin: 8px 0 0; color: var(--bad); text-align: center; overflow-wrap: anywhere; }
+    #retry {
+      margin-top: 12px;
+      padding: 6px 16px;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--accent);
+      font: inherit;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main id="loader">
+    <img class="logo" src="logo.png" alt="">
+    <h1>@PROJECT_TITLE@</h1>
+    <p class="byline">Written by Kidev using Qt <img src="qtlogo.svg" alt=""></p>
+    <ol id="steps">
+      <li class="step" id="step-application" data-state="waiting">
+        <div class="label"><span class="name">Application</span><span class="detail">Waiting</span></div>
+        <div class="bar" role="progressbar" aria-label="Application" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+      </li>
+      <li class="step" id="step-models" data-state="waiting">
+        <div class="label"><span class="name">Face, voice and speech models</span><span class="detail">Waiting</span></div>
+        <div class="bar" role="progressbar" aria-label="Models" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+      </li>
+      <li class="step" id="step-start" data-state="waiting">
+        <div class="label"><span class="name">Starting</span><span class="detail">Waiting</span></div>
+        <div class="bar" role="progressbar" aria-label="Starting" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+      </li>
+    </ol>
+    <p id="note" aria-live="polite"></p>
+    <p id="failure" role="alert" hidden></p>
+    <button id="retry" type="button" hidden>Try again</button>
+    <noscript>JavaScript is disabled. Please enable JavaScript to use this application.</noscript>
+  </main>
+  <div id="screen"></div>
+
+  <script>
+    'use strict';
+
+    // Filled in by the build from the files it produced. The sizes are the
+    // uncompressed ones: a server that compresses on the way out reports the
+    // compressed length, which says nothing about how much is left to read.
+    const BUILD = {
+      name: '@PROJECT_BINARY@',
+      entry: '@PROJECT_BINARY@_entry',
+      wasmBytes: @WASM_BYTES@,
+      dataBytes: @DATA_BYTES@,
+      dataHash: '@DATA_HASH@',
+    };
+
+    // The models are kept in IndexedDB under the build's hash of the data file,
+    // so an unchanged set is read back from this browser and a changed one is
+    // downloaded once and replaces it.
+    const CACHE_DATABASE = 'kerfur-cache';
+    const CACHE_STORE = 'packages';
+    const CACHE_KEY = BUILD.name + '.data';
+
+    const MEGABYTE = 1024 * 1024;
+
+    const note = document.getElementById('note');
+    const failure = document.getElementById('failure');
+    const retry = document.getElementById('retry');
+
+    const pageLoaded = new Promise(resolve => {
+      if (document.readyState === 'complete')
+        resolve();
+      else
+        window.addEventListener('load', resolve, { once: true });
+    });
+
+    function megabytes(bytes) {
+      return (bytes / MEGABYTE).toFixed(bytes < 10 * MEGABYTE ? 1 : 0) + ' MB';
+    }
+
+    class Step {
+      constructor(id) {
+        this.element = document.getElementById(id);
+        this.bar = this.element.querySelector('.bar');
+        this.fill = this.element.querySelector('.fill');
+        this.detail = this.element.querySelector('.detail');
+      }
+
+      progress(done, total, text) {
+        const fraction = total > 0 ? Math.min(done / total, 1) : 0;
+        this.element.dataset.state = 'active';
+        this.bar.classList.remove('busy');
+        this.fill.style.width = (fraction * 100).toFixed(1) + '%';
+        this.bar.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
+        this.detail.textContent = text;
+      }
+
+      busy(text) {
+        this.element.dataset.state = 'active';
+        this.bar.classList.add('busy');
+        this.bar.removeAttribute('aria-valuenow');
+        this.detail.textContent = text;
+      }
+
+      done(text) {
+        this.element.dataset.state = 'done';
+        this.bar.classList.remove('busy');
+        this.fill.style.width = '';
+        this.bar.setAttribute('aria-valuenow', '100');
+        this.detail.textContent = text;
+      }
+
+      fail(text) {
+        this.element.dataset.state = 'failed';
+        this.bar.classList.remove('busy');
+        this.detail.textContent = text;
+      }
+    }
+
+    // Reports at most every 100 ms, and always the last call.
+    function throttled(report) {
+      let last = 0;
+      return (received, total, final) => {
+        const now = performance.now();
+        if (final || now - last >= 100) {
+          last = now;
+          report(received, total);
+        }
+      };
+    }
+
+    function downloadText(received, total, started) {
+      const seconds = (performance.now() - started) / 1000;
+      const rate = seconds > 0.5 ? ', ' + (received / MEGABYTE / seconds).toFixed(1) + ' MB/s' : '';
+      return megabytes(received) + ' of ' + megabytes(total) + rate;
+    }
+
+    async function fetchOrThrow(url) {
+      const response = await fetch(url);
+      if (!response.ok)
+        throw new Error(url + ': HTTP ' + response.status);
+      return response;
+    }
+
+    // The application binary, compiled while it downloads.
+    async function compileApplication(step) {
+      const url = BUILD.name + '.wasm';
+      const started = performance.now();
+      step.progress(0, BUILD.wasmBytes, 'Connecting');
+      const response = await fetchOrThrow(url);
+
+      let received = 0;
+      const report = throttled((done, total) => step.progress(done, total, downloadText(done, total, started)));
+      const counted = response.body.pipeThrough(new TransformStream({
+        transform(chunk, controller) {
+          received += chunk.byteLength;
+          report(received, BUILD.wasmBytes, false);
+          controller.enqueue(chunk);
+        },
+        flush() {
+          report(received, BUILD.wasmBytes, true);
+          step.busy('Compiling');
+        },
+      }));
+      const wasm = new Response(counted, { headers: { 'Content-Type': 'application/wasm' } });
+      const module = typeof WebAssembly.compileStreaming === 'function'
+        ? await WebAssembly.compileStreaming(wasm)
+        : await WebAssembly.compile(await wasm.arrayBuffer());
+      step.done(megabytes(received));
+      return module;
+    }
+
+    function settled(request) {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function committed(transaction) {
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error);
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
+
+    // The cache database, or null where IndexedDB is missing or refused (a
+    // private window, storage turned off): the models are then downloaded on
+    // every visit.
+    async function openCache() {
+      if (typeof indexedDB === 'undefined')
+        return null;
+      try {
+        const request = indexedDB.open(CACHE_DATABASE, 1);
+        request.onupgradeneeded = () => request.result.createObjectStore(CACHE_STORE);
+        return await settled(request);
+      } catch (error) {
+        console.warn('kerfur: model cache unavailable', error);
+        return null;
+      }
+    }
+
+    async function readCachedModels(database) {
+      try {
+        const transaction = database.transaction(CACHE_STORE, 'readonly');
+        const record = await settled(transaction.objectStore(CACHE_STORE).get(CACHE_KEY));
+        if (record && record.hash === BUILD.dataHash && record.blob instanceof Blob
+            && record.blob.size === BUILD.dataBytes) {
+          return record.blob;
+        }
+      } catch (error) {
+        console.warn('kerfur: model cache unreadable', error);
+      }
+      return null;
+    }
+
+    async function storeModels(database, blob) {
+      try {
+        if (navigator.storage && navigator.storage.estimate) {
+          const { quota, usage } = await navigator.storage.estimate();
+          if (quota - usage < blob.size * 1.1) {
+            note.textContent = 'Not enough browser storage to keep the models: they will download again next time.';
+            return;
+          }
+        }
+        const transaction = database.transaction(CACHE_STORE, 'readwrite');
+        transaction.objectStore(CACHE_STORE).put({ hash: BUILD.dataHash, blob, stored: Date.now() }, CACHE_KEY);
+        await committed(transaction);
+        note.textContent = 'Models kept in this browser: the next visit skips their download.';
+      } catch (error) {
+        console.warn('kerfur: cannot keep the models', error);
+        note.textContent = 'The models could not be kept in this browser: they will download again next time.';
+      } finally {
+        database.close();
+      }
+    }
+
+    // The data file the runtime unpacks into its file system, from this
+    // browser's storage when it holds this build's copy, from the server
+    // otherwise.
+    async function loadModels(step) {
+      if (BUILD.dataBytes <= 0) {
+        step.done('None');
+        return null;
+      }
+
+      const database = await openCache();
+      if (database) {
+        step.busy('Checking this browser');
+        const cached = await readCachedModels(database);
+        if (cached) {
+          step.busy('Reading ' + megabytes(cached.size) + ' from this browser');
+          const buffer = await cached.arrayBuffer();
+          database.close();
+          step.done(megabytes(buffer.byteLength) + ', from this browser');
+          return buffer;
+        }
+      }
+
+      const started = performance.now();
+      step.progress(0, BUILD.dataBytes, 'Connecting');
+      const response = await fetchOrThrow(BUILD.name + '.data');
+      const reader = response.body.getReader();
+      const report = throttled((done, total) => step.progress(done, total, downloadText(done, total, started)));
+      const chunks = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done)
+          break;
+        chunks.push(value);
+        received += value.byteLength;
+        report(received, BUILD.dataBytes, false);
+      }
+      report(received, BUILD.dataBytes, true);
+
+      // The runtime reads each file at a fixed offset; a short or long copy
+      // would hand it the wrong bytes under the right names.
+      if (received !== BUILD.dataBytes)
+        throw new Error('The models arrived as ' + received + ' bytes instead of ' + BUILD.dataBytes);
+
+      const blob = new Blob(chunks, { type: 'application/octet-stream' });
+      chunks.length = 0;
+      const buffer = await blob.arrayBuffer();
+      step.done(megabytes(received));
+
+      if (database) {
+        note.textContent = 'Keeping the models in this browser for the next visit';
+        storeModels(database, blob);
+      }
+      return buffer;
+    }
+
+    function showFailure(text) {
+      failure.textContent = text;
+      failure.hidden = false;
+      retry.hidden = false;
+    }
+
+    async function start() {
+      const loader = document.getElementById('loader');
+      const screen = document.getElementById('screen');
+      const application = new Step('step-application');
+      const models = new Step('step-models');
+      const starting = new Step('step-start');
+
+      retry.addEventListener('click', () => window.location.reload());
+
+      let module;
+      let data;
+      try {
+        [module, data] = await Promise.all([
+          compileApplication(application).catch(error => {
+            application.fail('Failed');
+            throw error;
+          }),
+          loadModels(models).catch(error => {
+            models.fail('Failed');
+            throw error;
+          }),
+        ]);
+      } catch (error) {
+        console.error(error);
+        showFailure(error.message || String(error));
+        return;
+      }
+
+      await pageLoaded;
+      starting.busy('Starting @PROJECT_TITLE@');
+      try {
+        const config = {
+          qt: {
+            entryFunction: window[BUILD.entry],
+            containerElements: [screen],
+            module: Promise.resolve(module),
+            onLoaded: () => {
+              starting.done('Running');
+              loader.hidden = true;
+              screen.style.display = 'block';
+            },
+            onExit: exit => {
+              screen.style.display = 'none';
+              loader.hidden = false;
+              starting.fail(exit.crashed ? 'Stopped' : 'Exited');
+              let text = '@PROJECT_TITLE@ ' + (exit.crashed ? 'stopped' : 'exited');
+              if (exit.code !== undefined)
+                text += ' with code ' + exit.code;
+              if (exit.text)
+                text += ': ' + exit.text;
+              showFailure(text);
+            },
+          },
+        };
+        if (data) {
+          // Asked for once, while the runtime starts; the reference is dropped
+          // so the copy is freed once it has been unpacked.
+          config.getPreloadedPackage = () => {
+            const buffer = data;
+            data = null;
+            return buffer;
+          };
+        }
+        await qtLoad(config);
+      } catch (error) {
+        console.error(error);
+        starting.fail('Failed');
+        showFailure(error.message || String(error));
+      }
+    }
+
+    start();
+  </script>
+  <script src="@PROJECT_BINARY@.js"></script>
+  <script src="qtloader.js"></script>
+</body>
+</html>

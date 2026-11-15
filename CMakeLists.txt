@@ -29,12 +29,17 @@ find_package(
     COMPONENTS calib3d
                core
                dnn
-               imgcodecs
                imgproc
                objdetect
 )
 find_package(whisper CONFIG REQUIRED)
 find_package(ggml CONFIG REQUIRED)
+
+# Applies to the project's own targets; the vcpkg ports keep their own level.
+if (EMSCRIPTEN)
+    add_compile_options("$<$<CONFIG:MinSizeRel>:-Oz>" "$<$<CONFIG:MinSizeRel>:-flto>")
+    add_link_options("$<$<CONFIG:MinSizeRel>:-flto>")
+endif ()
 
 qt_standard_project_setup()
 qt_policy(SET QTP0001 NEW)

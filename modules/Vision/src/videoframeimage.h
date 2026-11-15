@@ -18,8 +18,9 @@ namespace Kerfur {
 ///
 /// `toImage` converts on the GPU, through an offscreen context it creates for
 /// the calling thread. In a browser that is a second WebGL context beside the
-/// one the scene graph draws with, while the browser backend only ever delivers
-/// packed RGBA in memory, which needs no conversion at all.
+/// one the scene graph draws with, so browser frames never reach it: the page
+/// is asked for their real layout (see `BrowserFrameLayout`) and they are read
+/// with `imageFromBrowserFrame`.
 ///
 /// A frame whose rows are shorter than its pixel format needs is labelled with
 /// the wrong format. Reading it as that format would run off the end of every
@@ -27,6 +28,32 @@ namespace Kerfur {
 /// size and stride need (a camera that delivers part of each frame), which
 /// would otherwise be converted from whatever memory follows it.
 QImage imageFromVideoFrame(const QVideoFrame &frame);
+
+/// How the bytes of one browser camera frame are laid out, as WebCodecs
+/// reports it on the `VideoFrame` they were copied from.
+///
+/// Qt's browser backend copies each frame with `VideoFrame.copyTo`, which
+/// writes the frame's own layout, and labels the copy RGBA whatever that
+/// layout was. I420 and NV12 then arrive with a first plane stride of one byte
+/// per pixel, and BGRA with red and blue swapped, so the label alone cannot be
+/// read.
+struct BrowserFrameLayout
+{
+    enum class Format : quint8 { Unknown, I420, Nv12, Rgba, Rgbx, Bgra, Bgrx };
+
+    Format format{Format::Unknown};
+    /// BT.709 coefficients rather than BT.601.
+    bool bt709{false};
+    /// Samples span 0 to 255 rather than 16 to 235 (16 to 240 for chroma).
+    bool fullRange{false};
+};
+
+/// The frame's bytes read in `layout`, with the frame's rotation and mirroring
+/// applied, or a null image when they do not fit it. Planar YUV must be packed
+/// the way `copyTo` writes it by default (a first plane stride equal to the
+/// width, each plane straight after the one before); packed RGB needs four
+/// bytes per pixel in every row.
+QImage imageFromBrowserFrame(const QVideoFrame &frame, const BrowserFrameLayout &layout);
 
 /// How many bytes the first plane of a frame in memory holds, and how many its
 /// stride and height need. Every uncompressed format keeps a full height first

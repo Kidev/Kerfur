@@ -7,6 +7,7 @@
 #include <QByteArray>
 #include <QImage>
 #include <QJsonObject>
+#include <QList>
 #include <QObject>
 #include <QString>
 #include <QUrl>
@@ -70,6 +71,9 @@ public:
     /// Larger files are refused before they are read.
     static constexpr qsizetype maximumFaceBytes{32 * 1024 * 1024};
     static constexpr qsizetype maximumVoiceBytes{64 * 1024 * 1024};
+    /// The rate a recording the browser decodes is resampled to: the rate
+    /// the speaker network listens at.
+    static constexpr int voiceSampleRate{16000};
     /// A staged picture is reduced to this on its longer side.
     static constexpr int maximumFaceSide{1920};
     static constexpr qsizetype maximumIdLength{48};
@@ -159,6 +163,9 @@ private slots:
     /// The web build's first read of IndexedDB has finished.
     void applyStorageLoaded(bool loaded);
     void applyStoragePersisted(bool persisted);
+    /// The web build's decode of a staged recording has finished. `samples`
+    /// is mono at `sampleRate`, and empty when the browser could not read it.
+    void applyDecodedVoice(int request, const QList<float> &samples, int sampleRate);
 
 private:
     struct StagedVoice
@@ -209,6 +216,10 @@ private:
     QString m_stagedVoiceLabel;
     QString m_problem;
     bool m_ready{false};
+    /// The browser decode a staged recording waits for; an older one that
+    /// finishes later is ignored.
+    int m_voiceDecodeRequest{0};
+    QString m_decodingVoiceLabel;
 };
 
 } // namespace Kerfur
