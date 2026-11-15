@@ -1,7 +1,7 @@
 # Kerfur
-[Try it in your browser](https://demo.kidev.org/Kerfur)
+[Try it in your browser](https://kerfur.kidev.org)
 
-[![meow](assets/kerfur.gif)](https://demo.kidev.org/Kerfur)
+[![meow](assets/kerfur.gif)](https://kerfur.kidev.org)
 
 ## Installing
 Installer with updates:
