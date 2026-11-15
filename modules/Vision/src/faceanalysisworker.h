@@ -56,8 +56,8 @@ public:
 
     /// Frames between two object passes. COCO is a second whole network and a
     /// held mug does not become a held phone between frames. It also only runs
-    /// at all when somebody recognised has a hand in view, so this stride is
-    /// the cadence of the rarer case rather than of every frame.
+    /// at all when somebody has a located hand in view, so this stride is the
+    /// cadence of the rarer case rather than of every frame.
     static constexpr int objectStride{2};
 
     /// Looks kept per hand before a held object's name is considered settled.
@@ -78,6 +78,10 @@ public slots:
     void analyse(const QImage &image, quint64 sequence, bool mirrored);
 
     void setFaceConfidence(double confidence);
+
+    /// Whether a stranger's hands are located when they are the only person in
+    /// view. See `locatesHandsOf`.
+    void setLoneStrangerHands(bool enabled);
 
     /// Reads the galleries again and re-enrols, then emits `ready` with the
     /// new roster. Connected to `IdentityLibrary::galleryChanged`; a face
@@ -137,7 +141,7 @@ private:
                               bool mirrored);
 
     /// Copies each face's name onto the person whose head region contains it,
-    /// then locates the hands of whoever ended up with one.
+    /// then locates the hands of whoever `locatesHandsOf` allows.
     ///
     /// `mirrored` says whether the frame is a reflection, and it decides which
     /// of the pose model's two arms is the subject's left one.
@@ -155,8 +159,7 @@ private:
 
     /// Runs the COCO stage over a crop around each hand that could be holding
     /// something, and hangs whatever it found on that hand. Does nothing, and
-    /// does not run the network at all, when no recognised person has a hand in
-    /// view.
+    /// does not run the network at all, when nobody has a located hand in view.
     void attributeHeldObjects(const cv::Mat &bgr, AnalysisResult &result);
 
     /// The one object in a crop around `hand` that the hand is actually inside,
@@ -208,8 +211,17 @@ private:
     quint64 m_peopleRevision{0};
     quint64 m_peopleFingerprint{0};
     double m_faceConfidence{0.6};
+    bool m_loneStrangerHands{true};
     bool m_initialized{false};
 };
+
+/// Whether `person`'s hands are located, measured and searched for objects.
+///
+/// Always for somebody the gallery recognises. For a stranger only when
+/// `loneStrangerHands` is set and they are the only person in view
+/// (`peopleInView` is one): a single visitor can count fingers at the camera,
+/// and a room with several people keeps the budget for the ones Kerfur knows.
+bool locatesHandsOf(const AnalysedPerson &person, qsizetype peopleInView, bool loneStrangerHands);
 
 /// A square crop around whichever of the head keypoints the pose stage was
 /// confident about, falling back to the top of the person box when it was

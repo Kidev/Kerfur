@@ -30,10 +30,33 @@ Rectangle {
     property string speechSpeaker: ""
     property string speechText: ""
 
+    // One height for every row of the popup's readout, sliders included, so
+    // the rows sit on an even rhythm.
+    readonly property int infoRowHeight: 20
+    readonly property real infoLabelWidth: 140
+    readonly property real infoValueWidth: Math.max(0, infoGrid.width - root.infoLabelWidth - infoGrid.columnSpacing)
+
     function identityColor(face) {
         if (!face || !face.known)
             return root.unknownColor;
         return face.identity === "kidev" ? root.kidevColor : root.knownColor;
+    }
+
+    component InfoLabel: Text {
+        color: "white"
+        font.pixelSize: 11
+        height: root.infoRowHeight
+        verticalAlignment: Text.AlignVCenter
+        width: root.infoLabelWidth
+    }
+
+    component InfoValue: Text {
+        color: "lightgray"
+        elide: Text.ElideRight
+        font.pixelSize: 11
+        height: root.infoRowHeight
+        verticalAlignment: Text.AlignVCenter
+        width: root.infoValueWidth
     }
 
     // Everything the analysis reports is normalized to the frame it was
@@ -116,17 +139,16 @@ Rectangle {
         }
 
         // Hands and what is in them, flattened the same way the bones are.
-        // Only recognised people have either: the analysis does not locate a
-        // stranger's hands at all, so an empty list here is a statement about
-        // who is in the room rather than about the pose model.
+        // The analysis decides whose hands are located (recognised people, and
+        // a stranger who is alone in view when that is switched on), so an
+        // empty list here is a statement about who is in the room rather than
+        // about the pose model.
         readonly property var hands: {
             if (!tracker || !tracker.people)
                 return [];
             const out = [];
             for (let p = 0; p < tracker.people.length; ++p) {
                 const person = tracker.people[p];
-                if (!person.known)
-                    continue;
                 for (let h = 0; h < person.hands.length; ++h) {
                     const hand = person.hands[h];
                     out.push({
@@ -305,7 +327,7 @@ Rectangle {
                         anchors.centerIn: parent
                         color: "#ffd740"
                         font.pixelSize: overlay.labelSize
-                        text: heldBox.modelData.identity + " holds " + heldBox.modelData.label
+                        text: (heldBox.modelData.identity !== "" ? heldBox.modelData.identity : "someone") + " holds " + heldBox.modelData.label
                     }
                 }
             }
@@ -772,32 +794,38 @@ Rectangle {
                 id: controlsPanel
 
                 color: "#c8000000"
-                height: 210
+                // Sized by its rows, so the last one gets the same margin as
+                // the first whatever the number of rows or the font.
+                height: infoGrid.implicitHeight + (infoGrid.anchors.margins * 2)
                 radius: 6
                 width: parent.width
 
                 Grid {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    columns: 2
-                    columnSpacing: 12
-                    rowSpacing: 8
+                    id: infoGrid
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Detection Confidence:"
-                        width: 130
+                    anchors.left: parent.left
+                    anchors.margins: 14
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    columnSpacing: 12
+                    columns: 2
+                    rowSpacing: 6
+                    verticalItemAlignment: Grid.AlignVCenter
+
+                    InfoLabel {
+                        text: "Detection confidence"
                     }
 
                     Row {
+                        height: root.infoRowHeight
                         spacing: 10
 
                         Slider {
                             id: confidenceSlider
 
+                            anchors.verticalCenter: parent.verticalCenter
                             from: 0.3
-                            height: 22
+                            height: root.infoRowHeight
                             to: 0.9
                             value: root.faceTracker ? root.faceTracker.detectionConfidence : 0.6
                             width: 150
@@ -808,28 +836,26 @@ Rectangle {
                             }
                         }
 
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: "lightgray"
-                            font.pixelSize: 10
+                        InfoValue {
                             text: confidenceSlider.value.toFixed(2)
+                            width: implicitWidth
                         }
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Tracking Smoothing:"
+                    InfoLabel {
+                        text: "Tracking smoothing"
                     }
 
                     Row {
+                        height: root.infoRowHeight
                         spacing: 10
 
                         Slider {
                             id: smoothingSlider
 
+                            anchors.verticalCenter: parent.verticalCenter
                             from: 0.0
-                            height: 22
+                            height: root.infoRowHeight
                             to: 1.0
                             value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.0
                             width: 150
@@ -840,48 +866,34 @@ Rectangle {
                             }
                         }
 
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: "lightgray"
-                            font.pixelSize: 10
+                        InfoValue {
                             text: smoothingSlider.value.toFixed(2)
+                            width: implicitWidth
                         }
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Camera:"
+                    InfoLabel {
+                        text: "Camera"
                     }
 
-                    Text {
-                        color: "lightgray"
-                        font.pixelSize: 11
-                        text: root.faceTracker ? (root.faceTracker.currentResolution + " delivered, " + root.faceTracker.requestedResolution + " requested") : "Unknown"
+                    InfoValue {
+                        text: root.faceTracker ? (root.faceTracker.currentResolution + " delivered, " + root.faceTracker.requestedResolution + " requested") : "unknown"
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Analysis:"
+                    InfoLabel {
+                        text: "Analysis"
                     }
 
-                    Text {
-                        color: "lightgray"
-                        font.pixelSize: 11
+                    InfoValue {
                         text: root.faceTracker ? (root.faceTracker.analysisResolution + " in " + root.faceTracker.analysisMs + " ms" + (root.faceTracker.poseReady ? ", pose on" : ", pose off") + (root.faceTracker.emotionReady ? ", expression on" : ", expression off")) : ""
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Gallery:"
+                    InfoLabel {
+                        text: "Gallery"
                     }
 
-                    Text {
-                        color: "lightgray"
+                    InfoValue {
                         elide: Text.ElideMiddle
-                        font.pixelSize: 11
                         text: {
                             if (!root.faceTracker)
                                 return "";
@@ -891,36 +903,25 @@ Rectangle {
                                 return "nobody enrolled";
                             return root.faceTracker.knownIdentities.join(", ") + "  (" + root.faceTracker.galleryDirectory + ")";
                         }
-                        width: 320
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Roster:"
+                    InfoLabel {
+                        text: "Roster"
                     }
 
-                    Text {
-                        color: "lightgray"
-                        elide: Text.ElideRight
-                        font.pixelSize: 11
+                    InfoValue {
                         text: {
                             if (!root.faceTracker || root.faceTracker.roster.length === 0)
                                 return "no ids.json; enrolling by file name, everybody unranked";
                             return root.faceTracker.roster.join(", ");
                         }
-                        width: 320
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Hands:"
+                    InfoLabel {
+                        text: "Hands"
                     }
 
-                    Text {
-                        color: "lightgray"
-                        font.pixelSize: 11
+                    InfoValue {
                         text: {
                             if (!root.faceTracker)
                                 return "";
@@ -929,7 +930,7 @@ Rectangle {
                             const hands = root.faceTracker.hands;
                             const held = root.faceTracker.heldLabels;
                             if (hands.length === 0)
-                                return "none visible for a recognised person";
+                                return root.faceTracker.loneStrangerHands ? "none visible" : "none visible for a recognised person";
                             let seen = hands.length + " visible";
                             // Says which of the two qualities this is. "2
                             // visible" reads as two measured hands whether or
@@ -951,15 +952,11 @@ Rectangle {
                         }
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Head:"
+                    InfoLabel {
+                        text: "Head"
                     }
 
-                    Text {
-                        color: "lightgray"
-                        font.pixelSize: 11
+                    InfoValue {
                         text: {
                             if (!root.faceTracker || !root.faceTracker.faceDetected)
                                 return "no face";
@@ -967,27 +964,23 @@ Rectangle {
                         }
                     }
 
-                    Text {
-                        color: "white"
-                        font.pixelSize: 11
-                        text: "Status:"
+                    InfoLabel {
+                        text: "Status"
                     }
 
                     Row {
+                        height: root.infoRowHeight
                         spacing: 8
 
                         Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             color: root.faceTracker && root.faceTracker.faceDetected ? "lime" : (root.faceTracker && root.faceTracker.enabled ? "orange" : "gray")
-                            height: 12
-                            radius: 6
-                            width: 12
+                            height: 10
+                            radius: 5
+                            width: 10
                         }
 
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: "lightgray"
-                            font.pixelSize: 11
+                        InfoValue {
                             text: {
                                 if (!root.faceTracker || !root.faceTracker.enabled)
                                     return "Face tracking disabled";
@@ -996,6 +989,7 @@ Rectangle {
                                 const people = root.faceTracker.people.length;
                                 return root.faceTracker.faces.length + " face(s), " + people + " person(s)";
                             }
+                            width: Math.min(implicitWidth, root.infoValueWidth - 18)
                         }
                     }
                 }

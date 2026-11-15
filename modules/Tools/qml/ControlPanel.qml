@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+import QtMultimedia
 import Core
 import Vision
 import Hearing
@@ -33,6 +34,10 @@ Rectangle {
     // two microphones, two whisper contexts and two transcription loops
     // competing for the same words, which is what the second one did.
     required property SpeechRecognizer speechRecognizer
+
+    /// How long a press on the face lasts before it shows or hides this panel,
+    /// quoted by the hide button's tooltip.
+    property int holdToToggleMs: 5000
 
     // One palette, named once. The alpha lives in the background colour rather
     // than in `opacity`, because opacity on the panel fades the text with it
@@ -74,7 +79,7 @@ Rectangle {
 
     // Rank for somebody added from the panel. Zero is the only rank that may
     // give commands, so it says so; the default is two, which may not.
-    readonly property var rankLabels: ["0 - may command", "1", "2 - default", "3", "4", "5"]
+    readonly property var rankLabels: ["Rank 0 - may give commands", "Rank 1", "Rank 2 - default", "Rank 3", "Rank 4", "Rank 5"]
     readonly property var rankValues: [0, 1, 2, 3, 4, 5]
     readonly property int defaultRankIndex: 2
 
@@ -85,6 +90,21 @@ Rectangle {
     property bool spokenShown: false
     property string spokenBy: ""
     property string spokenText: ""
+
+    // The person whose card is open in the People section, by id, and the
+    // recording being played back, by URL.
+    property string openPersonId: ""
+    property string playingVoice: ""
+
+    /// The enrolled person the form's name resolves to, or undefined for
+    /// somebody new. The same folding `enrol` applies, so "Ada" and "ada" are
+    /// one person here as they are on disk.
+    readonly property var formPerson: {
+        const id = Identities.personIdFor(personName.text);
+        if (id === "")
+            return undefined;
+        return Identities.people.find(person => person.id === id);
+    }
 
     /// Whether a preview or analysis size can be had from the camera: neither
     /// is ever enlarged past the frames it delivers. Every size is offered
@@ -147,13 +167,37 @@ Rectangle {
         return parts.length > 0 ? parts.join(", ") : "no samples";
     }
 
-    // Fills the form with somebody already taught, so the next save adds to
+    // Fills the form with somebody already enrolled, so the next save adds to
     // them rather than starting somebody new.
-    function teach(person) {
+    function addSamplesTo(person) {
         personName.text = person.name;
         personTitle.text = person.title;
         const rank = root.rankValues.indexOf(person.priority);
         personRank.currentIndex = rank >= 0 ? rank : root.defaultRankIndex;
+    }
+
+    function clearForm() {
+        personName.text = "";
+        personTitle.text = "";
+        personRank.currentIndex = root.defaultRankIndex;
+        Identities.clearStaged();
+    }
+
+    // One recording at a time. Pressing the one that is playing stops it.
+    function playVoice(url) {
+        const again = root.playingVoice === url && voicePlayer.playbackState === MediaPlayer.PlayingState;
+        voicePlayer.stop();
+        root.playingVoice = "";
+        if (again)
+            return;
+        voicePlayer.source = url;
+        root.playingVoice = url;
+        voicePlayer.play();
+    }
+
+    function stopVoice() {
+        voicePlayer.stop();
+        root.playingVoice = "";
     }
 
     // The browser has no file system for a QML dialog to show, so on the web
@@ -633,6 +677,37 @@ Rectangle {
         }
     }
 
+    // A button for something that deletes. The first press arms it and says
+    // so; only a second press within a few seconds acts.
+    component ConfirmButton: SmallButton {
+        id: confirmButton
+
+        property string action: ""
+        property bool armed: false
+
+        signal confirmed
+
+        label: confirmButton.armed ? "Press again to " + confirmButton.action.toLowerCase() : confirmButton.action
+
+        onClicked: {
+            if (confirmButton.armed) {
+                confirmButton.armed = false;
+                confirmButton.confirmed();
+                return;
+            }
+            confirmButton.armed = true;
+            disarmTimer.restart();
+        }
+
+        Timer {
+            id: disarmTimer
+
+            interval: 3000
+
+            onTriggered: confirmButton.armed = false
+        }
+    }
+
     component SmallButton: Rectangle {
         id: button
 
@@ -682,6 +757,45 @@ Rectangle {
             border.width: 1
             color: root.colorRaised
             radius: 4
+        }
+    }
+
+    // An enrolled photo, cropped square. The initial stands in while it
+    // loads and when it cannot be read.
+    component FaceThumbnail: Rectangle {
+        id: thumbnail
+
+        property string fallback: ""
+        property int size: 30
+        property alias source: picture.source
+
+        border.color: root.colorLine
+        border.width: 1
+        clip: true
+        color: root.colorSurface
+        height: thumbnail.size
+        radius: 3
+        width: thumbnail.size
+
+        Text {
+            anchors.centerIn: parent
+            color: root.colorDim
+            font.bold: true
+            font.pixelSize: Math.round(thumbnail.size * 0.45)
+            text: thumbnail.fallback.length > 0 ? thumbnail.fallback.charAt(0).toUpperCase() : "?"
+            visible: picture.status !== Image.Ready
+        }
+
+        Image {
+            id: picture
+
+            anchors.fill: parent
+            anchors.margins: 1
+            asynchronous: true
+            // A sample deleted and taken again reuses its file name.
+            cache: false
+            fillMode: Image.PreserveAspectCrop
+            sourceSize: Qt.size(thumbnail.size * 2, thumbnail.size * 2)
         }
     }
 
@@ -764,6 +878,23 @@ Rectangle {
                 Identities.stageFaceFile(identityFileDialog.selectedFile);
             else
                 Identities.stageVoiceFile(identityFileDialog.selectedFile);
+        }
+    }
+
+    // Plays back an enrolled recording from the People section.
+    MediaPlayer {
+        id: voicePlayer
+
+        audioOutput: AudioOutput {
+        }
+
+        onErrorOccurred: (error, errorString) => {
+            console.warn("cannot play", voicePlayer.source, errorString);
+            root.playingVoice = "";
+        }
+        onPlaybackStateChanged: {
+            if (voicePlayer.playbackState === MediaPlayer.StoppedState)
+                root.playingVoice = "";
         }
     }
 
@@ -904,6 +1035,60 @@ Rectangle {
         }
 
         Rectangle {
+            id: hideButton
+
+            anchors.right: parent.right
+            anchors.rightMargin: 10
+            anchors.verticalCenter: wordmark.verticalCenter
+            border.color: hideMouse.containsMouse ? root.colorAccent : root.colorLine
+            border.width: 1
+            color: hideMouse.pressed ? "#3a3f47" : root.colorRaised
+            height: 22
+            radius: 4
+            width: 22
+
+            Chevron {
+                anchors.centerIn: parent
+                color: hideMouse.containsMouse ? root.colorAccent : root.colorDim
+                height: 11
+                width: 11
+            }
+
+            MouseArea {
+                id: hideMouse
+
+                anchors.fill: parent
+                hoverEnabled: true
+
+                onClicked: KSettings.showControls = false
+            }
+
+            ToolTip {
+                id: hideTip
+
+                delay: 300
+                text: "Hide this panel. Press Tab, or click or touch the face and hold it for " + Math.round(root.holdToToggleMs / 1000) + " s, to show or hide it."
+                visible: hideMouse.containsMouse
+                width: Math.min(implicitWidth, 220)
+                x: hideButton.width - width
+                y: hideButton.height + 6
+
+                background: Rectangle {
+                    border.color: root.colorLine
+                    border.width: 1
+                    color: root.colorRaised
+                    radius: 4
+                }
+                contentItem: Text {
+                    color: root.colorText
+                    font.pixelSize: 10
+                    text: hideTip.text
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+
+        Rectangle {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
@@ -956,6 +1141,14 @@ Rectangle {
                     label: "Face tracking"
 
                     onToggled: KSettings.faceTrackingEnabled = !KSettings.faceTrackingEnabled
+                }
+
+                // People the gallery knows always have their hands tracked.
+                Toggle {
+                    checked: KSettings.loneStrangerHands
+                    label: "Hands of anyone alone in view"
+
+                    onToggled: KSettings.loneStrangerHands = !KSettings.loneStrangerHands
                 }
 
                 Item {
@@ -1123,7 +1316,7 @@ Rectangle {
 
                 Toggle {
                     checked: KSettings.speechRecognitionEnabled
-                    label: "Listen for 'Kerfur'"
+                    label: "Listen to voices"
 
                     onToggled: KSettings.speechRecognitionEnabled = !KSettings.speechRecognitionEnabled
                 }
@@ -1187,53 +1380,186 @@ Rectangle {
                 summaryColor: Identities.problem !== "" ? root.colorWarn : root.colorDim
                 title: "People"
 
+                onExpandedChanged: {
+                    if (!peopleSection.expanded)
+                        root.stopVoice();
+                }
+
+                // One card per person: the newest photo, the name and what
+                // they are to Kerfur. Pressing the card opens it on every
+                // photo, every recording and the actions.
                 Repeater {
                     model: Identities.people
 
-                    delegate: Column {
-                        id: personRow
+                    delegate: Rectangle {
+                        id: personCard
 
                         required property var modelData
 
-                        spacing: 3
+                        readonly property bool open: root.openPersonId === personCard.modelData.id
+                        readonly property var faces: personCard.modelData.faces
+                        readonly property var voices: personCard.modelData.voices
+                        readonly property string newestVoice: personCard.voices.length > 0 ? personCard.voices[personCard.voices.length - 1] : ""
+
+                        border.color: personCard.open ? root.colorAccent : root.colorLine
+                        border.width: 1
+                        color: root.colorRaised
+                        height: cardColumn.implicitHeight + 12
+                        radius: 4
                         width: parent ? parent.width : 0
 
-                        Text {
-                            color: root.colorText
-                            elide: Text.ElideRight
-                            font.pixelSize: 10
-                            text: personRow.modelData.name + " (" + personRow.modelData.standing + "): " + root.enrolledSamples(personRow.modelData)
-                            width: parent.width
-                        }
+                        Column {
+                            id: cardColumn
 
-                        Flow {
-                            spacing: 4
-                            width: parent.width
+                            anchors.left: parent.left
+                            anchors.margins: 6
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            spacing: 6
 
-                            SmallButton {
-                                label: "Teach"
+                            Item {
+                                height: 40
+                                width: parent.width
 
-                                onClicked: root.teach(personRow.modelData)
+                                FaceThumbnail {
+                                    id: avatar
+
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    fallback: personCard.modelData.name
+                                    size: 40
+                                    source: personCard.faces.length > 0 ? personCard.faces[personCard.faces.length - 1] : ""
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+
+                                    onClicked: root.openPersonId = personCard.open ? "" : personCard.modelData.id
+                                }
+
+                                Column {
+                                    anchors.left: avatar.right
+                                    anchors.leftMargin: 8
+                                    anchors.right: quickPlay.visible ? quickPlay.left : parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 1
+
+                                    Text {
+                                        color: root.colorText
+                                        elide: Text.ElideRight
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                        text: personCard.modelData.name
+                                        width: parent.width
+                                    }
+
+                                    Text {
+                                        color: personCard.modelData.priority === 0 ? root.colorWarn : root.colorDim
+                                        elide: Text.ElideRight
+                                        font.pixelSize: 9
+                                        text: personCard.modelData.standing
+                                        width: parent.width
+                                    }
+
+                                    Text {
+                                        color: root.colorDim
+                                        elide: Text.ElideRight
+                                        font.pixelSize: 9
+                                        text: root.enrolledSamples(personCard.modelData)
+                                        width: parent.width
+                                    }
+                                }
+
+                                // The newest recording, playable without
+                                // opening the card.
+                                SmallButton {
+                                    id: quickPlay
+
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    label: root.playingVoice === personCard.newestVoice ? "Stop" : "Play voice"
+                                    visible: personCard.newestVoice !== ""
+
+                                    onClicked: root.playVoice(personCard.newestVoice)
+                                }
                             }
 
-                            SmallButton {
-                                enabled: personRow.modelData.faceCount > 0
-                                label: "Forget faces"
+                            Flow {
+                                spacing: 4
+                                visible: personCard.open && personCard.faces.length > 0
+                                width: parent.width
 
-                                onClicked: Identities.forgetFaces(personRow.modelData.id)
+                                Repeater {
+                                    model: personCard.open ? personCard.faces : []
+
+                                    delegate: FaceThumbnail {
+                                        required property string modelData
+
+                                        fallback: personCard.modelData.name
+                                        size: 30
+                                        source: modelData
+                                    }
+                                }
                             }
 
-                            SmallButton {
-                                enabled: personRow.modelData.voiceCount > 0
-                                label: "Forget voices"
+                            Flow {
+                                spacing: 4
+                                visible: personCard.open && personCard.voices.length > 0
+                                width: parent.width
 
-                                onClicked: Identities.forgetVoices(personRow.modelData.id)
+                                Repeater {
+                                    model: personCard.open ? personCard.voices : []
+
+                                    delegate: SmallButton {
+                                        id: voiceChip
+
+                                        required property int index
+                                        required property string modelData
+
+                                        label: (root.playingVoice === voiceChip.modelData ? "Stop " : "Play ") + "voice " + (voiceChip.index + 1)
+
+                                        onClicked: root.playVoice(voiceChip.modelData)
+                                    }
+                                }
                             }
 
-                            SmallButton {
-                                label: "Remove"
+                            Flow {
+                                spacing: 4
+                                visible: personCard.open
+                                width: parent.width
 
-                                onClicked: Identities.remove(personRow.modelData.id)
+                                SmallButton {
+                                    label: "Add samples"
+
+                                    onClicked: root.addSamplesTo(personCard.modelData)
+                                }
+
+                                ConfirmButton {
+                                    action: "Forget faces"
+                                    enabled: personCard.modelData.faceCount > 0
+
+                                    onConfirmed: Identities.forgetFaces(personCard.modelData.id)
+                                }
+
+                                ConfirmButton {
+                                    action: "Forget voices"
+                                    enabled: personCard.modelData.voiceCount > 0
+
+                                    onConfirmed: {
+                                        root.stopVoice();
+                                        Identities.forgetVoices(personCard.modelData.id);
+                                    }
+                                }
+
+                                ConfirmButton {
+                                    action: "Remove"
+
+                                    onConfirmed: {
+                                        root.stopVoice();
+                                        Identities.remove(personCard.modelData.id);
+                                    }
+                                }
                             }
                         }
                     }
@@ -1242,13 +1568,29 @@ Rectangle {
                 Text {
                     color: root.colorDim
                     font.pixelSize: 9
-                    text: "Kerfur knows nobody yet. Stage a face or a voice below, name them and save."
+                    text: "Kerfur knows nobody yet. Add someone below."
                     visible: Identities.people.length === 0
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                }
+
+                Rectangle {
+                    color: root.colorLine
+                    height: 1
+                    width: parent.width
                 }
 
                 Caption {
-                    label: "Teach someone"
+                    label: root.formPerson ? "Add samples to " + root.formPerson.name : "Add a person"
                     value: Identities.ready ? "" : "loading"
+                }
+
+                Text {
+                    color: root.colorDim
+                    font.pixelSize: 9
+                    text: "Stage a photo, a voice or both, then save. Each save adds them as one more sample; a few taken in different light and rooms make recognition more reliable."
+                    width: parent.width
+                    wrapMode: Text.WordWrap
                 }
 
                 Field {
@@ -1262,7 +1604,7 @@ Rectangle {
                     id: personTitle
 
                     maximumLength: 64
-                    placeholderText: "Title: owner, trusted, ..."
+                    placeholderText: "Title shown on screen (owner, friend, ...)"
                 }
 
                 Combo {
@@ -1273,12 +1615,13 @@ Rectangle {
                 }
 
                 Caption {
-                    label: "Face"
-                    value: Identities.stagedFace !== "" ? Identities.stagedFace : "none"
+                    label: "Photo"
+                    value: Identities.stagedFace !== "" ? Identities.stagedFace : "none staged"
                 }
 
-                Row {
+                Flow {
                     spacing: 6
+                    width: parent.width
 
                     SmallButton {
                         enabled: root.faceTracker !== null && root.faceTracker.enabled
@@ -1296,11 +1639,12 @@ Rectangle {
 
                 Caption {
                     label: "Voice"
-                    value: Identities.stagedVoice !== "" ? Identities.stagedVoice : "none"
+                    value: Identities.stagedVoice !== "" ? Identities.stagedVoice : "none staged"
                 }
 
-                Row {
+                Flow {
                     spacing: 6
+                    width: parent.width
 
                     SmallButton {
                         enabled: root.speechRecognizer !== null && root.speechRecognizer.lastUtteranceSeconds >= root.speechRecognizer.minimumVoiceSeconds
@@ -1316,12 +1660,13 @@ Rectangle {
                     }
                 }
 
-                Row {
+                Flow {
                     spacing: 6
+                    width: parent.width
 
                     SmallButton {
                         enabled: Identities.ready && personName.text.trim() !== ""
-                        label: "Save"
+                        label: root.formPerson ? "Save samples" : "Save person"
 
                         // The form keeps the person, so another picture or
                         // sentence for them is one capture and one save away.
@@ -1330,9 +1675,16 @@ Rectangle {
 
                     SmallButton {
                         enabled: Identities.stagedFace !== "" || Identities.stagedVoice !== ""
-                        label: "Discard"
+                        label: "Clear staged"
 
                         onClicked: Identities.clearStaged()
+                    }
+
+                    SmallButton {
+                        label: "New person"
+                        visible: personName.text !== "" || personTitle.text !== ""
+
+                        onClicked: root.clearForm()
                     }
                 }
 

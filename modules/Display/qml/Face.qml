@@ -319,6 +319,7 @@ Item {
         analysisMaxSide: KSettings.analysisMaxSide
         cameraId: KSettings.cameraId
         enabled: KSettings.faceTrackingEnabled
+        loneStrangerHands: KSettings.loneStrangerHands
         previewMaxSide: KSettings.previewMaxSide
         updateHz: KSettings.visionUpdateHz
 

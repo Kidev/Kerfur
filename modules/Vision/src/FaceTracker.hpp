@@ -105,8 +105,9 @@ class FaceTracker : public QObject
     Q_PROPERTY(int attentionPriority READ attentionPriority NOTIFY facesChanged)
 
     /// The hands of the person the eyes are following, as maps of `box`,
-    /// `wrist`, `side` and `confidence`. Empty for a stranger, always: hands
-    /// are located only for people the gallery knows.
+    /// `wrist`, `side` and `confidence`. Hands are located for people the
+    /// gallery knows, and for a stranger only while `loneStrangerHands` is set
+    /// and nobody else is in view.
     Q_PROPERTY(QVariantList hands READ hands NOTIFY peopleChanged)
 
     /// What that person is holding, as maps of `label`, `box`, `score` and
@@ -172,6 +173,12 @@ class FaceTracker : public QObject
     /// at this rate, and the camera format is chosen to cover it rather than to
     /// be as fast as the device can manage.
     Q_PROPERTY(int updateHz READ updateHz WRITE setUpdateHz NOTIFY updateHzChanged)
+
+    /// Locates, measures and searches the hands of somebody the gallery does
+    /// not know, provided they are the only person in view. On by default; a
+    /// room with two or more people keeps hands for the people Kerfur knows.
+    Q_PROPERTY(bool loneStrangerHands READ loneStrangerHands WRITE setLoneStrangerHands NOTIFY
+                   loneStrangerHandsChanged)
 
     /// The size the preview is actually being drawn at, which is the capture
     /// size reduced to `previewMaxSide` and never enlarged past it. Published
@@ -246,6 +253,7 @@ public:
     int analysisMaxSide() const { return m_analysisMaxSide; }
     int previewMaxSide() const { return m_previewMaxSide; }
     int updateHz() const { return m_updateHz; }
+    bool loneStrangerHands() const { return m_loneStrangerHands; }
     QString previewResolution() const;
 
     QStringList knownIdentities() const { return m_capabilities.enrolled; }
@@ -268,6 +276,7 @@ public slots:
     void setAnalysisMaxSide(int side);
     void setPreviewMaxSide(int side);
     void setUpdateHz(int hertz);
+    void setLoneStrangerHands(bool enabled);
 
 signals:
     void enabledChanged();
@@ -288,6 +297,7 @@ signals:
     void analysisMaxSideChanged();
     void previewMaxSideChanged();
     void updateHzChanged();
+    void loneStrangerHandsChanged();
 
     /// To the worker thread. Not called directly: a direct call would run the
     /// models on whichever thread emitted.
@@ -370,6 +380,7 @@ private:
     int m_analysisMaxSide{defaultAnalysisMaxSide};
     int m_previewMaxSide{defaultPreviewMaxSide};
     int m_updateHz{defaultUpdateHz};
+    bool m_loneStrangerHands{true};
 
     /// The preview picture belonging to the pass that is still in flight, and
     /// the sequence number that says which pass that is. Held rather than shown

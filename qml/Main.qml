@@ -11,6 +11,12 @@ Window {
         Qt.quit();
     }
 
+    // Whether a text field or the skill editor has the keyboard. Esc and Tab
+    // belong to it then: Esc closes the editor instead of quitting.
+    function typing() {
+        return root.activeFocusItem instanceof TextInput || root.activeFocusItem instanceof TextEdit;
+    }
+
     function toggleControls() {
         KSettings.showControls = !KSettings.showControls;
     }
@@ -20,14 +26,14 @@ Window {
     visible: true
 
     Shortcut {
-        enabled: KSettings.allowEscapeShortcut
+        enabled: KSettings.allowEscapeShortcut && !root.typing()
         sequence: "Esc"
 
         onActivated: root.requestExit()
     }
 
     Shortcut {
-        enabled: true
+        enabled: !root.typing()
         sequence: "Tab"
 
         onActivated: root.toggleControls()
@@ -48,6 +54,7 @@ Window {
         anchors.right: parent.right
         anchors.top: parent.top
         faceTracker: face.faceTracker
+        holdToToggleMs: face.holdDuration
         speechRecognizer: face.speechRecognizer
         height: Window.height
         width: 0.15 * Window.width

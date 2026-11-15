@@ -6,9 +6,14 @@
 #include "assetsearch.h"
 #include "blackboard.h"
 #include "skill.h"
+#include "skillsource.h"
+#include "skillstore.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QMap>
+#include <QSaveFile>
 #include <QJSEngine>
 #include <QLoggingCategory>
 #include <QQmlComponent>
@@ -16,6 +21,7 @@
 #include <QQmlEngine>
 #include <QUrl>
 
+#include <algorithm>
 #include <type_traits>
 
 namespace Kerfur {
@@ -63,11 +69,34 @@ SkillRegistry *SkillRegistry::create(QQmlEngine *engine, QJSEngine *scriptEngine
     QJSEngine::setObjectOwnership(&registry, QJSEngine::CppOwnership);
 
     registry.m_engine = engine;
-    // Queued, so that loading skill files -- which instantiate QML components
+    // The skills load once the store has been read: it holds the skills added
+    // from the panel and, on the web build, the blackboard they read. `opened`
+    // is queued, so loading skill files -- which instantiate QML components
     // and therefore re-enter the engine -- happens after the engine has
     // finished creating this singleton rather than inside that call.
-    QMetaObject::invokeMethod(&registry, &SkillRegistry::loadSkills, Qt::QueuedConnection);
+    SkillStore &store{SkillStore::instance()};
+    connect(&store,
+            &SkillStore::opened,
+            &registry,
+            &SkillRegistry::applyStoreOpened,
+            Qt::UniqueConnection);
+    store.open();
     return &registry;
+}
+
+void SkillRegistry::applyStoreOpened(bool loaded)
+{
+    if (!loaded) {
+        note(QStringLiteral("browser storage unavailable; added skills last this session only"));
+    }
+    m_storeReady = true;
+    Blackboard::instance().restore();
+    reload();
+}
+
+QString SkillRegistry::storeDirectory() const
+{
+    return SkillStore::instance().skillsDirectory();
 }
 
 void SkillRegistry::setBackend(LanguageBackend *backend)
@@ -119,6 +148,7 @@ QStringList SkillRegistry::catalogue() const
 
 void SkillRegistry::loadSkills()
 {
+    m_files.clear();
     if (m_engine == nullptr) {
         m_problem = QStringLiteral("no QML engine; skills not loaded");
         emit skillsChanged();
@@ -139,7 +169,35 @@ void SkillRegistry::loadSkills()
         }
     }
 
-    if (m_directory.isEmpty()) {
+    // The bundled skills, then the ones added from the panel. An added file
+    // with the name of a bundled one replaces it, which is how a bundled skill
+    // is edited where the bundled directory cannot be written.
+    struct SkillFile
+    {
+        QFileInfo info;
+        bool added{false};
+        bool overrides{false};
+    };
+    QMap<QString, SkillFile> files;
+    const auto collect = [&files](const QString &path, bool added) {
+        if (path.isEmpty()) {
+            return;
+        }
+        const QDir directory{path};
+        const QFileInfoList found{directory.entryInfoList({QStringLiteral("*.qml")},
+                                                          QDir::Files | QDir::Readable,
+                                                          QDir::Name)};
+        for (const QFileInfo &info : found) {
+            const bool overrides{added && files.contains(info.fileName())};
+            files.insert(info.fileName(), SkillFile{info, added, overrides});
+        }
+    };
+    collect(m_directory, false);
+    if (m_storeReady) {
+        collect(SkillStore::instance().skillsDirectory(), true);
+    }
+
+    if (files.isEmpty()) {
         m_problem = QStringLiteral("no skills directory; searched %1")
                         .arg(AssetSearch::describe(QString{settingsKey}, QString{folderName}));
         qCInfo(registryLog) << m_problem;
@@ -147,20 +205,28 @@ void SkillRegistry::loadSkills()
         return;
     }
 
-    const QDir directory{m_directory};
-    const QFileInfoList files{directory.entryInfoList({QStringLiteral("*.qml")},
-                                                      QDir::Files | QDir::Readable,
-                                                      QDir::Name)};
-    for (const QFileInfo &file : files) {
-        QQmlComponent component{m_engine, QUrl::fromLocalFile(file.absoluteFilePath())};
+    for (const SkillFile &file : std::as_const(files)) {
+        QVariantMap entry{
+            {QStringLiteral("name"), file.info.completeBaseName()},
+            {QStringLiteral("description"), QString{}},
+            {QStringLiteral("file"), file.info.fileName()},
+            {QStringLiteral("path"), file.info.absoluteFilePath()},
+            {QStringLiteral("added"), file.added},
+            {QStringLiteral("overrides"), file.overrides},
+            {QStringLiteral("loaded"), false},
+        };
+
+        QQmlComponent component{m_engine, QUrl::fromLocalFile(file.info.absoluteFilePath())};
         if (component.isError()) {
             // Named, not swallowed. A skill file is content written by hand and
             // a typo in one must not take the others down with it, but it must
-            // be impossible to miss.
-            const QString failure{QStringLiteral("%1: %2").arg(file.fileName(),
+            // be impossible to miss. It stays listed, so that an added skill
+            // that no longer compiles can still be edited or removed.
+            const QString failure{QStringLiteral("%1: %2").arg(file.info.fileName(),
                                                                component.errorString().trimmed())};
             problems.append(failure);
             qCWarning(registryLog).noquote() << failure;
+            m_files.append(entry);
             continue;
         }
 
@@ -169,21 +235,29 @@ void SkillRegistry::loadSkills()
         auto *context{new QQmlContext(m_engine->rootContext(), this)};
         QObject *root{component.create(context)};
         if (root == nullptr) {
-            problems.append(QStringLiteral("%1: produced nothing").arg(file.fileName()));
+            problems.append(QStringLiteral("%1: produced nothing").arg(file.info.fileName()));
             delete context;
+            m_files.append(entry);
             continue;
         }
         root->setParent(this);
         context->setParent(root);
         m_roots.append(root);
 
-        if (qobject_cast<Skill *>(root) == nullptr) {
-            problems.append(QStringLiteral("%1: root is not a Skill").arg(file.fileName()));
+        const Skill *skill{qobject_cast<Skill *>(root)};
+        if (skill == nullptr) {
+            problems.append(QStringLiteral("%1: root is not a Skill").arg(file.info.fileName()));
+        } else {
+            entry.insert(QStringLiteral("name"), skill->name());
+            entry.insert(QStringLiteral("description"), skill->description());
+            entry.insert(QStringLiteral("loaded"), true);
         }
+        m_files.append(entry);
     }
 
     m_problem = problems.join(QStringLiteral("; "));
-    qCInfo(registryLog) << "loaded" << m_skills.size() << "skills from" << m_directory;
+    qCInfo(registryLog) << "loaded" << m_skills.size() << "skills from" << m_directory
+                        << SkillStore::instance().skillsDirectory();
     emit skillsChanged();
 }
 
@@ -196,7 +270,94 @@ void SkillRegistry::reload()
     m_skills.clear();
     m_inFlight.clear();
     clearConfirmation();
+    // The engine keeps every compiled file by URL. A file that was edited is
+    // read again only once its old compilation, unused now, has been dropped.
+    if (m_engine != nullptr) {
+        m_engine->trimComponentCache();
+    }
     loadSkills();
+}
+
+QString SkillRegistry::sourceOf(const QString &path) const
+{
+    const bool listed{std::any_of(m_files.cbegin(), m_files.cend(), [&path](const QVariant &file) {
+        return file.toMap().value(QStringLiteral("path")).toString() == path;
+    })};
+    if (!listed) {
+        return {};
+    }
+    QFile file{path};
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return {};
+    }
+    return QString::fromUtf8(file.read(maximumSkillBytes));
+}
+
+QString SkillRegistry::install(const QString &source, const QString &replacing)
+{
+    SkillStore &store{SkillStore::instance()};
+    if (m_engine == nullptr || !m_storeReady) {
+        return QStringLiteral("The skill store is not open yet.");
+    }
+    const QByteArray bytes{source.toUtf8()};
+    if (bytes.size() > maximumSkillBytes) {
+        return QStringLiteral("A skill is limited to %1 KiB.").arg(maximumSkillBytes / 1024);
+    }
+    const QString fileName{skillFileName(declaredSkillName(source))};
+    if (fileName.isEmpty()) {
+        return QStringLiteral("Give the skill a name, such as name: \"greeting\".");
+    }
+
+    const QDir directory{store.skillsDirectory()};
+    if (!directory.mkpath(QStringLiteral("."))) {
+        return QStringLiteral("Cannot create %1.").arg(directory.path());
+    }
+    const QString path{directory.filePath(fileName)};
+
+    // Compiled against the URL it will be loaded from, before anything is
+    // written: a skill that does not compile never replaces one that does.
+    QQmlComponent component{m_engine};
+    component.setData(bytes, QUrl::fromLocalFile(path));
+    if (component.isError()) {
+        return component.errorString().trimmed();
+    }
+    if (!component.isReady()) {
+        return QStringLiteral("The skill imports something that is not available offline.");
+    }
+
+    QSaveFile file{path};
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+        return QStringLiteral("Cannot write %1.").arg(path);
+    }
+
+    const QString previous{QFileInfo{replacing}.fileName()};
+    if (!previous.isEmpty() && previous != fileName
+        && previous.endsWith(QStringLiteral(".qml"))) {
+        QFile::remove(directory.filePath(previous));
+    }
+
+    store.persist();
+    store.requestDurable();
+    note(QStringLiteral("saved skill %1").arg(fileName));
+    reload();
+    return {};
+}
+
+QString SkillRegistry::uninstall(const QString &file)
+{
+    const QString fileName{QFileInfo{file}.fileName()};
+    const QDir directory{SkillStore::instance().skillsDirectory()};
+    if (!m_storeReady || fileName.isEmpty() || !fileName.endsWith(QStringLiteral(".qml"))
+        || !directory.exists(fileName)) {
+        return QStringLiteral("No added skill is called %1.").arg(file);
+    }
+    if (!QFile::remove(directory.filePath(fileName))) {
+        return QStringLiteral("Cannot delete %1.").arg(directory.filePath(fileName));
+    }
+    SkillStore::instance().persist();
+    note(QStringLiteral("removed skill %1").arg(fileName));
+    reload();
+    return {};
 }
 
 void SkillRegistry::registerSkill(Skill *skill)

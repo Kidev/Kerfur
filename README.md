@@ -22,7 +22,7 @@ Archive to extract:
 - [Linux arm64, glibc 2.38 or newer (Raspberry Pi OS Trixie on a Pi 5)](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz)
 
 ## Using
-`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for five seconds does the same. `Esc` quits when the `allowEscapeShortcut` setting is on.
+`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for five seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
 
 ## Building
 ### Requirements
@@ -75,10 +75,10 @@ The picture is held back until the pass measured on it returns, so the boxes are
 ### Knowing people
 Kerfur ships with an empty gallery. Every profile carries the two models that learn a person (face recognition and speaker recognition), and people are taught from the control panel.
 
-#### Teaching someone
-In the *People* section, stage a face (*Take from camera*, or a picture file) and a voice (*Use last sentence*, or a recording), give a name, a title and a rank, and press *Save*. Each save adds what was staged to that person as one more sample. Teaching the same person again in other light, from another angle or in a noisier room makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Each person keeps up to ten pictures and ten recordings, the oldest dropped first.
+#### Adding someone
+Under *Add a person* in the *People* section, stage a photo (*Take from camera*, or *Choose a picture*) and a voice (*Use last sentence*, or *Choose a recording*), give a name, a title and a rank, and press *Save person*. Each save adds what was staged to that person as one more sample. Adding samples of the same person in other light, from another angle or in a noisier room makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Each person keeps up to ten pictures and ten recordings, the oldest dropped first.
 
-Each person's row in the panel has *Teach*, which fills in their name, title and rank for the next save, *Forget faces* and *Forget voices*, which delete one kind of sample, and *Remove*. Saving a known name with nothing staged changes only the title and rank.
+Each person is listed as a card with their newest photo, their title and rank, how many samples they have, and *Play voice* for their newest recording. Pressing a card opens it on every photo, a *Play* button per recording, and the actions: *Add samples* fills in their name, title and rank for the next save (the form then reads *Add samples to* their name), *Forget faces* and *Forget voices* delete one kind of sample, and *Remove* forgets them. The three that delete act on a second press. Saving a known name with nothing staged changes only the title and rank.
 
 Both recognisers re-enrol as soon as a person is saved or changed. Everything taught is kept in `identities/` under the application data directory (`~/.local/share/kidev/Kerfur/identities` on Linux) and read back on the next start. The web build keeps that directory in the browser's IndexedDB, where it survives a reload and stays in the browser. Embeddings are cached against a hash of each file, so a new sample costs one inference and a restart costs none.
 
@@ -116,7 +116,7 @@ A gallery written by hand or copied from another machine is read from the `Paths
 When a voice is recognised while that person's face is in shot, the camera preview draws the sentence over their head, bordered in the colour of their face box. The two are matched by name, which holds because one manifest enrols both galleries. A recognised speaker who is out of shot gets no caption; the transcript is in the hearing panel either way.
 
 ### Hands and what is in them
-For a person the gallery recognises, Kerfur first locates their hands from the pose keypoints. A hand sits about a third of a forearm past the wrist, along the forearm, and measures about eight tenths of one across. An arm reaching towards the camera projects to almost no length, and a box sized from it alone would miss the hand nearest the lens, the largest one in the frame and the one most likely to hold something. So the shoulders, the trunk, the eyes and the ears are measured too, each scaled by what a hand is worth against it, and the forearm's answer is kept only where the rest of the body agrees. The result is a region to look in, where the hand pipeline starts.
+For a person the gallery recognises, and for anybody at all who is alone in view, Kerfur first locates their hands from the pose keypoints. A hand sits about a third of a forearm past the wrist, along the forearm, and measures about eight tenths of one across. An arm reaching towards the camera projects to almost no length, and a box sized from it alone would miss the hand nearest the lens, the largest one in the frame and the one most likely to hold something. So the shoulders, the trunk, the eyes and the ears are measured too, each scaled by what a hand is worth against it, and the forearm's answer is kept only where the rest of the body agrees. The result is a region to look in, where the hand pipeline starts.
 
 That region goes to MediaPipe's two model hand pipeline: a palm detector, and a landmark model that returns twenty-one points. Both are the ONNX exports from OpenCV Zoo, so they run on the `cv::dnn` already linked, and both are pinned by SHA-256 in [`assets/models.json`](assets/models.json) like every other stage. Upstream runs the palm detector across the whole frame. Kerfur gives it the region the skeleton found, which costs less and keeps the identity rule below.
 
@@ -134,10 +134,10 @@ The same points are also read as a gesture: an open palm, a fist, a thumb up or 
 
 The camera preview draws the twenty-one points as a hand skeleton over the body, with the fingertips and the wrist marked larger than the knuckles. Where the landmark model has measured a hand, its palm base replaces the pose model's wrist: both are the same joint, one guessed from a seventeen point body and one measured from a cropped hand, so the forearm ends where the hand begins. Both hand models are optional. When they are missing the forearm estimate stands alone, and the overlay draws it as a dimmed empty box. Two hands per frame get the landmark pass, chosen by rank and then by nearness (the order the eyes follow), so a room with four recognised people costs what a room with one costs.
 
-Hands are read for recognised people only: Kerfur notices its owner holding a mug and leaves what a stranger carries alone.
+Hands are read for recognised people, and for a stranger only while nobody else is in view, so a visitor can count fingers at the camera. With two or more people in the room, Kerfur notices its owner holding a mug and leaves what a stranger carries alone. *Vision > Hands of anyone alone in view* turns the stranger case off (saved as `Perception/loneStrangerHands`, on by default).
 
 ### Skills
-A skill is a `.qml` file in [`skills/`](skills/), read at start-up and editable without a rebuild. [`skills/calories.qml`](skills/calories.qml) uses every part:
+A skill is a `.qml` file, read at start-up and editable without a rebuild. The bundled ones are in [`skills/`](skills/). [`skills/calories.qml`](skills/calories.qml) uses every part and works on its own: it keeps the day's count, answers questions about it, takes a correction, resets at midnight and warns when the limit is passed. A shortened version:
 
 ```qml
 import Skills
@@ -150,7 +150,7 @@ Skill {
 
     Routine {
         dailyAt: "00:00"
-        onTriggered: day.set("caloriesOfTheDay", 0)
+        onTriggered: day.reset("caloriesOfTheDay")
     }
 
     Trigger {
@@ -175,7 +175,7 @@ Skill {
         key: "caloriesOfTheDay"
         onChanged: value => {
             if (value > day.number("maxCaloriesPerDay"))
-                day.emitEvent("calorieLimitExceeded", { "total": value });
+                day.say("That is past your daily limit of <maxCaloriesPerDay> calories.");
         }
     }
 }
@@ -186,17 +186,23 @@ Skill {
 - `confirm` asks before acting. The skill writes nothing until the person who was asked says yes, and only their answer counts: a second voice saying "yes" across the room is another sentence.
 - `authority` is the lowest rank allowed to fire a trigger, zero by default. `Trigger.Anyone` opens it to strangers.
 - `Routine` runs on the clock whether or not anybody is talking. `dailyAt` follows the wall clock and re-arms against it, so it neither drifts nor skips a midnight the machine slept through.
-- `Variable` and `Watch` declare and react to shared state. Everything lives on `Blackboard`, persisted to `blackboard.json`, and QML binds to it by name:
+- `say` answers out loud, with `<variable>` and `{slot}` expanded. Kerfur has no voice yet, so the panel shows the sentence and `Skills.spoke` carries it.
+- `Variable` and `Watch` declare and react to shared state. Everything lives on `Blackboard`, persisted to `blackboard.json` (in the browser's IndexedDB on the web build), and QML binds to it by name:
 
   ```qml
   readonly property real calories: Blackboard.values.caloriesOfTheDay
   onCaloriesChanged: ...
   ```
-- `emitEvent` is the only way out of the skill sandbox. A skill raises a named event on `Skills.eventRaised` and something outside acts on it, so a home automation system is reached through that event and a skill file can never stop the robot from starting.
+- `emitEvent` is the way out of the skill sandbox. A skill raises a named event on `Skills.eventRaised` and something outside acts on it, so a home automation system is reached through that event and a skill file can never stop the robot from starting. A skill that only talks, counts and answers needs none of it; `calories` raises `calorieLimitExceeded` for whoever wants it and works the same with nobody listening.
 
 `LanguageBackend` matches skills. Its one implementation matches phrases and descriptions locally and offline, in a microsecond. The interface is asynchronous so that a language model can become a subclass that posts the same request and emits the same resolution, with every existing skill unchanged. The panel names the backend in use.
 
-The *Reload* button in the panel re-reads the directory, so an edited skill takes effect without a rebuild or a restart.
+#### Adding a skill from the panel
+*Add a skill* in the *Skills* section opens an editor on a small working skill. *Edit* opens any listed skill. *Save* compiles the text first and writes nothing when it does not compile; the error stays in the editor. A saved skill is named after its `name` (`name: "Good morning"` is saved as `good-morning.qml`) and loads at once.
+
+Saved skills go to `skill-store/skills/` under the application data directory (`~/.local/share/kidev/Kerfur/skill-store/skills` on Linux), and the web build keeps that directory in the browser's IndexedDB, where it survives a reload. A saved file with the name of a bundled one replaces it, which is how a bundled skill is edited where its directory is read only; *Revert* deletes the copy and the bundled skill comes back. An added skill has *Remove*. A skill is QML and runs with Kerfur's own rights, so save only skills you have read.
+
+The *Reload* button re-reads both directories, so a skill edited on disk takes effect without a rebuild or a restart.
 
 ### Build options
 - `KERFUR_PLATFORM` is `pi`, `desktop`, `wasm` or `auto`.

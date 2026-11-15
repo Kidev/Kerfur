@@ -55,7 +55,8 @@ class IdentityLibrary : public QObject
     /// FileDialog, which on the web build has no file system to show.
     Q_PROPERTY(bool browserFiles READ browserFiles CONSTANT)
     /// One map per person enrolled here: `id`, `name`, `title`, `priority`,
-    /// `standing`, `hasFace`, `hasVoice`, `faceCount`, `voiceCount`. People
+    /// `standing`, `hasFace`, `hasVoice`, `faceCount`, `voiceCount`, and
+    /// `faces` and `voices`, the samples as file URLs, oldest first. People
     /// from a gallery configured by hand are not listed: they cannot be
     /// changed from here.
     Q_PROPERTY(QVariantList people READ people NOTIFY peopleChanged)
@@ -99,6 +100,8 @@ public:
     /// when nothing usable is left. The id also names the files, so anything
     /// that could leave the directory is gone by construction.
     static QString idFor(const QString &name);
+    /// `idFor`, for QML.
+    Q_INVOKABLE QString personIdFor(const QString &name) const { return idFor(name); }
 
     bool isReady() const { return m_ready; }
     QString directory() const { return m_directory; }

@@ -35,6 +35,9 @@ QtObject {
     property real glowMaxBrightness: 0.25
     property int ledScreenLedSize: 9
     property real leftRightAngle: 90
+    /// Whether a stranger's hands are tracked while they are the only person
+    /// in view. People the gallery knows always have theirs tracked.
+    property bool loneStrangerHands: true
     property real maskSpreadAtMax: 0
     property real maskSpreadAtMin: 0
     property real maskThresholdMax: 1.0
@@ -45,6 +48,7 @@ QtObject {
 
         property alias analysisMaxSide: root.analysisMaxSide
         property alias cameraId: root.cameraId
+        property alias loneStrangerHands: root.loneStrangerHands
         property alias previewMaxSide: root.previewMaxSide
         property alias visionUpdateHz: root.visionUpdateHz
 

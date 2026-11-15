@@ -3,6 +3,8 @@
 
 #include "blackboard.h"
 
+#include "skillstore.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QJSEngine>
@@ -59,7 +61,9 @@ Blackboard::Blackboard(QObject *parent)
         connect(application, &QCoreApplication::aboutToQuit, this, &Blackboard::flush);
     }
 
-    load();
+#ifndef Q_OS_WASM
+    restore();
+#endif
 }
 
 static_assert(!std::is_default_constructible_v<Blackboard>,
@@ -83,8 +87,14 @@ Blackboard *Blackboard::create(QQmlEngine *engine, QJSEngine *scriptEngine)
 
 QString Blackboard::storagePath() const
 {
+#ifdef Q_OS_WASM
+    // Only the skill store is backed by IndexedDB; anywhere else in the
+    // browser's file system is gone on the next reload.
+    return SkillStore::instance().directory() + QStringLiteral("/blackboard.json");
+#else
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
            + QStringLiteral("/blackboard.json");
+#endif
 }
 
 QStringList Blackboard::keys() const
@@ -270,9 +280,21 @@ void Blackboard::load()
     emit keysChanged();
 }
 
+void Blackboard::restore()
+{
+    if (m_restored) {
+        return;
+    }
+    m_restored = true;
+    load();
+}
+
 void Blackboard::flush()
 {
     m_persistTimer.stop();
+    if (!m_restored) {
+        return;
+    }
 
     QJsonObject object;
     const QStringList names{m_values->keys()};
@@ -301,7 +323,9 @@ void Blackboard::flush()
     file.write(QJsonDocument{object}.toJson(QJsonDocument::Indented));
     if (!file.commit()) {
         qCWarning(blackboardLog) << "cannot commit" << storagePath();
+        return;
     }
+    SkillStore::instance().persist();
 }
 
 } // namespace Kerfur

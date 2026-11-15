@@ -175,6 +175,10 @@ private slots:
         QVERIFY(!person.value(QStringLiteral("hasVoice")).toBool());
         QCOMPARE(person.value(QStringLiteral("faceCount")).toInt(), 1);
         QCOMPARE(person.value(QStringLiteral("voiceCount")).toInt(), 0);
+        // The panel shows each sample, so it is handed their locations.
+        QCOMPARE(person.value(QStringLiteral("faces")).toList(),
+                 QVariantList{QUrl::fromLocalFile(ada->facePaths.first()).toString()});
+        QVERIFY(person.value(QStringLiteral("voices")).toList().isEmpty());
     }
 
     void aLargePictureIsReduced()

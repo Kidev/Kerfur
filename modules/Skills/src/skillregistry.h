@@ -16,6 +16,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 
@@ -44,6 +45,19 @@ class SkillRegistry : public QObject
 
     /// The names of the loaded skills.
     Q_PROPERTY(QStringList skillNames READ skillNames NOTIFY skillsChanged)
+
+    /// Every skill file read, sorted by file name, as maps of `name`,
+    /// `description`, `file` (the file name), `path`, `added` (it was added
+    /// from the panel and lives in the skill store), `overrides` (an added
+    /// file that replaces a bundled one of the same file name) and `loaded`
+    /// (false when it failed to compile or is not a Skill).
+    Q_PROPERTY(QVariantList skills READ skills NOTIFY skillsChanged)
+
+    /// Where skills added from the panel are written, and whether that place
+    /// can be written yet. On the web build it is read back from IndexedDB
+    /// after start up.
+    Q_PROPERTY(QString storeDirectory READ storeDirectory CONSTANT)
+    Q_PROPERTY(bool storeReady READ isStoreReady NOTIFY skillsChanged)
 
     /// Every trigger, as `skill: intent`. For the panel, and for anybody
     /// wondering what Kerfur will answer to.
@@ -76,6 +90,9 @@ class SkillRegistry : public QObject
     Q_PROPERTY(QStringList activity READ activity NOTIFY activityChanged)
 
 public:
+    /// Larger skill text is refused by `install`.
+    static constexpr qsizetype maximumSkillBytes{256 * 1024};
+
     /// No default argument. The QML engine builds a default constructible
     /// singleton itself and never calls `create`, so QML would hold a second
     /// instance that C++ cannot see.
@@ -86,6 +103,9 @@ public:
     static SkillRegistry *create(QQmlEngine *engine, QJSEngine *scriptEngine);
 
     QStringList skillNames() const;
+    QVariantList skills() const { return m_files; }
+    QString storeDirectory() const;
+    bool isStoreReady() const { return m_storeReady; }
     QStringList catalogue() const;
     QString directory() const { return m_directory; }
     QString problem() const { return m_problem; }
@@ -107,6 +127,21 @@ public:
 
     /// Called by a Skill when its component completes.
     void registerSkill(Skill *skill);
+
+    /// The text of one listed skill file, by its `path` in `skills`. Empty for
+    /// anything that is not listed there.
+    Q_INVOKABLE QString sourceOf(const QString &path) const;
+
+    /// Saves `source` into the skill store as `skillFileName` of the name it
+    /// declares, then reloads. The text is compiled first and nothing is
+    /// written when it does not compile. `replacing` is the file name of an
+    /// added skill this text was edited from; it is deleted when the name, and
+    /// so the file, changed. Returns what went wrong, or an empty string.
+    Q_INVOKABLE QString install(const QString &source, const QString &replacing = {});
+
+    /// Deletes an added skill by file name, then reloads. A bundled skill it
+    /// overrode comes back. Returns what went wrong, or an empty string.
+    Q_INVOKABLE QString uninstall(const QString &file);
 
     /// Called by Skill::say.
     void say(const QString &text, const QString &from);
@@ -165,6 +200,10 @@ signals:
     /// wants to answer it anyway.
     void unmatched(const QString &text, const QString &speaker);
 
+private slots:
+    /// The skill store can be read: restores the blackboard, then loads.
+    void applyStoreOpened(bool loaded);
+
 private:
     void loadSkills();
     void applyResolution(const Kerfur::LanguageResolution &resolution);
@@ -207,6 +246,8 @@ private:
     QTimer m_confirmationTimer;
 
     QString m_directory;
+    QVariantList m_files;
+    bool m_storeReady{false};
     QString m_problem;
     QString m_lastUtterance;
     QString m_lastIntent;

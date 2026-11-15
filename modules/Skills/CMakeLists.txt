@@ -24,6 +24,10 @@ qt_add_qml_module(
             src/skill.cpp
             src/skillregistry.h
             src/skillregistry.cpp
+            src/skillsource.h
+            src/skillsource.cpp
+            src/skillstore.h
+            src/skillstore.cpp
 )
 
 target_link_libraries(${SKILLS_MODULE} PUBLIC KerfurCore Qt6::Core Qt6::Qml)

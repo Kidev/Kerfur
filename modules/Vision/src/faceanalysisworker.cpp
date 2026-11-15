@@ -181,7 +181,9 @@ double intersectionOverUnion(const cv::Rect2f &left, const cv::Rect2f &right)
 }
 
 /// Identifies one hand of one person across passes. Both halves are needed: a
-/// person has two hands, and two people have four between them.
+/// person has two hands, and two people have four between them. A stranger's
+/// identity is empty, which is still unique: a stranger's hands are only
+/// located while nobody else is in view.
 QString heldKey(const QString &identity, const QString &side)
 {
     return identity + QLatin1Char('/') + side;
@@ -321,6 +323,17 @@ void FaceAnalysisWorker::setFaceConfidence(double confidence)
 {
     m_faceConfidence = std::clamp(confidence, 0.1, 0.95);
     m_faces.setDetectionThreshold(static_cast<float>(m_faceConfidence));
+}
+
+void FaceAnalysisWorker::setLoneStrangerHands(bool enabled)
+{
+    if (m_loneStrangerHands == enabled) {
+        return;
+    }
+    m_loneStrangerHands = enabled;
+    // A held object voted for under the other rule belongs to somebody whose
+    // hands may no longer be looked at.
+    m_held.clear();
 }
 
 void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mirrored)
@@ -502,8 +515,8 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
         person.known = !person.identity.isEmpty();
 
         // And only now the hands. A stranger's hands are not located, not
-        // published and not searched for objects.
-        if (!person.known) {
+        // published and not searched for objects, unless they are alone.
+        if (!locatesHandsOf(person, result.people.size(), m_loneStrangerHands)) {
             continue;
         }
         person.leftHand = handFromKeypoints(person,
@@ -531,7 +544,8 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
     // allows: by rank first and then by nearness, which is the same order the
     // eyes follow. A room with four recognised people therefore costs what a
     // room with one costs, and the hands that are dropped are the ones nobody
-    // is looking at.
+    // is looking at. Only hands `attributePeople` located are valid, so whose
+    // hands are measured was decided there.
     struct Candidate
     {
         AnalysedPerson *person;
@@ -541,9 +555,6 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
     };
     QList<Candidate> candidates;
     for (AnalysedPerson &person : result.people) {
-        if (!person.known) {
-            continue;
-        }
         for (AnalysedHand *hand : {&person.leftHand, &person.rightHand}) {
             if (hand->valid) {
                 candidates.append(Candidate{&person,
@@ -642,9 +653,6 @@ void FaceAnalysisWorker::attributeHeldObjects(const cv::Mat &bgr, AnalysisResult
     };
     QList<Candidate> candidates;
     for (AnalysedPerson &person : result.people) {
-        if (!person.known) {
-            continue;
-        }
         for (const AnalysedHand *hand : {&person.leftHand, &person.rightHand}) {
             if (couldHold(*hand)) {
                 candidates.append(Candidate{&person,
@@ -931,6 +939,11 @@ QString FaceAnalysisWorker::voteIdentity(const cv::Rect2f &box,
                                     : similarity;
     confidence = leader.isEmpty() ? 0.0 : chosen->settledConfidence;
     return leader;
+}
+
+bool locatesHandsOf(const AnalysedPerson &person, qsizetype peopleInView, bool loneStrangerHands)
+{
+    return person.known || (loneStrangerHands && peopleInView == 1);
 }
 
 double bodyHandScale(const AnalysedPerson &person, const QSize &frameSize, float minimumConfidence)

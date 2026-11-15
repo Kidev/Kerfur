@@ -119,6 +119,13 @@ public:
     /// Writes now rather than on the debounce. Called at shutdown.
     void flush();
 
+    /// Reads the stored values back, once. The constructor does it on the
+    /// desktop; on the web build the file is in the skill store, which is read
+    /// from IndexedDB asynchronously, so SkillRegistry calls this when the store
+    /// has opened. Nothing is written before it has run, so an early write
+    /// cannot overwrite what was stored.
+    void restore();
+
 signals:
     /// One key changed. Carries the key so that a `Watch` can filter, and the
     /// value so that it does not have to read back.
@@ -145,6 +152,9 @@ private:
     /// True while this class is writing into the map, so that the map's own
     /// change signal can tell a QML assignment from an echo of `set`.
     bool m_writing{false};
+
+    /// Whether `restore` has run.
+    bool m_restored{false};
 
     /// How long writes are coalesced before hitting the disk. A skill that
     /// counts something can write on every utterance, and a robot that rewrites

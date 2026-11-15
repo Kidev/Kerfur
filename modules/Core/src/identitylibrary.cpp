@@ -862,6 +862,14 @@ void IdentityLibrary::refreshPeople()
         && QFileInfo::exists(
             QDir{m_directory}.absoluteFilePath(IdentityRegistry::manifestFileName()))) {
         const IdentityRegistry registry{IdentityRegistry::load(m_directory)};
+        const auto urlsOf = [](const QStringList &paths) {
+            QVariantList urls;
+            urls.reserve(paths.size());
+            for (const QString &path : paths) {
+                urls.append(QUrl::fromLocalFile(path).toString());
+            }
+            return urls;
+        };
         for (const IdentityRecord &record : registry.records()) {
             people.append(QVariantMap{
                 {QStringLiteral("id"), record.id},
@@ -873,6 +881,8 @@ void IdentityLibrary::refreshPeople()
                 {QStringLiteral("hasVoice"), !record.voicePaths.isEmpty()},
                 {QStringLiteral("faceCount"), record.facePaths.size()},
                 {QStringLiteral("voiceCount"), record.voicePaths.size()},
+                {QStringLiteral("faces"), urlsOf(record.facePaths)},
+                {QStringLiteral("voices"), urlsOf(record.voicePaths)},
             });
         }
     }

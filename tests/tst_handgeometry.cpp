@@ -55,6 +55,10 @@ private slots:
     void reportsTheSideItWasAskedFor();
     void measuresOverlapAgainstTheHand();
     void ignoresAnObjectThatMerelyPassesNearby();
+    void locatesARecognisedPersonsHandsInACrowd();
+    void locatesALoneStrangersHands();
+    void refusesAStrangersHandsInACrowd();
+    void refusesALoneStrangersHandsWhenSwitchedOff();
 };
 
 void TestHandGeometry::refusesAWristItCannotSee()
@@ -310,6 +314,32 @@ void TestHandGeometry::ignoresAnObjectThatMerelyPassesNearby()
     const QRectF hand{0.50, 0.50, 0.04, 0.04};
     const QRectF elsewhere{0.10, 0.10, 0.20, 0.20};
     QCOMPARE(handInsideObject(hand, elsewhere), 0.0);
+}
+
+void TestHandGeometry::locatesARecognisedPersonsHandsInACrowd()
+{
+    AnalysedPerson person{emptyPerson()};
+    person.known = true;
+    QVERIFY(locatesHandsOf(person, 3, false));
+    QVERIFY(locatesHandsOf(person, 3, true));
+}
+
+void TestHandGeometry::locatesALoneStrangersHands()
+{
+    const AnalysedPerson stranger{emptyPerson()};
+    QVERIFY(locatesHandsOf(stranger, 1, true));
+}
+
+void TestHandGeometry::refusesAStrangersHandsInACrowd()
+{
+    const AnalysedPerson stranger{emptyPerson()};
+    QVERIFY(!locatesHandsOf(stranger, 2, true));
+}
+
+void TestHandGeometry::refusesALoneStrangersHandsWhenSwitchedOff()
+{
+    const AnalysedPerson stranger{emptyPerson()};
+    QVERIFY(!locatesHandsOf(stranger, 1, false));
 }
 
 QTEST_MAIN(TestHandGeometry)

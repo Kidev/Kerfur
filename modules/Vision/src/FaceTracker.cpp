@@ -235,6 +235,7 @@ void FaceTracker::startWorker()
             &FaceTracker::confidenceChanged,
             m_worker,
             &Kerfur::FaceAnalysisWorker::setFaceConfidence);
+
     connect(m_worker,
             &Kerfur::FaceAnalysisWorker::resultReady,
             this,
@@ -772,8 +773,8 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
 
     // The body that goes with that face. By name when there is one, because a
     // name is the only association that survives two people crossing; by
-    // geometry otherwise, which is all there is for a stranger and is why a
-    // stranger has no hands to publish anyway.
+    // geometry otherwise, which is all there is for a stranger. A stranger has
+    // hands to publish only while they are alone in view.
     const Kerfur::AnalysedPerson *attention{nullptr};
     for (const Kerfur::AnalysedPerson &person : result.people) {
         if (!primary.identity.isEmpty() && person.identity == primary.identity) {
@@ -955,6 +956,21 @@ void FaceTracker::setUpdateHz(int hertz)
     m_updateHz = bounded;
     m_frameThrottleTimer.setInterval(intervalForRate(m_updateHz));
     emit updateHzChanged();
+}
+
+void FaceTracker::setLoneStrangerHands(bool enabled)
+{
+    if (m_loneStrangerHands == enabled) {
+        return;
+    }
+    m_loneStrangerHands = enabled;
+    // Queued with the value, so the worker never reads this object's state
+    // from its own thread.
+    QMetaObject::invokeMethod(m_worker,
+                              &Kerfur::FaceAnalysisWorker::setLoneStrangerHands,
+                              Qt::QueuedConnection,
+                              enabled);
+    emit loneStrangerHandsChanged();
 }
 
 void FaceTracker::setResolution(const QString &resolution)
