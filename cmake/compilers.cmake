@@ -14,6 +14,13 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
     target_compile_options(${PROJECT_NAME} PUBLIC /W4 /WX)
+    # C++ that qmlcachegen writes for the QML files instantiates Qt templates
+    # whose discarded constexpr branches MSVC reports as unreachable code.
+    get_target_property(QMLCACHE_SOURCES ${PROJECT_NAME} SOURCES)
+    list(FILTER QMLCACHE_SOURCES INCLUDE REGEX "/\\.rcc/qmlcache/[^/]+\\.cpp$")
+    if (QMLCACHE_SOURCES)
+        set_source_files_properties(${QMLCACHE_SOURCES} PROPERTIES COMPILE_OPTIONS /wd4702)
+    endif ()
 else ()
     message(FATAL_ERROR "Unknown compiler")
 endif ()
