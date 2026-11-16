@@ -38,6 +38,7 @@
     #loader img.logo { width: 180px; height: 180px; }
     #loader h1 { margin: 12px 0 0; font-size: 28px; }
     .byline { margin: 4px 0 24px; color: var(--dim); }
+    .byline strong { color: var(--text); font-weight: 700; }
     .byline img { width: 40px; height: 25px; vertical-align: middle; }
     #steps { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 440px; }
     .step { margin: 0 0 16px; }
@@ -92,7 +93,7 @@
   <main id="loader">
     <img class="logo" src="logo.png" alt="">
     <h1>@PROJECT_TITLE@</h1>
-    <p class="byline">Written by Kidev using Qt <img src="qtlogo.svg" alt=""></p>
+    <p class="byline">Written by <strong>kidev</strong> using <img src="qtlogo.svg" alt="Qt"></p>
     <ol id="steps">
       <li class="step" id="step-application" data-state="waiting">
         <div class="label"><span class="name">Application</span><span class="detail">Waiting</span></div>
@@ -120,9 +121,13 @@
     // Filled in by the build from the files it produced. The sizes are the
     // uncompressed ones: a server that compresses on the way out reports the
     // compressed length, which says nothing about how much is left to read.
+    // The version goes on every URL of the runtime: the glue script and the
+    // binary must come from the same build, and a cache in front of the server
+    // that kept one but not the other would pair them anyway.
     const BUILD = {
       name: '@PROJECT_BINARY@',
       entry: '@PROJECT_BINARY@_entry',
+      version: '@BUILD_ID@',
       wasmBytes: @WASM_BYTES@,
       dataBytes: @DATA_BYTES@,
       dataHash: '@DATA_HASH@',
@@ -218,7 +223,7 @@
 
     // The application binary, compiled while it downloads.
     async function compileApplication(step) {
-      const url = BUILD.name + '.wasm';
+      const url = BUILD.name + '.wasm?v=' + BUILD.version;
       const started = performance.now();
       step.progress(0, BUILD.wasmBytes, 'Connecting');
       const response = await fetchOrThrow(url);
@@ -240,6 +245,12 @@
       const module = typeof WebAssembly.compileStreaming === 'function'
         ? await WebAssembly.compileStreaming(wasm)
         : await WebAssembly.compile(await wasm.arrayBuffer());
+
+      // A binary of another size comes from another build, so this page and
+      // the glue it loaded are older than what the server holds now.
+      if (received !== BUILD.wasmBytes)
+        throw new Error('The application arrived as ' + received + ' bytes instead of ' + BUILD.wasmBytes
+                        + ': this page is out of date, reload it');
       step.done(megabytes(received));
       return module;
     }
@@ -334,7 +345,7 @@
 
       const started = performance.now();
       step.progress(0, BUILD.dataBytes, 'Connecting');
-      const response = await fetchOrThrow(BUILD.name + '.data');
+      const response = await fetchOrThrow(BUILD.name + '.data?v=' + BUILD.dataHash);
       const reader = response.body.getReader();
       const report = throttled((done, total) => step.progress(done, total, downloadText(done, total, started)));
       const chunks = [];
@@ -445,7 +456,7 @@
 
     start();
   </script>
-  <script src="@PROJECT_BINARY@.js"></script>
-  <script src="qtloader.js"></script>
+  <script src="@PROJECT_BINARY@.js?v=@BUILD_ID@"></script>
+  <script src="qtloader.js?v=@BUILD_ID@"></script>
 </body>
 </html>

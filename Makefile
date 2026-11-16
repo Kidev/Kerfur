@@ -203,11 +203,13 @@ upload-repo:
 		echo "No CDN credentials, will NOT update the remote with repo $(REPO_NAME)"; \
 	fi
 
+# The page goes up last: it names the build that the other files must already hold.
 upload-web:
 	@if [ -n "$(WASM_UPLOAD_USERNAME)" ] && [ -n "$(WASM_UPLOAD_PASSWORD)" ] && [ -n "$(WASM_UPLOAD_SOCKET)" ]; then \
 		lftp -u "$(WASM_UPLOAD_USERNAME),$(WASM_UPLOAD_PASSWORD)" "$(WASM_UPLOAD_SOCKET)" -e "\
 		$(LFTP_SETUP) \
-		mirror -R --only-newer --verbose $(ABS_INSTALL_DIR) $(PROJECT_TITLE); \
+		mirror -R --only-newer --verbose --exclude-glob index.html* $(ABS_INSTALL_DIR) $(PROJECT_TITLE); \
+		mput -O $(PROJECT_TITLE) $(ABS_INSTALL_DIR)/index.html*; \
 		quit"; \
 	else \
 		echo "No WASM webserver credentials, will NOT update the WASM demo"; \
@@ -423,18 +425,21 @@ web-build:
 	cp $(ASSETS_DIR)/favicon.ico $(ABS_INSTALL_DIR)/favicon.ico
 
 	@wasm="$(BUILD_DIR)/$(PROJECT_BINARY).wasm"; data="$(BUILD_DIR)/$(PROJECT_BINARY).data"; \
+	glue="$(BUILD_DIR)/$(PROJECT_BINARY).js"; loader="$(BUILD_DIR)/qtloader.js"; \
 	wasm_bytes=$$(wc -c < "$$wasm" | tr -d ' '); data_bytes=0; data_hash=; \
+	build_id=$$(cat "$$wasm" "$$glue" "$$loader" | (sha256sum 2>/dev/null || shasum -a 256) | cut -c1-16); \
 	if [ -f "$$data" ]; then \
 		data_bytes=$$(wc -c < "$$data" | tr -d ' '); \
 		data_hash=$$( (sha256sum "$$data" 2>/dev/null || shasum -a 256 "$$data") | cut -d' ' -f1); \
 	fi; \
 	sed -e 's#@PROJECT_TITLE@#$(PROJECT_TITLE)#g' -e 's#@PROJECT_BINARY@#$(PROJECT_BINARY)#g' \
 		-e "s#@WASM_BYTES@#$$wasm_bytes#g" -e "s#@DATA_BYTES@#$$data_bytes#g" \
-		-e "s#@DATA_HASH@#$$data_hash#g" web/index.html > $(ABS_INSTALL_DIR)/index.html; \
+		-e "s#@DATA_HASH@#$$data_hash#g" -e "s#@BUILD_ID@#$$build_id#g" \
+		web/index.html > $(ABS_INSTALL_DIR)/index.html; \
 	if grep -q '@[A-Z_]*@' $(ABS_INSTALL_DIR)/index.html; then \
 		echo "Error: unfilled placeholder in $(ABS_INSTALL_DIR)/index.html"; exit 1; \
 	fi; \
-	echo "index.html: wasm $$wasm_bytes bytes, data $$data_bytes bytes, sha256 $$data_hash"
+	echo "index.html: build $$build_id, wasm $$wasm_bytes bytes, data $$data_bytes bytes, sha256 $$data_hash"
 
 	@extensions_expr=""; \
 	for ext in $(BROTLI_EXTENSIONS); do \
