@@ -63,6 +63,7 @@ QByteArray mediaTypeFor(const QString &path)
 
 // The bytes are copied out of the wasm heap first: it is shared memory in this
 // build, and a Blob refuses a view over a SharedArrayBuffer.
+// clang-format off
 EM_JS(void, kerfurPlayVoice, (const char *bytes, int size, const char *type, int token), {
     const previous = Module.kerfurVoice;
     if (previous) {
@@ -73,30 +74,23 @@ EM_JS(void, kerfurPlayVoice, (const char *bytes, int size, const char *type, int
     const copy = new Uint8Array(size);
     copy.set(new Uint8Array(wasmMemory.buffer, bytes, size));
     const mediaType = UTF8ToString(type);
-    const url = URL.createObjectURL(mediaType ? new Blob([copy],
-                                                         {
-                                                             type:
-                                                                 mediaType
-                                                         })
-                                              : new Blob([copy]));
+    const blob = mediaType ? new Blob([copy], {type: mediaType}) : new Blob([copy]);
+    const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     const current = {audio: audio, url: url};
     Module.kerfurVoice = current;
-    const finish = function(failed)
-    {
-        if (Module.kerfurVoice != = current) {
+    const finish = function(failed) {
+        if (Module.kerfurVoice !== current) {
             return;
         }
         Module.kerfurVoice = null;
         URL.revokeObjectURL(url);
         _kerfurVoicePlaybackEnded(token, failed ? 1 : 0);
     };
-    audio.onended = function()
-    {
+    audio.onended = function() {
         finish(false);
     };
-    audio.onerror = function()
-    {
+    audio.onerror = function() {
         console.warn("voice playback: the browser cannot play this recording");
         finish(true);
     };
@@ -115,6 +109,7 @@ EM_JS(void, kerfurStopVoice, (), {
     current.audio.pause();
     URL.revokeObjectURL(current.url);
 })
+// clang-format on
 
 extern "C" EMSCRIPTEN_KEEPALIVE void kerfurVoicePlaybackEnded(int token, int failed)
 {
