@@ -31,9 +31,9 @@ jobs:
             qt_arch: linux_gcc_arm64
             artifact_name: linux-arm64
             build_name: '-arm64'
-            qt_tools: ''
+            qt_tools: 'tools_ifw'
             build_command: 'make'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'Windows x64'
             os: windows-2025
@@ -58,8 +58,10 @@ jobs:
             artifact_name: windows-arm64
             build_name: '-arm64'
             qt_tools: ''
+            # Qt publishes the Installer Framework for x86 Windows only; it runs under emulation.
+            ifw_host: 'windows'
             build_command: 'make'
-            installer_command: ''
+            installer_command: 'make installer'
 
           - name: 'macOS-15 ARM64'
             os: macos-15
@@ -159,6 +161,13 @@ jobs:
           tools: ${{ matrix.qt_tools }}
           aqtsource: ${{ matrix.aqt_source }}
           py7zrversion: '==1.1.4'
+
+      - name: Install Qt Installer Framework for another host
+        if: matrix.ifw_host != ''
+        shell: bash
+        run: |
+          python -m pip install "aqtinstall==3.3.*" "py7zr==1.1.4"
+          python -m aqt install-tool ${{ matrix.ifw_host }} desktop tools_ifw --outputdir "${{ github.workspace }}/Qt"
 
       - name: Install Emscripten SDK (Web only)
         if: matrix.artifact_name == 'web'

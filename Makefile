@@ -68,7 +68,14 @@ ASSETS_DIR := assets
 BUILD_DIR := build
 INSTALL_DIR := install
 WASM_ARCH ?= wasm_multithread
-BUILD_NAME ?=
+# The installer's remote folder is named after the OS and this suffix.
+ifeq ($(WEB),1)
+  BUILD_NAME ?= -wasm
+else ifneq ($(findstring arm64,$(QT_ROOT_DIR)),)
+  BUILD_NAME ?= -arm64
+else
+  BUILD_NAME ?= -$(subst aarch64,arm64,$(subst x86_64,x64,$(shell uname -m)))
+endif
 BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
 BUILD_QUALIFIER := $(OS_NAME)$(BUILD_NAME)
 BUILD_MODE ?= Release

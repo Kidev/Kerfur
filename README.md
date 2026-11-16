@@ -6,20 +6,22 @@
 ## Installing
 Installer with updates:
 - [Windows x64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Windows-x64.exe)
+- [Windows arm64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Windows-arm64.exe)
 - [Linux x64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Linux-x64)
+- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Linux-arm64) (glibc 2.38 or newer)
 
 Application bundle for macOS:
 - [macOS 15 arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-macos-15-arm64.tar.gz)
 
 AppImage:
 - [Linux x64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-x64.AppImage)
-- [Linux arm64, glibc 2.38 or newer (Raspberry Pi OS Trixie on a Pi 5)](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.AppImage)
+- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.AppImage) (glibc 2.38 or newer)
 
 Archive to extract:
 - [Windows x64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-windows-x64.zip)
 - [Windows arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-windows-arm64.zip)
 - [Linux x64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-x64.tar.gz)
-- [Linux arm64, glibc 2.38 or newer (Raspberry Pi OS Trixie on a Pi 5)](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz)
+- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz) (glibc 2.38 or newer)
 
 ## Using
 `Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for five seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
@@ -39,7 +41,7 @@ kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.12.0/gcc_64
 `make` alone works when `QT_ROOT_DIR` is set in the environment or exported by a `.env` file at the root of the repository.
 
 ### Make targets
-- `make installer` builds an online installer that uses an FTP server as its CDN. It needs `CDN_UPLOAD_SOCKET`, `CDN_UPLOAD_USERNAME` and `CDN_UPLOAD_PASSWORD`, and uploads into a folder named after the build's OS.
+- `make installer` builds an online installer that uses an FTP server as its CDN. It needs `CDN_UPLOAD_SOCKET`, `CDN_UPLOAD_USERNAME` and `CDN_UPLOAD_PASSWORD`, and uploads into a folder named after the build's OS and architecture, such as `Linux-arm64`.
 - `make web` builds the WebAssembly version into `install/`.
 - `make run-web` serves that build locally. Run `make web` first.
 - `make upload-web` uploads the web build into a `Kerfur` folder on a web server. It needs `WASM_UPLOAD_SOCKET`, `WASM_UPLOAD_USERNAME` and `WASM_UPLOAD_PASSWORD`.
