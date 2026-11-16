@@ -101,10 +101,11 @@ CDN_UPLOAD_PASSWORD ?=
 WASM_UPLOAD_SOCKET ?=
 WASM_UPLOAD_USERNAME ?=
 WASM_UPLOAD_PASSWORD ?=
-# Bounds lftp's retries so an unreachable host fails the upload within minutes.
+# Bounds lftp's retries so an unreachable host fails the upload within minutes,
+# and keeps each file under a temporary name until it is complete.
 LFTP_SETUP := set cmd:fail-exit yes; set net:timeout 30; set net:max-retries 3; \
 	set net:reconnect-interval-base 5; set net:reconnect-interval-multiplier 2; \
-	set ssl:verify-certificate no;
+	set ssl:verify-certificate no; set xfer:use-temp-file yes;
 
 # The web build resolves its dependencies for Emscripten rather than for the
 # host. The overlay triplet adds -msimd128 and -pthread: without the first,
