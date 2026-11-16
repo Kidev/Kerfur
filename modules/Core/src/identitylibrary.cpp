@@ -21,6 +21,7 @@
 #include <QVariantMap>
 
 #include <algorithm>
+#include <utility>
 
 #ifdef Q_OS_WASM
 #include <QtGui/private/qwasmlocalfileaccess_p.h>
@@ -31,7 +32,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <utility>
 #endif
 
 namespace Kerfur {
@@ -675,24 +675,90 @@ bool IdentityLibrary::forgetSamples(const QString &id, const QString &kind, cons
     entry.remove(kind);
     entry.remove(folder);
 
-    // A record with no sample left recognises nobody, and keeping it would
-    // list a person the panel can no longer teach anything about.
-    const bool emptied{!holdsSamples(entry)};
-    if (emptied) {
-        manifest->remove(id);
-    } else {
-        manifest->insert(id, entry);
-    }
-
-    if (!writeManifest(*manifest)) {
+    const std::optional<bool> emptied{storeOrForget(*manifest, id, entry)};
+    if (!emptied.has_value()) {
         return false;
     }
 
     qCInfo(libraryLog) << "forgot every" << kind << "of" << id
-                       << (emptied ? "and the person with them" : "");
+                       << (*emptied ? "and the person with them" : "");
     commit();
     succeed();
     return true;
+}
+
+bool IdentityLibrary::forgetSample(const QString &id, const QUrl &sample)
+{
+    if (m_directory.isEmpty() || !m_ready) {
+        return fail(QStringLiteral("Stored identities are not available yet."));
+    }
+
+    std::optional<QJsonObject> manifest{readManifest()};
+    if (!manifest.has_value()) {
+        return false;
+    }
+    if (id.isEmpty() || !manifest->contains(id)) {
+        return fail(QStringLiteral("%1 was not enrolled here.").arg(id));
+    }
+
+    // Matched against what the manifest resolves to inside the directory, so
+    // a URL can only ever name a file this person already owns.
+    const QString target{localPath(sample)};
+    QJsonObject entry{manifest->value(id).toObject()};
+    const std::pair<QString, QString> kinds[]{{QStringLiteral("face"), QStringLiteral("faces")},
+                                              {QStringLiteral("voice"), QStringLiteral("voices")}};
+    for (const auto &[kind, folder] : kinds) {
+        QStringList samples{samplesOf(entry, kind, folder)};
+        const auto found{std::find_if(samples.begin(), samples.end(), [&](const QString &relative) {
+            const QString resolved{resolveInside(relative)};
+            return !resolved.isEmpty() && !target.isEmpty() && resolved == QDir::cleanPath(target);
+        })};
+        if (found == samples.end()) {
+            continue;
+        }
+
+        const QString relative{*found};
+        removeInside(relative);
+        samples.erase(found);
+        entry.remove(kind);
+        if (samples.isEmpty()) {
+            entry.remove(folder);
+        } else {
+            entry.insert(folder, QJsonArray::fromStringList(samples));
+        }
+
+        const std::optional<bool> emptied{storeOrForget(*manifest, id, entry)};
+        if (!emptied.has_value()) {
+            return false;
+        }
+
+        qCInfo(libraryLog) << "forgot" << relative << "of" << id
+                           << (*emptied ? "and the person with it" : "");
+        commit();
+        succeed();
+        return true;
+    }
+
+    return fail(QStringLiteral("That sample does not belong to %1.").arg(id));
+}
+
+std::optional<bool> IdentityLibrary::storeOrForget(QJsonObject &manifest,
+                                                   const QString &id,
+                                                   const QJsonObject &entry)
+{
+    // A record with no sample left recognises nobody, and keeping it would
+    // list a person the panel can no longer teach anything about.
+    const bool emptied{!holdsSamples(entry)};
+    if (emptied) {
+        manifest.remove(id);
+    } else {
+        manifest.insert(id, entry);
+    }
+
+    if (!writeManifest(manifest)) {
+        return std::nullopt;
+    }
+    return emptied;
 }
 
 bool IdentityLibrary::addSample(QJsonObject &entry,

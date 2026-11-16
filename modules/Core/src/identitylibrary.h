@@ -152,6 +152,11 @@ public:
     Q_INVOKABLE bool forgetFaces(const QString &id);
     Q_INVOKABLE bool forgetVoices(const QString &id);
 
+    /// Deletes one picture or recording of somebody enrolled here, named by
+    /// the file URL `people` lists it under. A person left with no sample is
+    /// forgotten entirely.
+    Q_INVOKABLE bool forgetSample(const QString &id, const QUrl &sample);
+
 signals:
     void readyChanged();
     void peopleChanged();
@@ -195,6 +200,13 @@ private:
 
     /// The shared body of `forgetFaces` and `forgetVoices`.
     bool forgetSamples(const QString &id, const QString &kind, const QString &folder);
+
+    /// Stores `entry` as `id`, or forgets the person when it holds no sample
+    /// any more, and writes the manifest. Whether the person was forgotten,
+    /// or nothing when the manifest could not be written.
+    std::optional<bool> storeOrForget(QJsonObject &manifest,
+                                      const QString &id,
+                                      const QJsonObject &entry);
 
     /// Writes `data` to `relative` inside the directory, atomically.
     bool writeInside(const QString &relative, const QByteArray &data);

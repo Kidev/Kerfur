@@ -424,6 +424,77 @@ private slots:
         QVERIFY(library.people().isEmpty());
     }
 
+    void forgettingOneSampleKeepsTheOthers()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.stageVoiceSamples(sentence(2.5), 16000, QStringLiteral("sentence")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        QSignalSpy changed{&library, &IdentityLibrary::galleryChanged};
+
+        const QUrl first{
+            QUrl::fromLocalFile(directory.filePath(QStringLiteral("faces/ada-1.png")))};
+        QVERIFY(library.forgetSample(QStringLiteral("ada"), first));
+
+        QCOMPARE(changed.count(), 1);
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada-1.png"))));
+        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada-2.png"))));
+        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada-1.wav"))));
+        const std::optional<IdentityRecord> ada{
+            IdentityRegistry::load(directory.path()).find(QStringLiteral("ada"))};
+        QVERIFY(ada.has_value());
+        QCOMPARE(ada->facePaths, QStringList{directory.filePath(QStringLiteral("faces/ada-2.png"))});
+        QCOMPARE(ada->voicePaths.size(), 1);
+
+        const QUrl voice{
+            QUrl::fromLocalFile(directory.filePath(QStringLiteral("voices/ada-1.wav")))};
+        QVERIFY(library.forgetSample(QStringLiteral("ada"), voice));
+        QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("voices/ada-1.wav"))));
+        QVERIFY(!manifestIn(directory.path())
+                     .value(QStringLiteral("ada"))
+                     .toObject()
+                     .contains(QStringLiteral("voices")));
+    }
+
+    void forgettingTheLastSampleForgetsThePerson()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+
+        QVERIFY(library.forgetSample(QStringLiteral("ada"),
+                                     QUrl::fromLocalFile(
+                                         directory.filePath(QStringLiteral("faces/ada-1.png")))));
+
+        QVERIFY(!manifestIn(directory.path()).contains(QStringLiteral("ada")));
+        QVERIFY(library.people().isEmpty());
+    }
+
+    void aSampleOfSomebodyElseIsRefused()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Bob"), QString{}, 2));
+        QSignalSpy changed{&library, &IdentityLibrary::galleryChanged};
+
+        QVERIFY(!library.forgetSample(QStringLiteral("ada"),
+                                      QUrl::fromLocalFile(
+                                          directory.filePath(QStringLiteral("faces/bob-1.png")))));
+        QVERIFY(!library.forgetSample(QStringLiteral("ada"), QUrl{}));
+
+        QVERIFY(!library.problem().isEmpty());
+        QCOMPARE(changed.count(), 0);
+        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("faces/ada-1.png"))));
+        QVERIFY(QFileInfo::exists(directory.filePath(QStringLiteral("faces/bob-1.png"))));
+    }
+
     void forgettingSomebodyUnknownIsRefused()
     {
         QTemporaryDir directory;

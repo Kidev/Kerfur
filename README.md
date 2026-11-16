@@ -24,7 +24,7 @@ Archive to extract:
 - [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz) (glibc 2.38 or newer)
 
 ## Using
-`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for five seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
+`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for three seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
 
 ## Building
 ### Requirements
@@ -78,9 +78,9 @@ The picture is held back until the pass measured on it returns, so the boxes are
 Kerfur ships with an empty gallery. Every profile carries the two models that learn a person (face recognition and speaker recognition), and people are taught from the control panel.
 
 #### Adding someone
-Under *Add a person* in the *People* section, stage a photo (*Take from camera*, or *Choose a picture*) and a voice (*Use last sentence*, or *Choose a recording*), give a name, a title and a rank, and press *Save person*. Each save adds what was staged to that person as one more sample. Adding samples of the same person in other light, from another angle or in a noisier room makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Each person keeps up to ten pictures and ten recordings, the oldest dropped first.
+*Add a person* in the *People* section opens the form. Give a name, a title and a rank, stage a photo (*Take from camera*, or *Choose a picture*) and a voice (*Use last sentence*, or *Choose a recording*), and press *Save person*. After the save the form stays open as that person's edit form. Each save adds what was staged to that person as one more sample. Adding samples of the same person in other light, from another angle or in a noisier room makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Each person keeps up to ten pictures and ten recordings, the oldest dropped first.
 
-Each person is listed as a card with their newest photo, their title and rank, how many samples they have, and *Play voice* for their newest recording. Pressing a card opens it on every photo, a *Play* button per recording, and the actions: *Add samples* fills in their name, title and rank for the next save (the form then reads *Add samples to* their name), *Forget faces* and *Forget voices* delete one kind of sample, and *Remove* forgets them. The three that delete act on a second press. Saving a known name with nothing staged changes only the title and rank.
+Each person is listed as a card with their newest photo, their title, and their rank and sample counts. *Edit* opens the form on that person: it changes the title and the rank and adds whatever is staged, and a save with nothing staged changes only the title and rank. The red cross on the card deletes the person. Pressing the card opens it on every photo and every recording. Each recording plays from its own button, each sample has a red cross that deletes that sample alone, and *Delete all* deletes every photo or every recording. A person left with no sample is forgotten. A red cross acts on the second press.
 
 Both recognisers re-enrol as soon as a person is saved or changed. Everything taught is kept in `identities/` under the application data directory (`~/.local/share/kidev/Kerfur/identities` on Linux) and read back on the next start. The web build keeps that directory in the browser's IndexedDB, where it survives a reload and stays in the browser. Embeddings are cached against a hash of each file, so a new sample costs one inference and a restart costs none.
 

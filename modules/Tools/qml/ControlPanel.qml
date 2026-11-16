@@ -6,7 +6,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
-import QtMultimedia
 import Core
 import Vision
 import Hearing
@@ -37,7 +36,7 @@ Rectangle {
 
     /// How long a press on the face lasts before it shows or hides this panel,
     /// quoted by the hide button's tooltip.
-    property int holdToToggleMs: 5000
+    property int holdToToggleMs: 3000
 
     // One palette, named once. The alpha lives in the background colour rather
     // than in `opacity`, because opacity on the panel fades the text with it
@@ -46,11 +45,14 @@ Rectangle {
     readonly property color colorBackground: "#f01a1c20"
     readonly property color colorBad: "#ff6b6b"
     readonly property color colorDim: "#98a0ac"
+    // Text laid over a filled accent or warning colour.
+    readonly property color colorInk: "#14171b"
     readonly property color colorLine: "#3c414a"
     readonly property color colorOk: "#7cff5a"
     readonly property color colorRaised: "#2c3037"
     readonly property color colorSurface: "#24272c"
     readonly property color colorText: "#eceff4"
+    readonly property color colorVoice: "#c8b0ff"
     readonly property color colorWarn: "#ffb74d"
 
     // The longer side the analysis image is reduced to, as the few values worth
@@ -91,20 +93,13 @@ Rectangle {
     property string spokenBy: ""
     property string spokenText: ""
 
-    // The person whose card is open in the People section, by id, and the
-    // recording being played back, by URL.
+    // The People section's state, by person id: whose card shows its photos
+    // and recordings, and whose card holds the edit form. At most one form is
+    // open, adding or editing, because the staged samples it saves belong to
+    // the library and not to the form.
     property string openPersonId: ""
-    property string playingVoice: ""
-
-    /// The enrolled person the form's name resolves to, or undefined for
-    /// somebody new. The same folding `enrol` applies, so "Ada" and "ada" are
-    /// one person here as they are on disk.
-    readonly property var formPerson: {
-        const id = Identities.personIdFor(personName.text);
-        if (id === "")
-            return undefined;
-        return Identities.people.find(person => person.id === id);
-    }
+    property string editingPersonId: ""
+    property bool addingPerson: false
 
     /// Whether a preview or analysis size can be had from the camera: neither
     /// is ever enlarged past the frames it delivers. Every size is offered
@@ -158,46 +153,46 @@ Rectangle {
         return known + " known, " + Identities.people.length + " added here";
     }
 
-    function enrolledSamples(person) {
-        const parts = [];
-        if (person.faceCount > 0)
-            parts.push(person.faceCount + (person.faceCount === 1 ? " face" : " faces"));
-        if (person.voiceCount > 0)
-            parts.push(person.voiceCount + (person.voiceCount === 1 ? " voice" : " voices"));
-        return parts.length > 0 ? parts.join(", ") : "no samples";
+    function countOf(count, one, many) {
+        return count + " " + (count === 1 ? one : many);
     }
 
-    // Fills the form with somebody already enrolled, so the next save adds to
-    // them rather than starting somebody new.
-    function addSamplesTo(person) {
-        personName.text = person.name;
-        personTitle.text = person.title;
-        const rank = root.rankValues.indexOf(person.priority);
-        personRank.currentIndex = rank >= 0 ? rank : root.defaultRankIndex;
-    }
-
-    function clearForm() {
-        personName.text = "";
-        personTitle.text = "";
-        personRank.currentIndex = root.defaultRankIndex;
+    function openNewPerson() {
         Identities.clearStaged();
+        root.editingPersonId = "";
+        root.addingPerson = true;
     }
 
-    // One recording at a time. Pressing the one that is playing stops it.
-    function playVoice(url) {
-        const again = root.playingVoice === url && voicePlayer.playbackState === MediaPlayer.PlayingState;
-        voicePlayer.stop();
-        root.playingVoice = "";
-        if (again)
-            return;
-        voicePlayer.source = url;
-        root.playingVoice = url;
-        voicePlayer.play();
+    // Pressing Edit on the card whose form is open closes it.
+    function toggleEditPerson(id) {
+        const closing = root.editingPersonId === id;
+        Identities.clearStaged();
+        root.addingPerson = false;
+        root.editingPersonId = closing ? "" : id;
     }
 
-    function stopVoice() {
+    function closePersonForm() {
+        Identities.clearStaged();
+        root.addingPerson = false;
+        root.editingPersonId = "";
+    }
+
+    // Somebody just added keeps the form, now as theirs, so another photo or
+    // sentence for them is one capture and one save away.
+    function personSaved(id) {
+        root.addingPerson = false;
+        root.editingPersonId = id;
+    }
+
+    function removePerson(id) {
         voicePlayer.stop();
-        root.playingVoice = "";
+        if (root.editingPersonId === id)
+            root.closePersonForm();
+        Identities.remove(id);
+    }
+
+    function isPlaying(url) {
+        return voicePlayer.playing.toString() === url;
     }
 
     // The browser has no file system for a QML dialog to show, so on the web
@@ -677,26 +672,79 @@ Rectangle {
         }
     }
 
-    // A button for something that deletes. The first press arms it and says
-    // so; only a second press within a few seconds acts.
-    component ConfirmButton: SmallButton {
-        id: confirmButton
+    // A button for something that deletes: a red cross. The first press
+    // fills it and, unless it is `compact`, asks; only a second press within a
+    // few seconds acts. `label` is shown beside the cross while it is idle.
+    component DeleteButton: Rectangle {
+        id: deleteButton
 
-        property string action: ""
+        property string action: "Delete"
         property bool armed: false
+        property bool compact: false
+        property string label: ""
+
+        readonly property bool showsText: !deleteButton.compact && (deleteButton.armed || deleteButton.label !== "")
 
         signal confirmed
 
-        label: confirmButton.armed ? "Press again to " + confirmButton.action.toLowerCase() : confirmButton.action
+        border.color: deleteButton.armed || deleteMouse.containsMouse ? root.colorBad : "#7a3a3e"
+        border.width: 1
+        color: {
+            if (deleteButton.armed)
+                return root.colorBad;
+            return deleteMouse.pressed ? "#5a2a2e" : "#3a2326";
+        }
+        height: 20
+        opacity: deleteButton.enabled ? 1 : 0.4
+        radius: height / 2
+        width: deleteButton.showsText ? deleteRow.implicitWidth + 14 : height
 
-        onClicked: {
-            if (confirmButton.armed) {
-                confirmButton.armed = false;
-                confirmButton.confirmed();
-                return;
+        Behavior on width {
+            NumberAnimation {
+                duration: 120
+                easing.type: Easing.OutCubic
             }
-            confirmButton.armed = true;
-            disarmTimer.restart();
+        }
+
+        Row {
+            id: deleteRow
+
+            anchors.centerIn: parent
+            spacing: 5
+
+            Cross {
+                anchors.verticalCenter: parent.verticalCenter
+                color: deleteButton.armed ? root.colorInk : root.colorBad
+                height: Math.round(deleteButton.height * 0.4)
+                thickness: 1.8
+                width: height
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                color: deleteButton.armed ? root.colorInk : root.colorBad
+                font.bold: deleteButton.armed
+                font.pixelSize: 9
+                text: deleteButton.armed ? deleteButton.action + "?" : deleteButton.label
+                visible: deleteButton.showsText
+            }
+        }
+
+        MouseArea {
+            id: deleteMouse
+
+            anchors.fill: parent
+            hoverEnabled: true
+
+            onClicked: {
+                if (deleteButton.armed) {
+                    deleteButton.armed = false;
+                    deleteButton.confirmed();
+                    return;
+                }
+                deleteButton.armed = true;
+                disarmTimer.restart();
+            }
         }
 
         Timer {
@@ -704,20 +752,171 @@ Rectangle {
 
             interval: 3000
 
-            onTriggered: confirmButton.armed = false
+            onTriggered: deleteButton.armed = false
         }
     }
 
+    // A cross, drawn. Turned 45 degrees it is a delete or close mark; upright
+    // it is a plus.
+    component Cross: Item {
+        id: cross
+
+        property color color: "white"
+        property real thickness: 1.6
+
+        implicitHeight: 8
+        implicitWidth: 8
+        rotation: 45
+
+        Rectangle {
+            anchors.centerIn: parent
+            antialiasing: true
+            color: cross.color
+            height: cross.thickness
+            radius: height / 2
+            width: parent.width
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            antialiasing: true
+            color: cross.color
+            height: parent.height
+            radius: width / 2
+            width: cross.thickness
+        }
+    }
+
+    // A play mark: the right half of a square stood on its corner, stretched
+    // to the usual proportion.
+    component PlayMark: Item {
+        id: playMark
+
+        property color color: "white"
+
+        implicitHeight: 9
+        implicitWidth: Math.round(implicitHeight * 0.85)
+
+        Item {
+            clip: true
+            height: playMark.height
+            width: playMark.height / 2
+
+            transform: Scale {
+                xScale: playMark.width / (playMark.height / 2)
+            }
+
+            Rectangle {
+                antialiasing: true
+                color: playMark.color
+                height: playMark.height / Math.SQRT2
+                rotation: 45
+                width: height
+                x: -width / 2
+                y: (playMark.height - height) / 2
+            }
+        }
+    }
+
+    // A round button carrying one drawn mark: "close", "plus", "play" or
+    // "stop". `tint` colours the mark and the ring.
+    component MarkButton: Rectangle {
+        id: markButton
+
+        property string mark: "close"
+        property color tint: root.colorText
+
+        signal clicked
+
+        border.color: markMouse.containsMouse ? markButton.tint : root.colorLine
+        border.width: 1
+        color: markMouse.pressed ? "#3a3f47" : root.colorRaised
+        height: 20
+        opacity: markButton.enabled ? 1 : 0.4
+        radius: height / 2
+        width: height
+
+        Cross {
+            anchors.centerIn: parent
+            color: markButton.tint
+            height: Math.round(markButton.height * 0.4)
+            rotation: markButton.mark === "plus" ? 0 : 45
+            visible: markButton.mark === "close" || markButton.mark === "plus"
+            width: height
+        }
+
+        PlayMark {
+            anchors.centerIn: parent
+            anchors.horizontalCenterOffset: 1
+            color: markButton.tint
+            implicitHeight: Math.round(markButton.height * 0.42)
+            visible: markButton.mark === "play"
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            color: markButton.tint
+            height: Math.round(markButton.height * 0.34)
+            radius: 1
+            visible: markButton.mark === "stop"
+            width: height
+        }
+
+        MouseArea {
+            id: markMouse
+
+            anchors.fill: parent
+            hoverEnabled: true
+
+            onClicked: markButton.clicked()
+        }
+    }
+
+    // A small rounded label in a colour of its own, for the facts about a
+    // person that are read at a glance: rank, photos, recordings.
+    component Chip: Rectangle {
+        id: chip
+
+        property string text: ""
+        property color tint: root.colorDim
+
+        border.color: Qt.rgba(chip.tint.r, chip.tint.g, chip.tint.b, 0.55)
+        border.width: 1
+        color: Qt.rgba(chip.tint.r, chip.tint.g, chip.tint.b, 0.12)
+        implicitHeight: 15
+        implicitWidth: chipText.implicitWidth + 12
+        radius: height / 2
+
+        Text {
+            id: chipText
+
+            anchors.centerIn: parent
+            color: chip.tint
+            elide: Text.ElideRight
+            font.pixelSize: 8
+            horizontalAlignment: Text.AlignHCenter
+            text: chip.text
+            width: Math.min(implicitWidth, chip.width - 12)
+        }
+    }
+
+    /// A text button. A `primary` one is filled with the accent colour, for
+    /// the one action a form exists for.
     component SmallButton: Rectangle {
         id: button
 
         property string label: ""
+        property bool primary: false
 
         signal clicked
 
-        border.color: mouse.containsMouse ? root.colorAccent : root.colorLine
+        border.color: button.primary || mouse.containsMouse ? root.colorAccent : root.colorLine
         border.width: 1
-        color: mouse.pressed ? "#3a3f47" : root.colorRaised
+        color: {
+            if (button.primary)
+                return mouse.pressed ? "#5fb4dd" : root.colorAccent;
+            return mouse.pressed ? "#3a3f47" : root.colorRaised;
+        }
         height: 20
         opacity: button.enabled ? 1 : 0.4
         radius: 3
@@ -727,7 +926,8 @@ Rectangle {
             id: labelText
 
             anchors.centerIn: parent
-            color: root.colorText
+            color: button.primary ? root.colorInk : root.colorText
+            font.bold: button.primary
             font.pixelSize: 9
             text: button.label
         }
@@ -796,6 +996,267 @@ Rectangle {
             cache: false
             fillMode: Image.PreserveAspectCrop
             sourceSize: Qt.size(thumbnail.size * 2, thumbnail.size * 2)
+        }
+    }
+
+    // A caption over a form field.
+    component FieldLabel: Text {
+        color: root.colorDim
+        font.pixelSize: 9
+        width: parent ? parent.width : 0
+    }
+
+    // What is staged for one kind of sample, and the two ways to stage it.
+    component StagingRow: Item {
+        id: stagingRow
+
+        property string label: ""
+        property string staged: ""
+
+        height: 15
+        width: parent ? parent.width : 0
+
+        Text {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            color: root.colorText
+            font.pixelSize: 10
+            text: stagingRow.label
+        }
+
+        Chip {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: stagingRow.staged !== "" ? stagingRow.staged : "nothing staged"
+            tint: stagingRow.staged !== "" ? root.colorOk : root.colorDim
+            width: Math.min(implicitWidth, stagingRow.width * 0.7)
+        }
+    }
+
+    // The form a person is added or edited with. `person` is an entry of
+    // `Identities.people` when editing, and unset when adding somebody new.
+    component PersonForm: Rectangle {
+        id: form
+
+        property var person: undefined
+
+        readonly property bool editing: form.person !== undefined && form.person !== null
+        /// The enrolled person the typed name resolves to, when adding. The
+        /// same folding `enrol` applies, so "Ada" and "ada" are one person here
+        /// as they are on disk.
+        readonly property var existing: {
+            if (form.editing)
+                return form.person;
+            const id = Identities.personIdFor(nameField.text);
+            if (id === "")
+                return undefined;
+            return Identities.people.find(entry => entry.id === id);
+        }
+
+        signal closed
+        signal saved(string id)
+
+        function save() {
+            const name = form.editing ? form.person.name : nameField.text;
+            if (Identities.enrol(name, titleField.text, root.rankValues[rankCombo.currentIndex]))
+                form.saved(Identities.personIdFor(name));
+        }
+
+        border.color: root.colorAccent
+        border.width: 1
+        color: "#1d2126"
+        height: formColumn.implicitHeight + 16
+        radius: 4
+        width: parent ? parent.width : 0
+
+        Component.onCompleted: {
+            if (!form.editing)
+                return;
+            titleField.text = form.person.title;
+            const rank = root.rankValues.indexOf(form.person.priority);
+            rankCombo.currentIndex = rank >= 0 ? rank : root.defaultRankIndex;
+        }
+
+        Column {
+            id: formColumn
+
+            anchors.left: parent.left
+            anchors.margins: 8
+            anchors.right: parent.right
+            anchors.top: parent.top
+            spacing: 5
+
+            Item {
+                height: 20
+                width: parent.width
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.right: closeForm.left
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: root.colorAccent
+                    elide: Text.ElideRight
+                    font.bold: true
+                    font.pixelSize: 11
+                    text: form.editing ? "Edit " + form.person.name : "New person"
+                }
+
+                MarkButton {
+                    id: closeForm
+
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 18
+                    mark: "close"
+                    tint: root.colorDim
+
+                    onClicked: form.closed()
+                }
+            }
+
+            Text {
+                color: root.colorDim
+                font.pixelSize: 9
+                text: form.editing ? "Change the title or the rank, or stage another photo or recording. Each save adds them as one more sample, up to " + Identities.sampleLimit + " of each." : "A name and at least a photo or a recording. A few samples taken in different light and rooms make recognition more reliable."
+                width: parent.width
+                wrapMode: Text.WordWrap
+            }
+
+            FieldLabel {
+                text: "Name"
+                visible: !form.editing
+            }
+
+            Field {
+                id: nameField
+
+                maximumLength: 64
+                placeholderText: "Name"
+                visible: !form.editing
+            }
+
+            Text {
+                color: root.colorWarn
+                font.pixelSize: 9
+                text: form.existing ? form.existing.name + " is already known: saving adds these samples to them." : ""
+                visible: !form.editing && form.existing !== undefined
+                width: parent.width
+                wrapMode: Text.WordWrap
+            }
+
+            FieldLabel {
+                text: "Title shown on screen"
+            }
+
+            Field {
+                id: titleField
+
+                maximumLength: 64
+                placeholderText: "owner, friend, ..."
+            }
+
+            FieldLabel {
+                text: "Rank"
+            }
+
+            Combo {
+                id: rankCombo
+
+                currentIndex: root.defaultRankIndex
+                model: root.rankLabels
+            }
+
+            Item {
+                height: 2
+                width: parent.width
+            }
+
+            StagingRow {
+                label: "Photo"
+                staged: Identities.stagedFace
+            }
+
+            Flow {
+                spacing: 6
+                width: parent.width
+
+                SmallButton {
+                    enabled: root.faceTracker !== null && root.faceTracker.enabled
+                    label: "Take from camera"
+
+                    onClicked: Identities.stageFaceImage(root.faceTracker.cameraFrame, "camera")
+                }
+
+                SmallButton {
+                    label: "Choose a picture"
+
+                    onClicked: root.browseIdentityFile("face")
+                }
+            }
+
+            StagingRow {
+                label: "Voice"
+                staged: Identities.stagedVoice
+            }
+
+            Flow {
+                spacing: 6
+                width: parent.width
+
+                SmallButton {
+                    enabled: root.speechRecognizer !== null && root.speechRecognizer.lastUtteranceSeconds >= root.speechRecognizer.minimumVoiceSeconds
+                    label: root.speechRecognizer ? "Use last sentence (" + root.speechRecognizer.lastUtteranceSeconds.toFixed(1) + " s)" : "Use last sentence"
+
+                    onClicked: root.speechRecognizer.stageLastUtterance()
+                }
+
+                SmallButton {
+                    label: "Choose a recording"
+
+                    onClicked: root.browseIdentityFile("voice")
+                }
+            }
+
+            Text {
+                color: root.colorBad
+                font.pixelSize: 9
+                text: Identities.problem
+                visible: Identities.problem !== ""
+                width: parent.width
+                wrapMode: Text.WordWrap
+            }
+
+            Item {
+                height: 2
+                width: parent.width
+            }
+
+            Flow {
+                spacing: 6
+                width: parent.width
+
+                SmallButton {
+                    enabled: Identities.ready && (form.editing || nameField.text.trim() !== "")
+                    label: form.editing || form.existing ? "Save" : "Save person"
+                    primary: true
+
+                    onClicked: form.save()
+                }
+
+                SmallButton {
+                    enabled: Identities.stagedFace !== "" || Identities.stagedVoice !== ""
+                    label: "Clear staged"
+
+                    onClicked: Identities.clearStaged()
+                }
+
+                SmallButton {
+                    label: form.editing ? "Done" : "Cancel"
+
+                    onClicked: form.closed()
+                }
+            }
         }
     }
 
@@ -882,20 +1343,8 @@ Rectangle {
     }
 
     // Plays back an enrolled recording from the People section.
-    MediaPlayer {
+    VoicePlayer {
         id: voicePlayer
-
-        audioOutput: AudioOutput {
-        }
-
-        onErrorOccurred: (error, errorString) => {
-            console.warn("cannot play", voicePlayer.source, errorString);
-            root.playingVoice = "";
-        }
-        onPlaybackStateChanged: {
-            if (voicePlayer.playbackState === MediaPlayer.StoppedState)
-                root.playingVoice = "";
-        }
     }
 
     Component {
@@ -1067,7 +1516,7 @@ Rectangle {
                 id: hideTip
 
                 delay: 300
-                text: "Hide this panel. Press Tab, or click or touch the face and hold it for " + Math.round(root.holdToToggleMs / 1000) + " s, to show or hide it."
+                text: "Hide this panel. Press Tab, or click or touch the face and hold it for " + Math.round(root.holdToToggleMs / 1000) + "s, to show or hide it."
                 visible: hideMouse.containsMouse
                 width: Math.min(implicitWidth, 220)
                 x: hideButton.width - width
@@ -1141,14 +1590,6 @@ Rectangle {
                     label: "Face tracking"
 
                     onToggled: KSettings.faceTrackingEnabled = !KSettings.faceTrackingEnabled
-                }
-
-                // People the gallery knows always have their hands tracked.
-                Toggle {
-                    checked: KSettings.loneStrangerHands
-                    label: "Hands of anyone alone in view"
-
-                    onToggled: KSettings.loneStrangerHands = !KSettings.loneStrangerHands
                 }
 
                 Item {
@@ -1305,6 +1746,14 @@ Rectangle {
                     settingName: "eyeMovementRange"
                     to: 3.0
                 }
+
+                // People the gallery knows always have their hands tracked.
+                Toggle {
+                    checked: KSettings.loneStrangerHands
+                    label: "Hands of anyone alone in view"
+
+                    onToggled: KSettings.loneStrangerHands = !KSettings.loneStrangerHands
+                }
             }
 
             Section {
@@ -1382,12 +1831,12 @@ Rectangle {
 
                 onExpandedChanged: {
                     if (!peopleSection.expanded)
-                        root.stopVoice();
+                        voicePlayer.stop();
                 }
 
-                // One card per person: the newest photo, the name and what
-                // they are to Kerfur. Pressing the card opens it on every
-                // photo, every recording and the actions.
+                // One card per person: the newest photo, the name, what they
+                // are to Kerfur, and the two actions taken on the whole person.
+                // Pressing the card opens it on every photo and recording.
                 Repeater {
                     model: Identities.people
 
@@ -1397,11 +1846,11 @@ Rectangle {
                         required property var modelData
 
                         readonly property bool open: root.openPersonId === personCard.modelData.id
+                        readonly property bool editing: root.editingPersonId === personCard.modelData.id
                         readonly property var faces: personCard.modelData.faces
                         readonly property var voices: personCard.modelData.voices
-                        readonly property string newestVoice: personCard.voices.length > 0 ? personCard.voices[personCard.voices.length - 1] : ""
 
-                        border.color: personCard.open ? root.colorAccent : root.colorLine
+                        border.color: personCard.open || personCard.editing ? root.colorAccent : (rowMouse.containsMouse ? "#4c525c" : root.colorLine)
                         border.width: 1
                         color: root.colorRaised
                         height: cardColumn.implicitHeight + 12
@@ -1418,8 +1867,18 @@ Rectangle {
                             spacing: 6
 
                             Item {
-                                height: 40
+                                height: Math.max(42, personText.implicitHeight)
                                 width: parent.width
+
+                                MouseArea {
+                                    id: rowMouse
+
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    hoverEnabled: true
+
+                                    onClicked: root.openPersonId = personCard.open ? "" : personCard.modelData.id
+                                }
 
                                 FaceThumbnail {
                                     id: avatar
@@ -1427,23 +1886,19 @@ Rectangle {
                                     anchors.left: parent.left
                                     anchors.verticalCenter: parent.verticalCenter
                                     fallback: personCard.modelData.name
-                                    size: 40
+                                    size: 42
                                     source: personCard.faces.length > 0 ? personCard.faces[personCard.faces.length - 1] : ""
                                 }
 
-                                MouseArea {
-                                    anchors.fill: parent
-
-                                    onClicked: root.openPersonId = personCard.open ? "" : personCard.modelData.id
-                                }
-
                                 Column {
+                                    id: personText
+
                                     anchors.left: avatar.right
                                     anchors.leftMargin: 8
-                                    anchors.right: quickPlay.visible ? quickPlay.left : parent.right
+                                    anchors.right: personActions.left
                                     anchors.rightMargin: 6
                                     anchors.verticalCenter: parent.verticalCenter
-                                    spacing: 1
+                                    spacing: 3
 
                                     Text {
                                         color: root.colorText
@@ -1455,109 +1910,259 @@ Rectangle {
                                     }
 
                                     Text {
-                                        color: personCard.modelData.priority === 0 ? root.colorWarn : root.colorDim
+                                        color: root.colorDim
                                         elide: Text.ElideRight
+                                        font.italic: true
                                         font.pixelSize: 9
-                                        text: personCard.modelData.standing
+                                        text: personCard.modelData.title
+                                        visible: text !== ""
                                         width: parent.width
                                     }
 
-                                    Text {
-                                        color: root.colorDim
-                                        elide: Text.ElideRight
-                                        font.pixelSize: 9
-                                        text: root.enrolledSamples(personCard.modelData)
+                                    Flow {
+                                        spacing: 3
                                         width: parent.width
+
+                                        Chip {
+                                            text: personCard.modelData.priority === 0 ? "rank 0 - commands" : "rank " + personCard.modelData.priority
+                                            tint: personCard.modelData.priority === 0 ? root.colorWarn : root.colorDim
+                                        }
+
+                                        Chip {
+                                            text: root.countOf(personCard.modelData.faceCount, "photo", "photos")
+                                            tint: personCard.modelData.faceCount > 0 ? root.colorAccent : root.colorDim
+                                        }
+
+                                        Chip {
+                                            text: root.countOf(personCard.modelData.voiceCount, "voice", "voices")
+                                            tint: personCard.modelData.voiceCount > 0 ? root.colorVoice : root.colorDim
+                                        }
                                     }
                                 }
 
-                                // The newest recording, playable without
-                                // opening the card.
-                                SmallButton {
-                                    id: quickPlay
+                                Row {
+                                    id: personActions
 
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    label: root.playingVoice === personCard.newestVoice ? "Stop" : "Play voice"
-                                    visible: personCard.newestVoice !== ""
+                                    spacing: 5
 
-                                    onClicked: root.playVoice(personCard.newestVoice)
-                                }
-                            }
+                                    Chevron {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: personCard.open ? root.colorAccent : root.colorDim
+                                        open: personCard.open
+                                    }
 
-                            Flow {
-                                spacing: 4
-                                visible: personCard.open && personCard.faces.length > 0
-                                width: parent.width
+                                    SmallButton {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        enabled: Identities.ready
+                                        label: personCard.editing ? "Close" : "Edit"
 
-                                Repeater {
-                                    model: personCard.open ? personCard.faces : []
+                                        onClicked: root.toggleEditPerson(personCard.modelData.id)
+                                    }
 
-                                    delegate: FaceThumbnail {
-                                        required property string modelData
+                                    DeleteButton {
+                                        action: "Delete"
+                                        anchors.verticalCenter: parent.verticalCenter
 
-                                        fallback: personCard.modelData.name
-                                        size: 30
-                                        source: modelData
+                                        onConfirmed: root.removePerson(personCard.modelData.id)
                                     }
                                 }
                             }
 
-                            Flow {
-                                spacing: 4
-                                visible: personCard.open && personCard.voices.length > 0
+                            // Every photo and recording, each with its own
+                            // delete, under a heading that can delete them all.
+                            Column {
+                                spacing: 6
+                                visible: personCard.open
                                 width: parent.width
+
+                                Rectangle {
+                                    color: root.colorLine
+                                    height: 1
+                                    width: parent.width
+                                }
+
+                                Item {
+                                    height: 20
+                                    width: parent.width
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: root.colorAccent
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                        text: "Photos  " + personCard.faces.length + "/" + Identities.sampleLimit
+                                    }
+
+                                    DeleteButton {
+                                        action: "Delete all"
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        height: 18
+                                        label: "Delete all"
+                                        visible: personCard.faces.length > 1
+
+                                        onConfirmed: Identities.forgetFaces(personCard.modelData.id)
+                                    }
+                                }
+
+                                Text {
+                                    color: root.colorDim
+                                    font.pixelSize: 9
+                                    text: "No photo yet. Edit to add one."
+                                    visible: personCard.faces.length === 0
+                                }
+
+                                Flow {
+                                    spacing: 6
+                                    visible: personCard.faces.length > 0
+                                    width: parent.width
+
+                                    Repeater {
+                                        model: personCard.open ? personCard.faces : []
+
+                                        delegate: Item {
+                                            id: photo
+
+                                            required property string modelData
+
+                                            height: 48
+                                            width: 48
+
+                                            FaceThumbnail {
+                                                fallback: personCard.modelData.name
+                                                size: 48
+                                                source: photo.modelData
+                                            }
+
+                                            DeleteButton {
+                                                action: "Delete"
+                                                anchors.right: parent.right
+                                                anchors.rightMargin: 2
+                                                anchors.top: parent.top
+                                                anchors.topMargin: 2
+                                                compact: true
+                                                height: 16
+
+                                                onConfirmed: Identities.forgetSample(personCard.modelData.id, photo.modelData)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    height: 20
+                                    width: parent.width
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: root.colorVoice
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                        text: "Voices  " + personCard.voices.length + "/" + Identities.sampleLimit
+                                    }
+
+                                    DeleteButton {
+                                        action: "Delete all"
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        height: 18
+                                        label: "Delete all"
+                                        visible: personCard.voices.length > 1
+
+                                        onConfirmed: {
+                                            voicePlayer.stop();
+                                            Identities.forgetVoices(personCard.modelData.id);
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    color: root.colorDim
+                                    font.pixelSize: 9
+                                    text: "No recording yet. Edit to add one."
+                                    visible: personCard.voices.length === 0
+                                }
 
                                 Repeater {
                                     model: personCard.open ? personCard.voices : []
 
-                                    delegate: SmallButton {
-                                        id: voiceChip
+                                    delegate: Rectangle {
+                                        id: recording
 
                                         required property int index
                                         required property string modelData
 
-                                        label: (root.playingVoice === voiceChip.modelData ? "Stop " : "Play ") + "voice " + (voiceChip.index + 1)
+                                        readonly property bool playing: root.isPlaying(recording.modelData)
 
-                                        onClicked: root.playVoice(voiceChip.modelData)
+                                        border.color: recording.playing ? root.colorOk : root.colorLine
+                                        border.width: 1
+                                        color: root.colorSurface
+                                        height: 26
+                                        radius: 13
+                                        width: parent ? parent.width : 0
+
+                                        MarkButton {
+                                            id: playButton
+
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 3
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            mark: recording.playing ? "stop" : "play"
+                                            tint: root.colorOk
+
+                                            onClicked: voicePlayer.toggle(recording.modelData)
+                                        }
+
+                                        Text {
+                                            anchors.left: playButton.right
+                                            anchors.leftMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: recording.playing ? root.colorOk : root.colorText
+                                            font.pixelSize: 10
+                                            text: "Recording " + (recording.index + 1) + (recording.playing ? "  playing" : "")
+                                        }
+
+                                        DeleteButton {
+                                            action: "Delete"
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 3
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            compact: true
+
+                                            onConfirmed: {
+                                                if (recording.playing)
+                                                    voicePlayer.stop();
+                                                Identities.forgetSample(personCard.modelData.id, recording.modelData);
+                                            }
+                                        }
                                     }
+                                }
+
+                                Text {
+                                    color: root.colorBad
+                                    font.pixelSize: 9
+                                    text: voicePlayer.problem
+                                    visible: voicePlayer.problem !== ""
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
                                 }
                             }
 
-                            Flow {
-                                spacing: 4
-                                visible: personCard.open
+                            Loader {
+                                active: personCard.editing
+                                visible: active
                                 width: parent.width
 
-                                SmallButton {
-                                    label: "Add samples"
+                                sourceComponent: Component {
+                                    PersonForm {
+                                        person: personCard.modelData
 
-                                    onClicked: root.addSamplesTo(personCard.modelData)
-                                }
-
-                                ConfirmButton {
-                                    action: "Forget faces"
-                                    enabled: personCard.modelData.faceCount > 0
-
-                                    onConfirmed: Identities.forgetFaces(personCard.modelData.id)
-                                }
-
-                                ConfirmButton {
-                                    action: "Forget voices"
-                                    enabled: personCard.modelData.voiceCount > 0
-
-                                    onConfirmed: {
-                                        root.stopVoice();
-                                        Identities.forgetVoices(personCard.modelData.id);
-                                    }
-                                }
-
-                                ConfirmButton {
-                                    action: "Remove"
-
-                                    onConfirmed: {
-                                        root.stopVoice();
-                                        Identities.remove(personCard.modelData.id);
+                                        onClosed: root.closePersonForm()
+                                        onSaved: id => root.personSaved(id)
                                     }
                                 }
                             }
@@ -1568,131 +2173,78 @@ Rectangle {
                 Text {
                     color: root.colorDim
                     font.pixelSize: 9
-                    text: "Kerfur knows nobody yet. Add someone below."
-                    visible: Identities.people.length === 0
+                    text: "Kerfur knows nobody yet."
+                    visible: Identities.people.length === 0 && !root.addingPerson
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }
 
+                // Opens the form for somebody new. Hidden while that form is
+                // open, which has its own close.
                 Rectangle {
-                    color: root.colorLine
-                    height: 1
-                    width: parent.width
-                }
-
-                Caption {
-                    label: root.formPerson ? "Add samples to " + root.formPerson.name : "Add a person"
-                    value: Identities.ready ? "" : "loading"
-                }
-
-                Text {
-                    color: root.colorDim
-                    font.pixelSize: 9
-                    text: "Stage a photo, a voice or both, then save. Each save adds them as one more sample; a few taken in different light and rooms make recognition more reliable."
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                }
-
-                Field {
-                    id: personName
-
-                    maximumLength: 64
-                    placeholderText: "Name"
-                }
-
-                Field {
-                    id: personTitle
-
-                    maximumLength: 64
-                    placeholderText: "Title shown on screen (owner, friend, ...)"
-                }
-
-                Combo {
-                    id: personRank
-
-                    currentIndex: root.defaultRankIndex
-                    model: root.rankLabels
-                }
-
-                Caption {
-                    label: "Photo"
-                    value: Identities.stagedFace !== "" ? Identities.stagedFace : "none staged"
-                }
-
-                Flow {
-                    spacing: 6
+                    border.color: addPersonMouse.containsMouse ? root.colorAccent : "#3f6578"
+                    border.width: 1
+                    color: addPersonMouse.pressed ? "#23343f" : "#1b262d"
+                    height: 28
+                    opacity: Identities.ready ? 1 : 0.5
+                    radius: 4
+                    visible: !root.addingPerson
                     width: parent.width
 
-                    SmallButton {
-                        enabled: root.faceTracker !== null && root.faceTracker.enabled
-                        label: "Take from camera"
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 7
 
-                        onClicked: Identities.stageFaceImage(root.faceTracker.cameraFrame, "camera")
+                        Cross {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.colorAccent
+                            height: 9
+                            rotation: 0
+                            thickness: 1.8
+                            width: 9
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.colorAccent
+                            font.bold: true
+                            font.pixelSize: 10
+                            text: Identities.ready ? "Add a person" : "Loading people"
+                        }
                     }
 
-                    SmallButton {
-                        label: "Choose a picture"
+                    MouseArea {
+                        id: addPersonMouse
 
-                        onClicked: root.browseIdentityFile("face")
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        enabled: Identities.ready
+                        hoverEnabled: true
+
+                        onClicked: root.openNewPerson()
                     }
                 }
 
-                Caption {
-                    label: "Voice"
-                    value: Identities.stagedVoice !== "" ? Identities.stagedVoice : "none staged"
-                }
-
-                Flow {
-                    spacing: 6
+                Loader {
+                    active: root.addingPerson
+                    visible: active
                     width: parent.width
 
-                    SmallButton {
-                        enabled: root.speechRecognizer !== null && root.speechRecognizer.lastUtteranceSeconds >= root.speechRecognizer.minimumVoiceSeconds
-                        label: root.speechRecognizer ? "Use last sentence (" + root.speechRecognizer.lastUtteranceSeconds.toFixed(1) + " s)" : "Use last sentence"
-
-                        onClicked: root.speechRecognizer.stageLastUtterance()
-                    }
-
-                    SmallButton {
-                        label: "Choose a recording"
-
-                        onClicked: root.browseIdentityFile("voice")
+                    sourceComponent: Component {
+                        PersonForm {
+                            onClosed: root.closePersonForm()
+                            onSaved: id => root.personSaved(id)
+                        }
                     }
                 }
 
-                Flow {
-                    spacing: 6
-                    width: parent.width
-
-                    SmallButton {
-                        enabled: Identities.ready && personName.text.trim() !== ""
-                        label: root.formPerson ? "Save samples" : "Save person"
-
-                        // The form keeps the person, so another picture or
-                        // sentence for them is one capture and one save away.
-                        onClicked: Identities.enrol(personName.text, personTitle.text, root.rankValues[personRank.currentIndex])
-                    }
-
-                    SmallButton {
-                        enabled: Identities.stagedFace !== "" || Identities.stagedVoice !== ""
-                        label: "Clear staged"
-
-                        onClicked: Identities.clearStaged()
-                    }
-
-                    SmallButton {
-                        label: "New person"
-                        visible: personName.text !== "" || personTitle.text !== ""
-
-                        onClicked: root.clearForm()
-                    }
-                }
-
+                // A refusal from an action outside the forms, such as a
+                // delete. A form shows its own.
                 Text {
                     color: root.colorBad
                     font.pixelSize: 9
                     text: Identities.problem
-                    visible: Identities.problem !== ""
+                    visible: Identities.problem !== "" && !root.addingPerson && root.editingPersonId === ""
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }

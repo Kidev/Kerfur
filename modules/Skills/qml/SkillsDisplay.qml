@@ -5,9 +5,11 @@ import QtQuick.Controls
 import Skills
 
 // What the skills are doing, for the control panel, and where a skill is added
-// or edited. Everything else here is a consequence of what was said, and the
-// Yes and No buttons only answer a question Kerfur already asked out loud.
-Rectangle {
+// or edited. Each skill is a card of its own, the way to add another sits
+// below them and outside every card, and what was last heard and done is in a
+// box of its own under that. The Yes and No buttons there only answer a
+// question Kerfur already asked out loud.
+Column {
     id: root
 
     // Where a person writing a skill reads what one can do.
@@ -113,334 +115,412 @@ Rectangle {
         }
     }
 
-    border.color: "#3c414a"
-    border.width: 1
-    color: "#1f2226"
-    implicitHeight: column.implicitHeight + 16
-    radius: 4
+    spacing: 6
 
-    Column {
-        id: column
+    Text {
+        color: "#98a0ac"
+        font.pixelSize: 10
+        text: "none loaded"
+        visible: Skills.skills.length === 0
+    }
 
-        anchors.left: parent.left
-        anchors.margins: 8
-        anchors.right: parent.right
-        anchors.top: parent.top
-        spacing: 6
+    // Every skill file, with what it does. A file that failed to load is
+    // listed in red, so an added skill that broke can still be fixed or
+    // removed from here.
+    Repeater {
+        model: Skills.skills
 
-        // Every skill file, with what it does. A file that failed to load is
-        // listed in red, so an added skill that broke can still be fixed or
-        // removed from here.
-        Column {
-            spacing: 4
-            width: parent.width
+        delegate: Rectangle {
+            id: skillCard
 
-            Text {
-                color: "#98a0ac"
-                font.pixelSize: 10
-                text: "none loaded"
-                visible: Skills.skills.length === 0
-            }
+            required property var modelData
 
-            Repeater {
-                model: Skills.skills
+            border.color: skillCard.modelData.loaded ? "#3c414a" : "#8a3a3a"
+            border.width: 1
+            color: "#1f2226"
+            height: skillRow.height + 12
+            radius: 4
+            width: parent ? parent.width : 0
 
-                delegate: Item {
-                    id: skillRow
+            Item {
+                id: skillRow
 
-                    required property var modelData
+                anchors.left: parent.left
+                anchors.margins: 6
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: Math.max(skillText.implicitHeight, skillButtons.height)
 
-                    height: Math.max(skillText.implicitHeight, skillButtons.height)
-                    width: parent ? parent.width : 0
+                Column {
+                    id: skillText
 
-                    Column {
-                        id: skillText
+                    anchors.left: parent.left
+                    anchors.right: skillButtons.left
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 0
 
-                        anchors.left: parent.left
-                        anchors.right: skillButtons.left
-                        anchors.rightMargin: 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 0
-
-                        Text {
-                            color: skillRow.modelData.loaded ? "#7cff5a" : "#ffb4b4"
-                            elide: Text.ElideRight
-                            font.bold: true
-                            font.pixelSize: 10
-                            text: {
-                                let origin = "";
-                                if (skillRow.modelData.overrides)
-                                    origin = "  (edited here)";
-                                else if (skillRow.modelData.added)
-                                    origin = "  (added here)";
-                                return skillRow.modelData.name + origin;
-                            }
-                            width: parent.width
+                    Text {
+                        color: skillCard.modelData.loaded ? "#7cff5a" : "#ffb4b4"
+                        elide: Text.ElideRight
+                        font.bold: true
+                        font.pixelSize: 10
+                        text: {
+                            let origin = "";
+                            if (skillCard.modelData.overrides)
+                                origin = "  (edited here)";
+                            else if (skillCard.modelData.added)
+                                origin = "  (added here)";
+                            return skillCard.modelData.name + origin;
                         }
-
-                        Text {
-                            color: "#98a0ac"
-                            font.pixelSize: 8
-                            text: skillRow.modelData.description
-                            visible: text !== ""
-                            width: parent.width
-                            wrapMode: Text.WordWrap
-                        }
+                        width: parent.width
                     }
 
-                    Row {
-                        id: skillButtons
+                    Text {
+                        color: "#98a0ac"
+                        font.pixelSize: 8
+                        text: skillCard.modelData.description
+                        visible: text !== ""
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                    }
+                }
 
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 4
+                Row {
+                    id: skillButtons
 
-                        SkillButton {
-                            enabled: Skills.storeReady
-                            label: "Edit"
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 4
 
-                            onClicked: root.editSkill(skillRow.modelData)
-                        }
+                    SkillButton {
+                        enabled: Skills.storeReady
+                        label: "Edit"
 
-                        // An edited bundled skill goes back to the bundled
-                        // file; an added one is gone.
-                        ConfirmSkillButton {
-                            action: skillRow.modelData.overrides ? "Revert" : "Remove"
-                            visible: skillRow.modelData.added
+                        onClicked: root.editSkill(skillCard.modelData)
+                    }
 
-                            onConfirmed: Skills.uninstall(skillRow.modelData.file)
-                        }
+                    // An edited bundled skill goes back to the bundled
+                    // file; an added one is gone.
+                    ConfirmSkillButton {
+                        action: skillCard.modelData.overrides ? "Revert" : "Remove"
+                        visible: skillCard.modelData.added
+
+                        onConfirmed: Skills.uninstall(skillCard.modelData.file)
                     }
                 }
             }
         }
+    }
 
-        Row {
-            spacing: 8
+    // Below the cards and outside them: this adds one more skill beside the
+    // ones listed.
+    Item {
+        height: 26
+        width: parent.width
 
-            SkillButton {
+        Rectangle {
+            id: addSkillButton
+
+            anchors.left: parent.left
+            anchors.right: addSkillLink.left
+            anchors.rightMargin: 10
+            border.color: addSkillMouse.containsMouse ? "#8ad8ff" : "#3f6578"
+            border.width: 1
+            color: addSkillMouse.pressed ? "#23343f" : "#1b262d"
+            height: parent.height
+            opacity: Skills.storeReady ? 1 : 0.5
+            radius: 4
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 7
+
+                // A plus, drawn rather than typed, as the panel draws its
+                // other marks.
+                Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 9
+                    width: 9
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        antialiasing: true
+                        color: "#8ad8ff"
+                        height: 1.8
+                        radius: height / 2
+                        width: parent.width
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        antialiasing: true
+                        color: "#8ad8ff"
+                        height: parent.height
+                        radius: width / 2
+                        width: 1.8
+                    }
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: "#8ad8ff"
+                    font.bold: true
+                    font.pixelSize: 10
+                    text: "Add a skill"
+                }
+            }
+
+            MouseArea {
+                id: addSkillMouse
+
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
                 enabled: Skills.storeReady
-                label: "Add a skill"
+                hoverEnabled: true
 
                 onClicked: root.newSkill()
             }
-
-            ReferenceLink {
-                anchors.verticalCenter: parent.verticalCenter
-            }
         }
 
-        Text {
-            color: "#666"
-            font.pixelSize: 8
-            text: "via " + Skills.backendName + (Skills.directory !== "" ? " - " + Skills.directory : "")
-            width: parent.width
-            wrapMode: Text.WrapAnywhere
+        ReferenceLink {
+            id: addSkillLink
+
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
         }
+    }
 
-        Rectangle {
-            border.color: "#8a3a3a"
-            border.width: 1
-            color: "#3a2326"
-            height: problemText.height + 8
-            radius: 3
-            visible: Skills.problem !== ""
-            width: parent.width
+    // What was last heard and done, and the state every skill shares.
+    Rectangle {
+        border.color: "#3c414a"
+        border.width: 1
+        color: "#1f2226"
+        height: column.implicitHeight + 16
+        radius: 4
+        width: parent.width
 
-            Text {
-                id: problemText
-
-                anchors.left: parent.left
-                anchors.margins: 4
-                anchors.right: parent.right
-                anchors.top: parent.top
-                color: "#ffb4b4"
-                font.pixelSize: 8
-                text: Skills.problem
-                wrapMode: Text.WordWrap
-            }
-        }
-
-        // The last thing heard, and what it was taken to mean. The refusal case
-        // is the one worth seeing: a command that was understood and declined
-        // looks exactly like one that was never heard, unless it says so.
         Column {
-            spacing: 2
-            visible: Skills.lastUtterance !== ""
-            width: parent.width
+            id: column
+
+            anchors.left: parent.left
+            anchors.margins: 8
+            anchors.right: parent.right
+            anchors.top: parent.top
+            spacing: 6
 
             Text {
-                color: "#eceff4"
-                font.pixelSize: 10
-                text: "\"" + Skills.lastUtterance + "\""
+                color: "#666"
+                font.pixelSize: 8
+                text: "via " + Skills.backendName + (Skills.directory !== "" ? " - " + Skills.directory : "")
                 width: parent.width
-                wrapMode: Text.WordWrap
+                wrapMode: Text.WrapAnywhere
             }
 
-            Text {
-                color: {
-                    if (Skills.lastIntent === "")
-                        return "#888";
-                    return Skills.lastAuthorised ? "#7cff5a" : "#ffaa44";
-                }
-                font.pixelSize: 9
-                text: {
-                    const who = Skills.lastSpeaker === "" ? "a stranger" : Skills.lastSpeaker;
-                    if (Skills.lastIntent === "")
-                        return who + " - not understood";
-                    return who + " - " + Skills.lastIntent;
-                }
+            Rectangle {
+                border.color: "#8a3a3a"
+                border.width: 1
+                color: "#3a2326"
+                height: problemText.height + 8
+                radius: 3
+                visible: Skills.problem !== ""
                 width: parent.width
-                wrapMode: Text.WordWrap
-            }
-        }
-
-        // An outstanding question. It is answered by voice; these are here so
-        // that a microphone that cannot hear the answer is not a dead end.
-        Rectangle {
-            border.color: "#ffaa44"
-            border.width: 1
-            color: "#3a3222"
-            height: confirmColumn.implicitHeight + 8
-            radius: 3
-            visible: Skills.awaitingConfirmation
-            width: parent.width
-
-            Column {
-                id: confirmColumn
-
-                anchors.left: parent.left
-                anchors.margins: 4
-                anchors.right: parent.right
-                anchors.top: parent.top
-                spacing: 4
 
                 Text {
-                    color: "#ffd9a0"
-                    font.pixelSize: 9
-                    text: Skills.question
+                    id: problemText
+
+                    anchors.left: parent.left
+                    anchors.margins: 4
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    color: "#ffb4b4"
+                    font.pixelSize: 8
+                    text: Skills.problem
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            // The last thing heard, and what it was taken to mean. The refusal case
+            // is the one worth seeing: a command that was understood and declined
+            // looks exactly like one that was never heard, unless it says so.
+            Column {
+                spacing: 2
+                visible: Skills.lastUtterance !== ""
+                width: parent.width
+
+                Text {
+                    color: "#eceff4"
+                    font.pixelSize: 10
+                    text: "\"" + Skills.lastUtterance + "\""
                     width: parent.width
                     wrapMode: Text.WordWrap
                 }
 
-                Row {
-                    spacing: 6
+                Text {
+                    color: {
+                        if (Skills.lastIntent === "")
+                            return "#888";
+                        return Skills.lastAuthorised ? "#7cff5a" : "#ffaa44";
+                    }
+                    font.pixelSize: 9
+                    text: {
+                        const who = Skills.lastSpeaker === "" ? "a stranger" : Skills.lastSpeaker;
+                        if (Skills.lastIntent === "")
+                            return who + " - not understood";
+                        return who + " - " + Skills.lastIntent;
+                    }
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                }
+            }
 
-                    Repeater {
-                        model: [
-                            {
-                                "label": "Yes",
-                                "accept": true
-                            },
-                            {
-                                "label": "No",
-                                "accept": false
-                            }
-                        ]
+            // An outstanding question. It is answered by voice; these are here so
+            // that a microphone that cannot hear the answer is not a dead end.
+            Rectangle {
+                border.color: "#ffaa44"
+                border.width: 1
+                color: "#3a3222"
+                height: confirmColumn.implicitHeight + 8
+                radius: 3
+                visible: Skills.awaitingConfirmation
+                width: parent.width
 
-                        delegate: Rectangle {
-                            id: answer
+                Column {
+                    id: confirmColumn
 
-                            required property var modelData
+                    anchors.left: parent.left
+                    anchors.margins: 4
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    spacing: 4
 
-                            border.color: "#3c414a"
-                            border.width: 1
-                            color: mouse.pressed ? "#3a3f47" : "#2c3037"
-                            height: 18
-                            radius: 3
-                            width: 44
+                    Text {
+                        color: "#ffd9a0"
+                        font.pixelSize: 9
+                        text: Skills.question
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                    }
 
-                            Text {
-                                anchors.centerIn: parent
-                                color: "#eceff4"
-                                font.pixelSize: 9
-                                text: answer.modelData.label
-                            }
+                    Row {
+                        spacing: 6
 
-                            MouseArea {
-                                id: mouse
+                        Repeater {
+                            model: [
+                                {
+                                    "label": "Yes",
+                                    "accept": true
+                                },
+                                {
+                                    "label": "No",
+                                    "accept": false
+                                }
+                            ]
 
-                                anchors.fill: parent
+                            delegate: Rectangle {
+                                id: answer
 
-                                onClicked: answer.modelData.accept ? Skills.confirmPending() : Skills.cancelPending()
+                                required property var modelData
+
+                                border.color: "#3c414a"
+                                border.width: 1
+                                color: mouse.pressed ? "#3a3f47" : "#2c3037"
+                                height: 18
+                                radius: 3
+                                width: 44
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    color: "#eceff4"
+                                    font.pixelSize: 9
+                                    text: answer.modelData.label
+                                }
+
+                                MouseArea {
+                                    id: mouse
+
+                                    anchors.fill: parent
+
+                                    onClicked: answer.modelData.accept ? Skills.confirmPending() : Skills.cancelPending()
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        Text {
-            color: "#c8b0ff"
-            font.pixelSize: 9
-            text: "says: " + Skills.lastSpoken
-            visible: Skills.lastSpoken !== ""
-            width: parent.width
-            wrapMode: Text.WordWrap
-        }
+            Text {
+                color: "#c8b0ff"
+                font.pixelSize: 9
+                text: "says: " + Skills.lastSpoken
+                visible: Skills.lastSpoken !== ""
+                width: parent.width
+                wrapMode: Text.WordWrap
+            }
 
-        Rectangle {
-            color: "#3c414a"
-            height: 1
-            visible: Blackboard.keys.length > 0
-            width: parent.width
-        }
+            Rectangle {
+                color: "#3c414a"
+                height: 1
+                visible: Blackboard.keys.length > 0
+                width: parent.width
+            }
 
-        // The variables, live. This is the whole state of every skill, and
-        // seeing it change while talking is how a skill gets debugged.
-        Column {
-            spacing: 1
-            width: parent.width
+            // The variables, live. This is the whole state of every skill, and
+            // seeing it change while talking is how a skill gets debugged.
+            Column {
+                spacing: 1
+                width: parent.width
 
-            Repeater {
-                model: Blackboard.keys
+                Repeater {
+                    model: Blackboard.keys
 
-                delegate: Row {
-                    id: variable
+                    delegate: Row {
+                        id: variable
 
-                    required property string modelData
+                        required property string modelData
 
-                    spacing: 4
+                        spacing: 4
 
-                    Text {
-                        color: "#9e9e9e"
-                        font.pixelSize: 9
-                        text: variable.modelData + ":"
-                    }
+                        Text {
+                            color: "#9e9e9e"
+                            font.pixelSize: 9
+                            text: variable.modelData + ":"
+                        }
 
-                    Text {
-                        color: "#eceff4"
-                        font.pixelSize: 9
-                        // Through the snapshot rather than through `values`,
-                        // because the key is only known at run time and a
-                        // binding cannot depend on a property it cannot name.
-                        text: String(Blackboard.snapshot[variable.modelData] ?? "")
+                        Text {
+                            color: "#eceff4"
+                            font.pixelSize: 9
+                            // Through the snapshot rather than through `values`,
+                            // because the key is only known at run time and a
+                            // binding cannot depend on a property it cannot name.
+                            text: String(Blackboard.snapshot[variable.modelData] ?? "")
+                        }
                     }
                 }
             }
-        }
 
-        Rectangle {
-            border.color: "#3c414a"
-            border.width: 1
-            color: reloadMouse.pressed ? "#3a3f47" : "#2c3037"
-            height: 18
-            radius: 3
-            width: 60
+            Rectangle {
+                border.color: "#3c414a"
+                border.width: 1
+                color: reloadMouse.pressed ? "#3a3f47" : "#2c3037"
+                height: 18
+                radius: 3
+                width: 60
 
-            Text {
-                anchors.centerIn: parent
-                color: "#eceff4"
-                font.pixelSize: 9
-                text: "Reload"
-            }
+                Text {
+                    anchors.centerIn: parent
+                    color: "#eceff4"
+                    font.pixelSize: 9
+                    text: "Reload"
+                }
 
-            MouseArea {
-                id: reloadMouse
+                MouseArea {
+                    id: reloadMouse
 
-                anchors.fill: parent
+                    anchors.fill: parent
 
-                onClicked: Skills.reload()
+                    onClicked: Skills.reload()
+                }
             }
         }
     }

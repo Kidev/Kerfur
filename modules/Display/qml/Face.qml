@@ -30,7 +30,7 @@ Item {
     // Face tracking properties
     readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.faceDetected
     // How long a press on the face lasts before it counts as `held`.
-    readonly property int holdDuration: 5000
+    readonly property int holdDuration: 3000
     property bool isBlinking: false
     property bool isDoubleBlink: false
     property bool isTouched: false

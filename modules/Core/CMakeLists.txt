@@ -23,6 +23,8 @@ qt_add_qml_module(
             src/identitylibrary.h
             src/wavfile.cpp
             src/wavfile.h
+            src/voiceplayer.cpp
+            src/voiceplayer.h
             src/assetsearch.cpp
             src/assetsearch.h
             src/capturepermission.cpp
@@ -45,6 +47,11 @@ qt_add_qml_module(
 )
 
 target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Gui Qt6::Qml)
+
+# VoicePlayer plays through the browser on the web build.
+if (NOT EMSCRIPTEN)
+    target_link_libraries(${CORE_MODULE} PRIVATE Qt6::Multimedia)
+endif ()
 
 # The browser's file picker is Qt's private QWasmLocalFileAccess.
 if (EMSCRIPTEN)
