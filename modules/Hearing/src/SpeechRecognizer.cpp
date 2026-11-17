@@ -5,6 +5,7 @@
 
 #include "identitylibrary.h"
 #include "modeldirectory.h"
+#include "session.h"
 #include "speakerembedder.h"
 #include "voiceidentifier.h"
 
@@ -85,8 +86,12 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
     // destructor, and QObject destroys children after the derived part of the
     // parent is already gone. Owned by the unique_ptr instead, which runs
     // first.
-    m_modelPath = Kerfur::ModelDirectory::locate(speechModelFile);
-    applyModelPath();
+    if (Kerfur::Session::light()) {
+        m_modelError = QStringLiteral("Speech recognition is off in a light session");
+    } else {
+        m_modelPath = Kerfur::ModelDirectory::locate(speechModelFile);
+        applyModelPath();
+    }
 
     connect(m_whisperEngine.get(),
             &WhisperEngine::transcriptionReady,
@@ -135,7 +140,9 @@ SpeechRecognizer::SpeechRecognizer(QObject *parent)
             this,
             &SpeechRecognizer::handleAudioInputsChanged);
 
-    startVoiceIdentification();
+    if (!Kerfur::Session::light()) {
+        startVoiceIdentification();
+    }
     enumerateAudioDevices();
 }
 
@@ -305,6 +312,10 @@ void SpeechRecognizer::refreshDevices()
 void SpeechRecognizer::setEnabled(bool enabled)
 {
     if (m_enabled == enabled) {
+        return;
+    }
+    // The setting is kept as it is, so the next full session listens again.
+    if (enabled && Kerfur::Session::light()) {
         return;
     }
 

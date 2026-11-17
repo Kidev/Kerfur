@@ -6,6 +6,7 @@
 #include "cameraselection.h"
 #include "faceanalysisworker.h"
 #include "identitylibrary.h"
+#include "session.h"
 #include "videoframeimage.h"
 
 #include <QCameraFormat>
@@ -207,7 +208,10 @@ FaceTracker::FaceTracker(QObject *parent)
             this,
             &FaceTracker::handleVideoInputsChanged);
 
-    startWorker();
+    // A light session loads no model, so it has no worker to load them in.
+    if (!Kerfur::Session::light()) {
+        startWorker();
+    }
     enumerateCameras();
 }
 
@@ -351,6 +355,10 @@ void FaceTracker::restartCamera()
 void FaceTracker::setEnabled(bool enabled)
 {
     if (m_enabled == enabled) {
+        return;
+    }
+    // The setting is kept as it is, so the next full session looks again.
+    if (enabled && Kerfur::Session::light()) {
         return;
     }
 
@@ -966,10 +974,12 @@ void FaceTracker::setLoneStrangerHands(bool enabled)
     m_loneStrangerHands = enabled;
     // Queued with the value, so the worker never reads this object's state
     // from its own thread.
-    QMetaObject::invokeMethod(m_worker,
-                              &Kerfur::FaceAnalysisWorker::setLoneStrangerHands,
-                              Qt::QueuedConnection,
-                              enabled);
+    if (m_worker != nullptr) {
+        QMetaObject::invokeMethod(m_worker,
+                                  &Kerfur::FaceAnalysisWorker::setLoneStrangerHands,
+                                  Qt::QueuedConnection,
+                                  enabled);
+    }
     emit loneStrangerHandsChanged();
 }
 

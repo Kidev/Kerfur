@@ -5,6 +5,7 @@
 
 #include "assetsearch.h"
 #include "blackboard.h"
+#include "session.h"
 #include "skill.h"
 #include "skillsource.h"
 #include "skillstore.h"
@@ -69,6 +70,11 @@ SkillRegistry *SkillRegistry::create(QQmlEngine *engine, QJSEngine *scriptEngine
     QJSEngine::setObjectOwnership(&registry, QJSEngine::CppOwnership);
 
     registry.m_engine = engine;
+    // A light session runs no skill: it hears nothing to trigger one, and the
+    // panel shows none to edit.
+    if (Session::light()) {
+        return &registry;
+    }
     // The skills load once the store has been read: it holds the skills added
     // from the panel and, on the web build, the blackboard they read. `opened`
     // is queued, so loading skill files -- which instantiate QML components

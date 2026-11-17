@@ -45,7 +45,8 @@
     .step .label { display: flex; justify-content: space-between; gap: 12px; }
     .step .name { font-weight: 600; }
     .step .detail { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
-    .step[data-state="waiting"] .name { color: var(--dim); }
+    .step[data-state="waiting"] .name,
+    .step[data-state="skipped"] .name { color: var(--dim); }
     .step[data-state="failed"] .detail { color: var(--bad); }
     .bar {
       position: relative;
@@ -123,7 +124,8 @@
     // compressed length, which says nothing about how much is left to read.
     // The version goes on every URL of the runtime: the glue script and the
     // binary must come from the same build, and a cache in front of the server
-    // that kept one but not the other would pair them anyway.
+    // that kept one but not the other would pair them anyway. `dataFiles`
+    // gives each model's path and its byte range in the data file.
     const BUILD = {
       name: '@PROJECT_BINARY@',
       entry: '@PROJECT_BINARY@_entry',
@@ -131,7 +133,13 @@
       wasmBytes: @WASM_BYTES@,
       dataBytes: @DATA_BYTES@,
       dataHash: '@DATA_HASH@',
+      dataFiles: @DATA_FILES@,
     };
+
+    // `?light` in the address starts Kerfur without its models, camera and
+    // microphone: the models are neither downloaded nor read from this
+    // browser, and the application is told with `--light`.
+    const LIGHT = new URLSearchParams(window.location.search).has('light');
 
     // The models are kept in IndexedDB under the build's hash of the data file,
     // so an unchanged set is read back from this browser and a changed one is
@@ -192,6 +200,14 @@
       fail(text) {
         this.element.dataset.state = 'failed';
         this.bar.classList.remove('busy');
+        this.detail.textContent = text;
+      }
+
+      skip(text) {
+        this.element.dataset.state = 'skipped';
+        this.bar.classList.remove('busy');
+        this.fill.style.width = '';
+        this.bar.removeAttribute('aria-valuenow');
         this.detail.textContent = text;
       }
     }
@@ -325,6 +341,10 @@
     // browser's storage when it holds this build's copy, from the server
     // otherwise.
     async function loadModels(step) {
+      if (LIGHT) {
+        step.skip('Not loaded in light mode');
+        return null;
+      }
       if (BUILD.dataBytes <= 0) {
         step.done('None');
         return null;
@@ -425,14 +445,6 @@
               screen.style.display = 'block';
             },
             onExit: exit => {
-              // A clean quit (Esc) closes the tab. A browser only lets a
-              // script close a tab that a script opened, so when it refuses,
-              // the page says the application exited.
-              if (!exit.crashed && !exit.code) {
-                window.close();
-                if (window.closed)
-                  return;
-              }
               screen.style.display = 'none';
               loader.hidden = false;
               starting.fail(exit.crashed ? 'Stopped' : 'Exited');
@@ -445,14 +457,20 @@
             },
           },
         };
+        if (LIGHT)
+          config.arguments = ['--light'];
         if (data) {
-          // Asked for once, while the runtime starts; the reference is dropped
-          // so the copy is freed once it has been unpacked.
-          config.getPreloadedPackage = () => {
-            const buffer = data;
-            data = null;
-            return buffer;
-          };
+          // Each model becomes a file over its range of the data file, which
+          // the file system keeps rather than copies.
+          const bytes = new Uint8Array(data);
+          data = null;
+          config.preRun = [instance => {
+            for (const file of BUILD.dataFiles) {
+              instance.FS.mkdirTree(file.path.slice(0, file.path.lastIndexOf('/')));
+              instance.FS.createDataFile(file.path, null, bytes.subarray(file.start, file.end),
+                                         true, true, true);
+            }
+          }];
         }
         await qtLoad(config);
       } catch (error) {

@@ -35,6 +35,7 @@
 #include <QSurfaceFormat>
 
 #ifdef KERFUR_PERCEPTION_CPU
+#include "session.h"
 #include "visionproducer.h"
 #include "worldmodel.h"
 #endif
@@ -69,7 +70,8 @@ int main(int argc, char *argv[])
     {
         const QSettings settings;
         vision.setEnabled(
-            settings.value(QStringLiteral("Perception/cpuPipelineEnabled"), false).toBool());
+            !Kerfur::Session::light()
+            && settings.value(QStringLiteral("Perception/cpuPipelineEnabled"), false).toBool());
     }
 #endif
 

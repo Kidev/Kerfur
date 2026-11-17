@@ -31,6 +31,8 @@ qt_add_qml_module(
             src/capturepermission.h
             src/settingspath.cpp
             src/settingspath.h
+            src/session.cpp
+            src/session.h
             src/boundedqueue.h
             src/perceptiontypes.cpp
             src/perceptiontypes.h

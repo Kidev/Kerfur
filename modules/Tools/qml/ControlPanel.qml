@@ -1439,7 +1439,7 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        height: 62
+        height: Session.light ? 40 : 62
 
         Text {
             id: wordmark
@@ -1471,6 +1471,7 @@ Rectangle {
             anchors.top: wordmark.bottom
             anchors.topMargin: 7
             spacing: 12
+            visible: !Session.light
 
             StatusLight {
                 label: "vision"
@@ -1601,6 +1602,7 @@ Rectangle {
                 summary: root.visionSummary()
                 summaryColor: root.visionColor()
                 title: "Vision"
+                visible: !Session.light
 
                 Toggle {
                     checked: KSettings.faceTrackingEnabled
@@ -1779,6 +1781,7 @@ Rectangle {
                 summary: root.hearingSummary()
                 summaryColor: root.hearingColor()
                 title: "Hearing"
+                visible: !Session.light
 
                 Toggle {
                     checked: KSettings.speechRecognitionEnabled
@@ -1845,6 +1848,7 @@ Rectangle {
                 summary: root.peopleSummary()
                 summaryColor: Identities.problem !== "" ? root.colorWarn : root.colorDim
                 title: "People"
+                visible: !Session.light
 
                 onExpandedChanged: {
                     if (!peopleSection.expanded)
@@ -2273,6 +2277,7 @@ Rectangle {
                 summary: Skills.skillNames.length + " loaded"
                 summaryColor: Skills.problem !== "" ? root.colorBad : root.colorDim
                 title: "Skills"
+                visible: !Session.light
 
                 Loader {
                     active: skillsSection.expanded

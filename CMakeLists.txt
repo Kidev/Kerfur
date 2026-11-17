@@ -112,25 +112,13 @@ target_link_libraries(
             Skillsplugin
 )
 
-# WebAssembly has no filesystem to provision models into, so they are baked
-# into the Emscripten virtual one at link time and ModelCatalog looks there.
-# Absent at configure time means a build with no perception rather than a build
-# failure, which is the state a fresh clone that has not run `make models` is in.
+# The web models are packed by cmake/pack-web-models.sh and unpacked into
+# /models by the page, which skips them for a light session.
 if (EMSCRIPTEN)
-    if (EXISTS "${CMAKE_SOURCE_DIR}/models")
-        target_link_options(
-            ${PROJECT_NAME}
-            PRIVATE "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/models@/models"
-        )
-        message(STATUS "Preloading models from ${CMAKE_SOURCE_DIR}/models")
-    else ()
-        message(WARNING "No models directory; the web build will start without perception")
-    endif ()
-
-    # Skill files are read at run time, so they ship the same way as the models.
+    # Skill files are read at run time from the virtual file system.
     target_link_options(
         ${PROJECT_NAME}
-        PRIVATE "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/skills@/skills"
+        PRIVATE "SHELL:--embed-file ${CMAKE_SOURCE_DIR}/skills@/skills"
     )
 
     # IndexedDB backs the directory people enrolled at run time are kept in.

@@ -24,7 +24,9 @@ Archive to extract:
 - [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz) (glibc 2.38 or newer)
 
 ## Using
-`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for three seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on (in a browser it closes the tab, where the browser allows a script to do so). While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
+`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for three seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. In a browser it closes the tab, or goes back to the previous page when the browser refuses (a browser lets a script close only a tab with a single page in its history). While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
+
+Started with `--light`, Kerfur loads no model, runs no skill and opens neither the camera nor the microphone. The face, the screen and the glow run as usual, and the panel shows only its Screen and Glow sections. In a browser, add `?light` to the address ([kerfur.kidev.org/?light](https://kerfur.kidev.org/?light)): the page then skips the model download and never reads the copy kept in the browser.
 
 ## Building
 ### Requirements
@@ -46,11 +48,11 @@ kidev:~$ make QT_ROOT_DIR=/opt/Qt/6.12.0/gcc_64
 - `make run-web` serves that build locally. Run `make web` first.
 - `make upload-web` uploads the web build into a `Kerfur` folder on a web server. It needs `WASM_UPLOAD_SOCKET`, `WASM_UPLOAD_USERNAME` and `WASM_UPLOAD_PASSWORD`.
 - `make models` fetches the perception models, checks each against its SHA-256, and copies them into the application data directory, which a desktop build searches first.
-- `make models-pi` and `make models-web` do the same for the Raspberry Pi and web profiles. `make models-web` writes into `models/` in the source tree, and `make web` runs it and bakes the result into the WebAssembly file system.
+- `make models-pi` and `make models-web` do the same for the Raspberry Pi and web profiles. `make models-web` writes into `models/` in the source tree, and `make web` runs it and packs the result into the data file the page downloads ([`cmake/pack-web-models.sh`](cmake/pack-web-models.sh)).
 - `make` bundles the `MODELS_PROFILE` profile (`desktop` by default, `pi` for a Pi) into `install/models`, so every archive, AppImage and installer made from that tree carries its models. `MODELS_CACHE_DIR` (`~/.cache/kidev/Kerfur/models`) keeps the verified downloads, and a rebuild copies from it.
 
 ### Web build
-The page ([`web/index.html`](web/index.html)) shows the application download, the model download and the start-up as three steps, each with its own progress bar. The two downloads run in parallel, and the application compiles while it arrives.
+The page ([`web/index.html`](web/index.html)) shows the application download, the model download and the start-up as three steps, each with its own progress bar. The two downloads run in parallel, and the application compiles while it arrives. Before the application starts, the page writes each model into `/models` in the WebAssembly file system.
 
 The models are kept in the browser's IndexedDB under the SHA-256 of the data file. A later visit reads them from there, and a build with different models downloads them once and replaces the stored copy. A browser short on disk space may clear that storage, which costs one more download. Saving a person asks the browser to keep the site's storage from then on (Firefox shows a prompt for it), because people taught cannot be downloaded again. Clearing the site's data removes everything.
 

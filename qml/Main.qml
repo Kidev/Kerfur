@@ -1,3 +1,4 @@
+import Core
 import Display
 import QtQuick
 import QtQuick.Window
@@ -8,7 +9,7 @@ Window {
     id: root
 
     function requestExit() {
-        Qt.quit();
+        Session.end();
     }
 
     // Whether a text field or the skill editor has the keyboard. Esc and Tab

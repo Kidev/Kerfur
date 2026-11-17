@@ -131,9 +131,9 @@ export VCPKG_OVERLAY_TRIPLETS
 # and checksum verified once rather than at run time. The desktop profile lands
 # in the application data directory, which is where KSettings points
 # `Paths/modelsPath` by default. The wasm profile lands in the source tree,
-# because the web build bakes that directory into the Emscripten file system at
-# link time and a browser has nowhere else to read it from.
+# where the web build packs it into the data file the page downloads.
 MODELS_SCRIPT := $(shell pwd)/cmake/fetch-models.sh
+PACK_WEB_MODELS_SCRIPT := $(shell pwd)/cmake/pack-web-models.sh
 MODELS_WEB_DIR ?= $(shell pwd)/models
 # Make's own conditionals rather than a $(shell) with a case statement: the
 # closing paren of a shell case label terminates the $(shell ...) expansion.
@@ -427,6 +427,7 @@ web-build:
 
 	cp $(BUILD_DIR)/*.js $(ABS_INSTALL_DIR)
 	cp $(BUILD_DIR)/*.wasm $(ABS_INSTALL_DIR)
+	$(PACK_WEB_MODELS_SCRIPT) "$(MODELS_WEB_DIR)" "$(BUILD_DIR)/$(PROJECT_BINARY).data" "$(BUILD_DIR)/$(PROJECT_BINARY).data.json"
 	find $(BUILD_DIR) -maxdepth 1 -name '*.data' -exec cp {} $(ABS_INSTALL_DIR) \;
 	cp $(BUILD_DIR)/*.svg $(ABS_INSTALL_DIR)
 	cp $(ASSETS_DIR)/logo.png $(ABS_INSTALL_DIR)/logo.png
@@ -434,6 +435,7 @@ web-build:
 
 	@wasm="$(BUILD_DIR)/$(PROJECT_BINARY).wasm"; data="$(BUILD_DIR)/$(PROJECT_BINARY).data"; \
 	glue="$(BUILD_DIR)/$(PROJECT_BINARY).js"; loader="$(BUILD_DIR)/qtloader.js"; \
+	data_files=$$(cat "$(BUILD_DIR)/$(PROJECT_BINARY).data.json"); \
 	wasm_bytes=$$(wc -c < "$$wasm" | tr -d ' '); data_bytes=0; data_hash=; \
 	build_id=$$(cat "$$wasm" "$$glue" "$$loader" | (sha256sum 2>/dev/null || shasum -a 256) | cut -c1-16); \
 	if [ -f "$$data" ]; then \
@@ -442,7 +444,8 @@ web-build:
 	fi; \
 	sed -e 's#@PROJECT_TITLE@#$(PROJECT_TITLE)#g' -e 's#@PROJECT_BINARY@#$(PROJECT_BINARY)#g' \
 		-e "s#@WASM_BYTES@#$$wasm_bytes#g" -e "s#@DATA_BYTES@#$$data_bytes#g" \
-		-e "s#@DATA_HASH@#$$data_hash#g" -e "s#@BUILD_ID@#$$build_id#g" \
+		-e "s#@DATA_HASH@#$$data_hash#g" -e "s#@DATA_FILES@#$$data_files#g" \
+		-e "s#@BUILD_ID@#$$build_id#g" \
 		web/index.html > $(ABS_INSTALL_DIR)/index.html; \
 	if grep -q '@[A-Z_]*@' $(ABS_INSTALL_DIR)/index.html; then \
 		echo "Error: unfilled placeholder in $(ABS_INSTALL_DIR)/index.html"; exit 1; \
