@@ -78,6 +78,7 @@ Rectangle {
     readonly property var updateRateLabels: ["3 Hz - idling", "6 Hz - default", "10 Hz - responsive", "15 Hz - maximum"]
     readonly property var updateRateValues: [3, 6, 10, 15]
     readonly property var blendModeNames: ["Additive", "Screen", "Replace", "Outer"]
+    readonly property list<color> glowPresetColors: [Qt.rgba(1, 0, 0, 1), Qt.rgba(0, 1, 0, 1), Qt.rgba(0, 0, 1, 1), Qt.rgba(0, 1, 1, 1), Qt.rgba(1, 0, 1, 1), Qt.rgba(1, 1, 1, 1)]
 
     // Rank for somebody added from the panel. Zero is the only rank that may
     // give commands, so it says so; the default is two, which may not.
@@ -144,6 +145,10 @@ Rectangle {
         if (root.faceTracker.errorString !== "")
             return root.colorBad;
         return root.faceTracker.perceptionProblem !== "" ? root.colorWarn : root.colorDim;
+    }
+
+    function isGlowPreset(colour) {
+        return root.glowPresetColors.some(preset => Qt.colorEqual(preset, colour));
     }
 
     function peopleSummary() {
@@ -1261,8 +1266,7 @@ Rectangle {
     }
 
     // A glow colour, with a ring when it is the one in use. Without the ring
-    // the panel cannot say which of four swatches is current, which it could
-    // not before.
+    // the panel cannot say which swatch is current.
     component Swatch: Rectangle {
         id: swatch
 
@@ -1339,6 +1343,19 @@ Rectangle {
                 Identities.stageFaceFile(identityFileDialog.selectedFile);
             else
                 Identities.stageVoiceFile(identityFileDialog.selectedFile);
+        }
+    }
+
+    ColorDialog {
+        id: glowColorDialog
+
+        title: "Choose a glow colour"
+
+        onAccepted: {
+            colorAnimationTimer.running = false;
+            const picked = glowColorDialog.selectedColor;
+            KSettings.glowCustomColor = Qt.rgba(picked.r, picked.g, picked.b, 1);
+            KSettings.glowColor = KSettings.glowCustomColor;
         }
     }
 
@@ -2332,14 +2349,17 @@ Rectangle {
                 summary: root.blendModeNames[KSettings.glowBlendMode]
                 title: "Glow"
 
-                SettingSlider {
-                    decimals: 0
-                    from: 0
+                Caption {
                     label: "Blend mode"
-                    settingName: "glowBlendMode"
-                    stepSize: 1
-                    to: 3
-                    valueText: root.blendModeNames[KSettings.glowBlendMode]
+                }
+
+                Combo {
+                    id: blendModeCombo
+
+                    currentIndex: KSettings.glowBlendMode
+                    model: root.blendModeNames
+
+                    onActivated: KSettings.glowBlendMode = blendModeCombo.currentIndex
                 }
 
                 SettingSlider {
@@ -2366,40 +2386,48 @@ Rectangle {
 
                 Caption {
                     label: "Colour"
-                    value: colorAnimationTimer.running ? "cycling" : ""
+                    value: colorAnimationTimer.running ? "gaming" : ""
                 }
 
-                Row {
+                Flow {
                     spacing: 8
                     width: parent.width
 
-                    Swatch {
-                        selected: !colorAnimationTimer.running && Qt.colorEqual(KSettings.glowColor, "cyan")
-                        swatchColor: "cyan"
+                    Repeater {
+                        model: root.glowPresetColors
 
-                        onPicked: {
-                            colorAnimationTimer.running = false;
-                            KSettings.glowColor = Qt.rgba(0, 1, 1, 1);
+                        Swatch {
+                            id: presetSwatch
+
+                            required property color modelData
+
+                            selected: !colorAnimationTimer.running && Qt.colorEqual(KSettings.glowColor, presetSwatch.modelData)
+                            swatchColor: presetSwatch.modelData
+
+                            onPicked: {
+                                colorAnimationTimer.running = false;
+                                KSettings.glowColor = presetSwatch.modelData;
+                            }
                         }
                     }
 
+                    // The custom colour: shows the last one chosen, and opens
+                    // the dialog on that colour to change it.
                     Swatch {
-                        selected: !colorAnimationTimer.running && Qt.colorEqual(KSettings.glowColor, "lime")
-                        swatchColor: "lime"
+                        selected: !colorAnimationTimer.running && !root.isGlowPreset(KSettings.glowColor) && Qt.colorEqual(KSettings.glowColor, KSettings.glowCustomColor)
+                        swatchColor: KSettings.glowCustomColor
 
                         onPicked: {
-                            colorAnimationTimer.running = false;
-                            KSettings.glowColor = Qt.rgba(0, 1, 0, 1);
+                            glowColorDialog.selectedColor = KSettings.glowCustomColor;
+                            glowColorDialog.open();
                         }
-                    }
 
-                    Swatch {
-                        selected: !colorAnimationTimer.running && Qt.colorEqual(KSettings.glowColor, "magenta")
-                        swatchColor: "magenta"
-
-                        onPicked: {
-                            colorAnimationTimer.running = false;
-                            KSettings.glowColor = Qt.rgba(1, 0, 1, 1);
+                        Text {
+                            anchors.centerIn: parent
+                            color: KSettings.glowCustomColor.hslLightness > 0.6 ? root.colorInk : root.colorText
+                            font.bold: true
+                            font.pixelSize: 14
+                            text: "+"
                         }
                     }
 

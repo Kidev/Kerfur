@@ -29,11 +29,14 @@ QtObject {
         category: "General"
     }
     property int glowBlendMode: 1
-    property real glowBloom: 0.35
-    property real glowBlurAmount: 0.2
-    property color glowColor: "magenta"
-    property real glowMaxBrightness: 0.25
-    property int ledScreenLedSize: 9
+    property real glowBloom: 0
+    property real glowBlurAmount: 0
+    property color glowColor: "cyan"
+    /// The last colour chosen from the colour dialog, kept apart from
+    /// `glowColor` so the custom swatch still offers it after a preset is picked.
+    property color glowCustomColor: "#ff8000"
+    property real glowMaxBrightness: 1.0
+    property int ledScreenLedSize: 6
     property real leftRightAngle: 90
     /// Whether a stranger's hands are tracked while they are the only person
     /// in view. People the gallery knows always have theirs tracked.
@@ -78,6 +81,7 @@ QtObject {
         property alias glowBloom: root.glowBloom
         property alias glowBlurAmount: root.glowBlurAmount
         property alias glowColor: root.glowColor
+        property alias glowCustomColor: root.glowCustomColor
         property alias glowMaxBrightness: root.glowMaxBrightness
         property alias ledScreenLedSize: root.ledScreenLedSize
         property alias leftRightAngle: root.leftRightAngle

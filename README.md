@@ -24,7 +24,7 @@ Archive to extract:
 - [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz) (glibc 2.38 or newer)
 
 ## Using
-`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for three seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
+`Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for three seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on (in a browser it closes the tab, where the browser allows a script to do so). While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.
 
 ## Building
 ### Requirements

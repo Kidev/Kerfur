@@ -425,6 +425,14 @@
               screen.style.display = 'block';
             },
             onExit: exit => {
+              // A clean quit (Esc) closes the tab. A browser only lets a
+              // script close a tab that a script opened, so when it refuses,
+              // the page says the application exited.
+              if (!exit.crashed && !exit.code) {
+                window.close();
+                if (window.closed)
+                  return;
+              }
               screen.style.display = 'none';
               loader.hidden = false;
               starting.fail(exit.crashed ? 'Stopped' : 'Exited');
