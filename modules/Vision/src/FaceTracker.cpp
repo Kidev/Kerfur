@@ -6,6 +6,7 @@
 #include "cameraselection.h"
 #include "faceanalysisworker.h"
 #include "identitylibrary.h"
+#include "perceptiontypes.h"
 #include "session.h"
 #include "videoframeimage.h"
 
@@ -18,6 +19,10 @@
 #include <QVideoFrameFormat>
 
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <optional>
+#include <utility>
 
 namespace {
 
@@ -186,14 +191,17 @@ FaceTracker::FaceTracker(QObject *parent)
     , m_camera{this}
     , m_captureSession{this}
     , m_videoSink{this}
+    , m_libcamera{this}
     , m_frameThrottleTimer{this}
     , m_cameraRetryTimer{this}
     , m_startWatchdog{this}
 {
     Kerfur::ensureFaceAnalysisMetaTypesRegistered();
 
+    m_clock.start();
+    applyIdleLimits();
     m_frameThrottleTimer.setSingleShot(true);
-    m_frameThrottleTimer.setInterval(intervalForRate(m_updateHz));
+    m_frameThrottleTimer.setInterval(frameInterval());
 
     m_cameraRetryTimer.setSingleShot(true);
     m_cameraRetryTimer.setInterval(2000);
@@ -208,6 +216,25 @@ FaceTracker::FaceTracker(QObject *parent)
             this,
             &FaceTracker::handleVideoInputsChanged);
 
+    connect(&m_libcamera,
+            &Kerfur::LibcameraCapture::frameReady,
+            this,
+            &FaceTracker::processLibcameraFrame);
+    connect(&m_libcamera, &Kerfur::LibcameraCapture::started, this, [this]() {
+        setErrorString(QString{});
+        m_cameraRetryTimer.stop();
+        emit currentResolutionChanged();
+    });
+    connect(&m_libcamera,
+            &Kerfur::LibcameraCapture::errorOccurred,
+            this,
+            [this](const QString &message) {
+                setErrorString(QStringLiteral("Camera error: %1").arg(message));
+                if (m_enabled && !m_cameraRetryTimer.isActive()) {
+                    m_cameraRetryTimer.start();
+                }
+            });
+
     // A light session loads no model, so it has no worker to load them in.
     if (!Kerfur::Session::light()) {
         startWorker();
@@ -220,6 +247,7 @@ FaceTracker::~FaceTracker()
     // Before the thread goes away, so that a pass in flight cannot land on a
     // half destroyed tracker.
     disconnect(&m_videoSink, nullptr, this, nullptr);
+    m_libcamera.stop();
     m_workerThread.quit();
     m_workerThread.wait();
 }
@@ -235,10 +263,6 @@ void FaceTracker::startWorker()
             &FaceTracker::analysisRequested,
             m_worker,
             &Kerfur::FaceAnalysisWorker::analyse);
-    connect(this,
-            &FaceTracker::confidenceChanged,
-            m_worker,
-            &Kerfur::FaceAnalysisWorker::setFaceConfidence);
 
     connect(m_worker,
             &Kerfur::FaceAnalysisWorker::resultReady,
@@ -250,6 +274,22 @@ void FaceTracker::startWorker()
             &Kerfur::IdentityLibrary::galleryChanged,
             m_worker,
             &Kerfur::FaceAnalysisWorker::reloadGallery);
+
+    // The worker starts from this object's thresholds, so the two never
+    // disagree about a value nobody has set yet. Called directly: its thread
+    // has not started, so nothing else can be touching it.
+    const std::array<std::pair<Kerfur::VisionThreshold, qreal>, 7> thresholds{{
+        {Kerfur::VisionThreshold::Face, m_detectionConfidence},
+        {Kerfur::VisionThreshold::Person, m_personConfidence},
+        {Kerfur::VisionThreshold::Keypoint, m_keypointConfidence},
+        {Kerfur::VisionThreshold::Identity, m_identityThreshold},
+        {Kerfur::VisionThreshold::Palm, m_palmConfidence},
+        {Kerfur::VisionThreshold::Hand, m_handConfidence},
+        {Kerfur::VisionThreshold::Object, m_objectConfidence},
+    }};
+    for (const auto &[which, value] : thresholds) {
+        m_worker->setThreshold(which, value);
+    }
 
     m_workerThread.setObjectName(QStringLiteral("kerfur-vision"));
     m_workerThread.start();
@@ -263,31 +303,51 @@ void FaceTracker::startWorker()
 
 bool FaceTracker::enumerateCameras()
 {
+    if (!m_libcamerasProbed && !Kerfur::Session::light()) {
+        m_libcameras = Kerfur::libcameraDevices();
+        m_libcamerasProbed = true;
+    }
+
     const QList<QCameraDevice> cameras{QMediaDevices::videoInputs()};
     QList<Kerfur::CameraCandidate> candidates;
-    candidates.reserve(cameras.size());
+    candidates.reserve(cameras.size() + m_libcameras.size());
     for (const QCameraDevice &camera : cameras) {
         candidates.append(Kerfur::CameraCandidate{camera.id(),
                                                   camera.description(),
                                                   camera.position()
                                                       == QCameraDevice::FrontFace});
     }
+    for (const Kerfur::LibcameraDevice &camera : std::as_const(m_libcameras)) {
+        candidates.append(Kerfur::CameraCandidate{Kerfur::libcameraCameraId(camera.name),
+                                                  camera.model,
+                                                  false});
+    }
 
+    const QByteArray previous{preferredCameraId()};
     const qsizetype chosen{Kerfur::chooseCamera(candidates,
                                                 m_wantedCamera,
-                                                m_preferredCamera.id(),
+                                                previous,
                                                 QMediaDevices::defaultVideoInput().id())};
-    const QCameraDevice previous{m_preferredCamera};
-    m_preferredCamera = chosen >= 0 ? cameras.at(chosen) : QCameraDevice{};
+    if (chosen >= 0 && chosen < cameras.size()) {
+        m_preferredCamera = cameras.at(chosen);
+        m_preferredLibcamera = -1;
+    } else {
+        m_preferredCamera = QCameraDevice{};
+        m_preferredLibcamera = chosen >= 0 ? chosen - cameras.size() : -1;
+    }
 
     const QStringList labels{Kerfur::cameraLabels(candidates)};
     const bool listChanged{cameras != m_cameras || labels != m_cameraLabels};
     m_cameras = cameras;
     m_cameraLabels = labels;
 
-    const bool switched{m_preferredCamera != previous};
+    const bool switched{preferredCameraId() != previous};
     if (listChanged || switched) {
         emit availableCamerasChanged();
+    }
+    // An automatic field of view is the chosen camera's.
+    if (switched) {
+        emit mountChanged();
     }
     // The resolutions are the chosen device's, and the browser backend only
     // has a device to choose some time after start up.
@@ -299,33 +359,57 @@ bool FaceTracker::enumerateCameras()
 
 void FaceTracker::handleVideoInputsChanged()
 {
-    const QByteArray running{m_camera.cameraDevice().id()};
+    const QByteArray running{m_openCameraId};
     enumerateCameras();
-    qCInfo(trackerLog) << m_cameras.size() << "camera(s) available";
+    qCInfo(trackerLog) << m_cameras.size() + m_libcameras.size() << "camera(s) available";
 
     // A running camera keeps its stream even when the entry it was opened from
     // is replaced, which the browser does once permission is granted. The one
     // exception is the chosen camera coming back while a fallback is open.
-    if (m_enabled && !m_isInitializing && !m_camera.isActive()) {
+    if (m_enabled && !m_isInitializing && !cameraActive()) {
         initializeCamera();
-    } else if (m_enabled && m_camera.isActive() && !m_wantedCamera.isEmpty()
-               && m_preferredCamera.id() == m_wantedCamera && running != m_wantedCamera) {
-        qCInfo(trackerLog) << "chosen camera" << m_preferredCamera.description() << "is back";
+    } else if (m_enabled && cameraActive() && !m_wantedCamera.isEmpty()
+               && preferredCameraId() == m_wantedCamera && running != m_wantedCamera) {
+        qCInfo(trackerLog) << "chosen camera" << currentCamera() << "is back";
         restartCamera();
     }
 }
 
+QByteArray FaceTracker::preferredCameraId() const
+{
+    if (usingLibcamera()) {
+        return Kerfur::libcameraCameraId(m_libcameras.at(m_preferredLibcamera).name);
+    }
+    return m_preferredCamera.id();
+}
+
+QByteArray FaceTracker::cameraIdAt(qsizetype index) const
+{
+    if (index >= 0 && index < m_cameras.size()) {
+        return m_cameras.at(index).id();
+    }
+    const qsizetype libcameraIndex{index - m_cameras.size()};
+    if (libcameraIndex >= 0 && libcameraIndex < m_libcameras.size()) {
+        return Kerfur::libcameraCameraId(m_libcameras.at(libcameraIndex).name);
+    }
+    return {};
+}
+
+bool FaceTracker::cameraActive() const
+{
+    return m_libcamera.isRunning() || m_camera.isActive();
+}
+
 QString FaceTracker::currentCamera() const
 {
-    const qsizetype index{m_cameras.indexOf(m_preferredCamera)};
+    const qsizetype index{usingLibcamera() ? m_cameras.size() + m_preferredLibcamera
+                                           : m_cameras.indexOf(m_preferredCamera)};
     return index >= 0 && index < m_cameraLabels.size() ? m_cameraLabels.at(index) : QString{};
 }
 
 QString FaceTracker::cameraIdFor(const QString &label) const
 {
-    const qsizetype index{m_cameraLabels.indexOf(label)};
-    return index >= 0 && index < m_cameras.size() ? QString::fromUtf8(m_cameras.at(index).id())
-                                                  : QString{};
+    return QString::fromUtf8(cameraIdAt(m_cameraLabels.indexOf(label)));
 }
 
 void FaceTracker::setCameraId(const QString &id)
@@ -338,7 +422,7 @@ void FaceTracker::setCameraId(const QString &id)
     emit cameraIdChanged();
 
     if (enumerateCameras() && m_enabled) {
-        qCInfo(trackerLog) << "switching to camera" << m_preferredCamera.description();
+        qCInfo(trackerLog) << "switching to camera" << currentCamera();
         restartCamera();
     }
 }
@@ -365,9 +449,11 @@ void FaceTracker::setEnabled(bool enabled)
     m_enabled = enabled;
 
     if (m_enabled) {
+        stopWatching(false);
         initializeCamera();
     } else {
         m_hasLastKnownPosition = false;
+        m_hasGaze = false;
         uninitializeCamera();
     }
 
@@ -464,10 +550,10 @@ void FaceTracker::initializeCamera()
 
     m_isInitializing = true;
 
-    if (m_preferredCamera.isNull()) {
+    if (!hasPreferredCamera()) {
         enumerateCameras();
     }
-    if (m_preferredCamera.isNull()) {
+    if (!hasPreferredCamera()) {
         setErrorString(QStringLiteral("No cameras available"));
         m_isInitializing = false;
         return;
@@ -475,6 +561,12 @@ void FaceTracker::initializeCamera()
 
     uninitializeCamera();
 
+    if (usingLibcamera()) {
+        startLibcamera();
+        return;
+    }
+
+    m_openCameraId = m_preferredCamera.id();
     m_camera.setCameraDevice(m_preferredCamera);
     selectCameraFormat();
 
@@ -510,12 +602,29 @@ void FaceTracker::initializeCamera()
     m_startWatchdog.start();
 }
 
+void FaceTracker::startLibcamera()
+{
+    const Kerfur::LibcameraDevice &device{m_libcameras.at(m_preferredLibcamera)};
+    m_openCameraId = Kerfur::libcameraCameraId(device.name);
+    // Starting is synchronous here: what remains asynchronous is the first
+    // frame, and the watchdog and `started` cover that.
+    m_isInitializing = false;
+    if (!m_libcamera.start(device, m_requestedResolution)) {
+        setErrorString(QStringLiteral("Camera error: %1").arg(m_libcamera.errorString()));
+        if (m_enabled && !m_cameraRetryTimer.isActive()) {
+            m_cameraRetryTimer.start();
+        }
+        return;
+    }
+    m_startWatchdog.start();
+}
+
 void FaceTracker::checkCameraStarted()
 {
     if (!m_enabled) {
         return;
     }
-    if (!m_camera.isActive()) {
+    if (!cameraActive()) {
         setErrorString(QStringLiteral("Camera failed to start within 5 seconds"));
         m_isInitializing = false;
         return;
@@ -529,7 +638,7 @@ void FaceTracker::checkCameraStarted()
 
 void FaceTracker::retryCameraInitialization()
 {
-    if (m_enabled && !m_camera.isActive()) {
+    if (m_enabled && !cameraActive()) {
         qCInfo(trackerLog) << "retrying camera initialization";
         enumerateCameras();
         initializeCamera();
@@ -549,6 +658,9 @@ void FaceTracker::uninitializeCamera()
     if (m_camera.isActive()) {
         m_camera.stop();
     }
+    m_libcamera.stop();
+    m_openCameraId.clear();
+    stopWatching(false);
 
     setFaceDetected(false);
     m_pendingPreview = QImage{};
@@ -568,14 +680,14 @@ void FaceTracker::uninitializeCamera()
     }
 }
 
-void FaceTracker::processVideoFrame(const QVideoFrame &frame)
+bool FaceTracker::acceptFrame()
 {
     if (!m_enabled) {
-        return;
+        return false;
     }
 
     if (m_frameThrottleTimer.isActive()) {
-        return;
+        return false;
     }
 
     // One pass at a time, and the throttle is not restarted for a frame that
@@ -591,11 +703,26 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
     // panel that shows nothing at all for those seconds looks like a camera
     // that failed rather than like a robot waking up.
     if (m_analysisBusy && m_analysisReady) {
-        return;
+        return false;
     }
     m_frameThrottleTimer.start();
+    return true;
+}
+
+void FaceTracker::processVideoFrame(const QVideoFrame &frame)
+{
+    if (!acceptFrame()) {
+        return;
+    }
 
     const QImage captured{Kerfur::imageFromVideoFrame(frame)};
+    if (watching() && !captured.isNull()) {
+        if (!motionWakes(Kerfur::MotionGate::thumbnail(captured))) {
+            showWatchedFrame(captured);
+            return;
+        }
+        stopWatching(true);
+    }
     if (captured.isNull()) {
         const Kerfur::PlaneFill fill{Kerfur::firstPlaneFill(frame)};
         if (fill.held < fill.needed) {
@@ -614,7 +741,53 @@ void FaceTracker::processVideoFrame(const QVideoFrame &frame)
         }
         return;
     }
+    processCapturedImage(captured);
+}
 
+void FaceTracker::processLibcameraFrame()
+{
+    if (!acceptFrame()) {
+        return;
+    }
+    // Watching reads the luma plane of the frame and nothing else. The colour
+    // conversion is paid only for a frame that wakes the models, or one a view
+    // is showing.
+    if (watching()) {
+        if (!m_libcamera.holdLatest()) {
+            return;
+        }
+        const bool wakes{motionWakes(m_libcamera.heldLumaThumbnail())};
+        if (!wakes && m_previewViewers == 0) {
+            m_libcamera.releaseHeld();
+            return;
+        }
+        const QImage held{m_libcamera.heldFrame()};
+        m_libcamera.releaseHeld();
+        if (!wakes) {
+            showWatchedFrame(held);
+            return;
+        }
+        stopWatching(true);
+        if (held.isNull()) {
+            return;
+        }
+        processCapturedImage(held);
+        return;
+    }
+    const QImage captured{m_libcamera.takeFrame()};
+    if (captured.isNull()) {
+        // Also the case of a notification that found the frame already taken,
+        // which says nothing; a frame that could not be read says why.
+        if (!m_libcamera.errorString().isEmpty()) {
+            setErrorString(m_libcamera.errorString());
+        }
+        return;
+    }
+    processCapturedImage(captured);
+}
+
+void FaceTracker::processCapturedImage(const QImage &captured)
+{
     // A picture is the end of every error this class reports about the
     // camera, whichever of them was standing.
     setErrorString(QString{});
@@ -720,6 +893,8 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         return;
     }
 
+    notePresence(!result.faces.isEmpty() || !result.people.isEmpty());
+
     // The picture this pass was measured against, now that the measurements
     // are here to be drawn on it.
     if (result.sequence == m_pendingPreviewSequence && !m_pendingPreview.isNull()) {
@@ -754,12 +929,23 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
                          > right.box.width() * right.box.height();
               });
 
+    const Kerfur::SceneGeometry geometry{sceneGeometry(result.frameSize)};
+    const QList<Kerfur::Placement> placements{placeFaces(geometry, ordered, result.people)};
+
     QVariantList faces;
     faces.reserve(ordered.size());
-    for (const Kerfur::AnalysedFace &face : ordered) {
-        faces.append(faceToVariant(face));
+    for (qsizetype index{0}; index < ordered.size(); ++index) {
+        QVariantMap face{faceToVariant(ordered.at(index))};
+        const Kerfur::Placement &placement{placements.at(index)};
+        face.insert(QStringLiteral("distance"),
+                    placement.isValid() ? placement.floorDistanceMetres : -1.0);
+        face.insert(QStringLiteral("distanceSource"), Kerfur::rangeSourceName(placement.source));
+        faces.append(face);
     }
     m_faces = faces;
+    m_attentionDistance = placements.isEmpty() || !placements.first().isValid()
+                              ? -1.0
+                              : placements.first().floorDistanceMetres;
 
     if (ordered.isEmpty()) {
         m_primaryFace.clear();
@@ -775,7 +961,7 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
     }
 
     const Kerfur::AnalysedFace &primary{ordered.first()};
-    m_primaryFace = faceToVariant(primary);
+    m_primaryFace = faces.first().toMap();
     m_faceLandmarks = landmarksToVariant(primary.landmarks);
     emit facesChanged();
 
@@ -808,7 +994,350 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         setFaceCenter(centre);
     }
     m_hasLastKnownPosition = true;
+
+    // Aimed at the face itself when it could be placed, so that somebody close
+    // to the screen is looked at from where the eyes are drawn rather than
+    // from the lens. A face that could not be placed is far enough away, or
+    // unknown enough, for the direction of its ray to be all there is.
+    //
+    // Detected first: a view that follows the gaze only while a face is
+    // detected must not miss the first one.
     setFaceDetected(true);
+    const Kerfur::Placement &placement{placements.first()};
+    setGaze(placement.isValid() ? geometry.gazeAt(placement.position)
+                                : geometry.gazeAlong(geometry.ray(centre)));
+}
+
+Kerfur::SceneGeometry FaceTracker::sceneGeometry(const QSize &frame) const
+{
+    Kerfur::CameraMount mount{m_mount};
+    mount.horizontalFovDegrees = effectiveFieldOfView();
+    return Kerfur::SceneGeometry{mount, frame};
+}
+
+QList<Kerfur::Placement> FaceTracker::placeFaces(const Kerfur::SceneGeometry &geometry,
+                                                 const QList<Kerfur::AnalysedFace> &faces,
+                                                 const QList<Kerfur::AnalysedPerson> &people) const
+{
+    // Ankles the pose model is at least this sure of stand on the floor.
+    constexpr double ankleConfidence{0.5};
+    const auto feetOf = [](const Kerfur::AnalysedPerson &person) -> std::optional<QPointF> {
+        QPointF sum;
+        int seen{0};
+        for (const Kerfur::Keypoint ankle : {Kerfur::Keypoint::LeftAnkle,
+                                             Kerfur::Keypoint::RightAnkle}) {
+            const auto index{static_cast<qsizetype>(ankle)};
+            if (index < person.keypoints.size() && index < person.keypointScores.size()
+                && person.keypointScores.at(index) >= ankleConfidence) {
+                sum += person.keypoints.at(index);
+                ++seen;
+            }
+        }
+        if (seen == 0) {
+            return std::nullopt;
+        }
+        return sum / seen;
+    };
+
+    QList<Kerfur::Placement> placements;
+    placements.reserve(faces.size());
+    for (const Kerfur::AnalysedFace &face : faces) {
+        Kerfur::FaceSighting sighting;
+        sighting.centre = face.box.center();
+        if (face.landmarks.size() >= 2) {
+            sighting.rightEye = face.landmarks.at(0);
+            sighting.leftEye = face.landmarks.at(1);
+        }
+        sighting.yawDegrees = face.pose.valid ? face.pose.yaw : 0.0;
+        sighting.heightMetres = face.heightMetres;
+
+        const Kerfur::AnalysedPerson *body{nullptr};
+        for (const Kerfur::AnalysedPerson &person : people) {
+            if (!face.identity.isEmpty() && person.identity == face.identity) {
+                body = &person;
+                break;
+            }
+            if (body == nullptr && person.box.contains(sighting.centre)) {
+                body = &person;
+            }
+        }
+        if (body != nullptr) {
+            sighting.feet = feetOf(*body);
+        }
+        placements.append(geometry.place(sighting));
+    }
+    return placements;
+}
+
+void FaceTracker::setGaze(const Kerfur::GazeAngles &gaze)
+{
+    Kerfur::GazeAngles next{gaze};
+    const qreal smoothing{std::clamp(m_trackingSmoothing, 0.0, 1.0)};
+    if (m_hasGaze && smoothing > 0.0) {
+        next.yawDegrees = m_gaze.yawDegrees * smoothing + gaze.yawDegrees * (1.0 - smoothing);
+        next.pitchDegrees = m_gaze.pitchDegrees * smoothing
+                            + gaze.pitchDegrees * (1.0 - smoothing);
+    }
+    m_hasGaze = true;
+    if (qFuzzyCompare(next.yawDegrees, m_gaze.yawDegrees)
+        && qFuzzyCompare(next.pitchDegrees, m_gaze.pitchDegrees)) {
+        return;
+    }
+    m_gaze = next;
+    emit gazeChanged();
+}
+
+qreal FaceTracker::effectiveFieldOfView() const
+{
+    if (m_fieldOfView > 0.0) {
+        return m_fieldOfView;
+    }
+    if (usingLibcamera() && m_preferredLibcamera < m_libcameras.size()) {
+        const double known{
+            Kerfur::fieldOfViewForSensor(m_libcameras.at(m_preferredLibcamera).model)};
+        if (known > 0.0) {
+            return known;
+        }
+    }
+    return fallbackFieldOfView;
+}
+
+int FaceTracker::frameInterval() const
+{
+    if (watching()) {
+        return static_cast<int>(std::lround(1000.0 / m_watchHz));
+    }
+    return intervalForRate(m_updateHz);
+}
+
+void FaceTracker::applyIdleLimits()
+{
+    m_idleClock.setLimits(static_cast<qint64>(m_idleAfterSeconds) * 1000,
+                          static_cast<qint64>(std::lround(m_probeSeconds * 1000.0)));
+}
+
+void FaceTracker::notePresence(bool present)
+{
+    if (m_idleClock.notePass(present, m_clock.elapsed())) {
+        startWatching();
+    }
+}
+
+void FaceTracker::startWatching()
+{
+    // The first watched frame becomes the reference, so a change is measured
+    // against the empty room as it is now.
+    m_motionGate.clear();
+    m_pendingPreview = QImage{};
+    m_frameThrottleTimer.setInterval(frameInterval());
+    qCInfo(trackerLog) << "nobody in view; watching for motion at" << m_watchHz << "Hz";
+    emit watchingChanged();
+}
+
+void FaceTracker::stopWatching(bool probe)
+{
+    const bool wasWatching{watching()};
+    if (probe) {
+        m_idleClock.wake(m_clock.elapsed());
+    } else {
+        m_idleClock.reset(m_clock.elapsed());
+    }
+    if (!wasWatching) {
+        return;
+    }
+    m_frameThrottleTimer.setInterval(frameInterval());
+    if (probe) {
+        qCInfo(trackerLog) << "motion" << m_motionPercent << "%; looking for somebody";
+    }
+    emit watchingChanged();
+}
+
+bool FaceTracker::motionWakes(const QImage &thumbnail)
+{
+    if (thumbnail.isNull()) {
+        return false;
+    }
+    if (!m_motionGate.hasReference()) {
+        m_motionGate.setReference(thumbnail);
+        return false;
+    }
+    const qreal percent{m_motionGate.changedFraction(thumbnail) * 100.0};
+    if (!qFuzzyCompare(percent + 1.0, m_motionPercent + 1.0)) {
+        m_motionPercent = percent;
+        emit motionPercentChanged();
+    }
+    return percent >= m_wakePercent;
+}
+
+void FaceTracker::showWatchedFrame(const QImage &captured)
+{
+    if (m_previewViewers == 0 || captured.isNull()) {
+        return;
+    }
+    setErrorString(QString{});
+    setCaptureResolution(captured.size());
+    const QImage image{captured.flipped(Qt::Horizontal)};
+    QSize previewSize{image.size()};
+    if (std::max(image.width(), image.height()) > m_previewMaxSide) {
+        previewSize.scale(m_previewMaxSide, m_previewMaxSide, Qt::KeepAspectRatio);
+    }
+    setCameraFrame(previewSize == image.size()
+                       ? image
+                       : image.scaled(previewSize, Qt::KeepAspectRatio, Qt::FastTransformation));
+}
+
+void FaceTracker::attachPreview()
+{
+    ++m_previewViewers;
+}
+
+void FaceTracker::detachPreview()
+{
+    m_previewViewers = std::max(0, m_previewViewers - 1);
+}
+
+void FaceTracker::setThreshold(qreal &stored, qreal value, Kerfur::VisionThreshold which)
+{
+    const qreal bounded{std::clamp(value, 0.01, 0.99)};
+    if (qFuzzyCompare(stored, bounded)) {
+        return;
+    }
+    stored = bounded;
+    if (m_worker != nullptr) {
+        Kerfur::FaceAnalysisWorker *worker{m_worker};
+        QMetaObject::invokeMethod(
+            worker,
+            [worker, which, bounded]() { worker->setThreshold(which, bounded); },
+            Qt::QueuedConnection);
+    }
+    emit thresholdsChanged();
+}
+
+void FaceTracker::setPersonConfidence(qreal confidence)
+{
+    setThreshold(m_personConfidence, confidence, Kerfur::VisionThreshold::Person);
+}
+
+void FaceTracker::setKeypointConfidence(qreal confidence)
+{
+    setThreshold(m_keypointConfidence, confidence, Kerfur::VisionThreshold::Keypoint);
+}
+
+void FaceTracker::setIdentityThreshold(qreal similarity)
+{
+    setThreshold(m_identityThreshold, similarity, Kerfur::VisionThreshold::Identity);
+}
+
+void FaceTracker::setPalmConfidence(qreal confidence)
+{
+    setThreshold(m_palmConfidence, confidence, Kerfur::VisionThreshold::Palm);
+}
+
+void FaceTracker::setHandConfidence(qreal confidence)
+{
+    setThreshold(m_handConfidence, confidence, Kerfur::VisionThreshold::Hand);
+}
+
+void FaceTracker::setObjectConfidence(qreal confidence)
+{
+    setThreshold(m_objectConfidence, confidence, Kerfur::VisionThreshold::Object);
+}
+
+void FaceTracker::setCameraHeight(qreal metres)
+{
+    const qreal bounded{std::clamp(metres, 0.0, 3.0)};
+    if (qFuzzyCompare(m_mount.heightMetres + 1.0, bounded + 1.0)) {
+        return;
+    }
+    m_mount.heightMetres = bounded;
+    emit mountChanged();
+}
+
+void FaceTracker::setCameraTilt(qreal degrees)
+{
+    const qreal bounded{std::clamp(degrees, -90.0, 90.0)};
+    if (qFuzzyCompare(m_mount.tiltDegrees + 1000.0, bounded + 1000.0)) {
+        return;
+    }
+    m_mount.tiltDegrees = bounded;
+    emit mountChanged();
+}
+
+void FaceTracker::setScreenOffset(qreal metres)
+{
+    const qreal bounded{std::clamp(metres, -1.0, 1.0)};
+    if (qFuzzyCompare(m_mount.screenOffsetMetres + 10.0, bounded + 10.0)) {
+        return;
+    }
+    m_mount.screenOffsetMetres = bounded;
+    emit mountChanged();
+}
+
+void FaceTracker::setFieldOfView(qreal degrees)
+{
+    // Zero is automatic; anything else is a lens a pinhole model can describe.
+    const qreal bounded{degrees <= 0.0 ? 0.0 : std::clamp(degrees, 20.0, 170.0)};
+    if (qFuzzyCompare(m_fieldOfView + 1.0, bounded + 1.0)) {
+        return;
+    }
+    m_fieldOfView = bounded;
+    emit mountChanged();
+}
+
+void FaceTracker::setIdleWatch(bool enabled)
+{
+    if (m_idleWatch == enabled) {
+        return;
+    }
+    m_idleWatch = enabled;
+    if (!enabled) {
+        stopWatching(false);
+    }
+    m_idleClock.setEnabled(enabled);
+    emit idleWatchChanged();
+}
+
+void FaceTracker::setIdleAfterSeconds(int seconds)
+{
+    const int bounded{std::clamp(seconds, 5, 3600)};
+    if (m_idleAfterSeconds == bounded) {
+        return;
+    }
+    m_idleAfterSeconds = bounded;
+    applyIdleLimits();
+    emit idleWatchChanged();
+}
+
+void FaceTracker::setWatchHz(qreal hertz)
+{
+    const qreal bounded{std::clamp(hertz, 0.2, 10.0)};
+    if (qFuzzyCompare(m_watchHz, bounded)) {
+        return;
+    }
+    m_watchHz = bounded;
+    m_frameThrottleTimer.setInterval(frameInterval());
+    emit idleWatchChanged();
+}
+
+void FaceTracker::setWakePercent(qreal percent)
+{
+    const qreal bounded{std::clamp(percent, 0.05, 50.0)};
+    if (qFuzzyCompare(m_wakePercent, bounded)) {
+        return;
+    }
+    m_wakePercent = bounded;
+    emit idleWatchChanged();
+}
+
+void FaceTracker::setProbeSeconds(qreal seconds)
+{
+    const qreal bounded{std::clamp(seconds, 1.0, 60.0)};
+    if (qFuzzyCompare(m_probeSeconds, bounded)) {
+        return;
+    }
+    m_probeSeconds = bounded;
+    applyIdleLimits();
+    emit idleWatchChanged();
 }
 
 QRectF FaceTracker::faceBox() const
@@ -900,6 +1429,13 @@ QVariantList FaceTracker::handEdges()
 
 QStringList FaceTracker::availableResolutions() const
 {
+    if (usingLibcamera()) {
+        QStringList resolutions;
+        for (const QSize &size : m_libcameras.at(m_preferredLibcamera).sizes) {
+            resolutions.append(describeSize(size));
+        }
+        return resolutions;
+    }
     if (m_preferredCamera.isNull()) {
         return {};
     }
@@ -918,7 +1454,7 @@ QStringList FaceTracker::availableResolutions() const
 
 QString FaceTracker::currentResolution() const
 {
-    if (!m_camera.isActive()) {
+    if (!cameraActive()) {
         return QStringLiteral("Unknown");
     }
     // Only once a frame has actually been seen. Reporting the requested format
@@ -962,7 +1498,7 @@ void FaceTracker::setUpdateHz(int hertz)
         return;
     }
     m_updateHz = bounded;
-    m_frameThrottleTimer.setInterval(intervalForRate(m_updateHz));
+    m_frameThrottleTimer.setInterval(frameInterval());
     emit updateHzChanged();
 }
 
@@ -1000,7 +1536,7 @@ void FaceTracker::setResolution(const QString &resolution)
     m_requestedResolution = requested;
     emit currentResolutionChanged();
 
-    if (m_enabled && m_camera.isActive()) {
+    if (m_enabled && cameraActive()) {
         setCameraFrame(QImage{});
         setFaceDetected(false);
         initializeCamera();
@@ -1009,13 +1545,7 @@ void FaceTracker::setResolution(const QString &resolution)
 
 void FaceTracker::setDetectionConfidence(qreal confidence)
 {
-    const qreal bounded{std::clamp(confidence, 0.1, 0.95)};
-    if (qFuzzyCompare(m_detectionConfidence, bounded)) {
-        return;
-    }
-    m_detectionConfidence = bounded;
-    emit detectionConfidenceChanged();
-    emit confidenceChanged(m_detectionConfidence);
+    setThreshold(m_detectionConfidence, confidence, Kerfur::VisionThreshold::Face);
 }
 
 void FaceTracker::setTrackingSmoothing(qreal smoothing)

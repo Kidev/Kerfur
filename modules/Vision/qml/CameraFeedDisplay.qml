@@ -59,6 +59,17 @@ Rectangle {
         width: root.infoValueWidth
     }
 
+    // While the tracker only watches for motion, it converts frames to colour
+    // just for the views that say they are showing them.
+    Component.onCompleted: {
+        if (root.faceTracker)
+            root.faceTracker.attachPreview();
+    }
+    Component.onDestruction: {
+        if (root.faceTracker)
+            root.faceTracker.detachPreview();
+    }
+
     // Everything the analysis reports is normalized to the frame it was
     // measured in, so an overlay only ever needs to know where the image was
     // actually painted. That is the whole of the coordinate handling, and it is
@@ -501,6 +512,16 @@ Rectangle {
                             visible: text !== ""
                         }
 
+                        // Along the floor from the camera, and what it was
+                        // measured from: the feet, the person's height or the
+                        // spacing of their eyes.
+                        Text {
+                            color: "#9e9e9e"
+                            font.pixelSize: overlay.labelSize
+                            text: faceItem.modelData.distance > 0 ? faceItem.modelData.distance.toFixed(1) + " m (" + faceItem.modelData.distanceSource + ")" : ""
+                            visible: text !== ""
+                        }
+
                         // What the manifest calls this person. Shown
                         // because the eyes following one face out of three is
                         // only obviously correct once the reason is on screen,
@@ -812,64 +833,22 @@ Rectangle {
                     rowSpacing: 6
                     verticalItemAlignment: Grid.AlignVCenter
 
+                    // Read only: the thresholds are settings, changed from the
+                    // Vision section of the control panel, which saves them.
                     InfoLabel {
-                        text: "Detection confidence"
+                        text: "Face / person"
                     }
 
-                    Row {
-                        height: root.infoRowHeight
-                        spacing: 10
-
-                        Slider {
-                            id: confidenceSlider
-
-                            anchors.verticalCenter: parent.verticalCenter
-                            from: 0.3
-                            height: root.infoRowHeight
-                            to: 0.9
-                            value: root.faceTracker ? root.faceTracker.detectionConfidence : 0.6
-                            width: 150
-
-                            onMoved: {
-                                if (root.faceTracker)
-                                    root.faceTracker.detectionConfidence = value;
-                            }
-                        }
-
-                        InfoValue {
-                            text: confidenceSlider.value.toFixed(2)
-                            width: implicitWidth
-                        }
+                    InfoValue {
+                        text: root.faceTracker ? (root.faceTracker.detectionConfidence.toFixed(2) + " / " + root.faceTracker.personConfidence.toFixed(2)) : ""
                     }
 
                     InfoLabel {
                         text: "Tracking smoothing"
                     }
 
-                    Row {
-                        height: root.infoRowHeight
-                        spacing: 10
-
-                        Slider {
-                            id: smoothingSlider
-
-                            anchors.verticalCenter: parent.verticalCenter
-                            from: 0.0
-                            height: root.infoRowHeight
-                            to: 1.0
-                            value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.0
-                            width: 150
-
-                            onMoved: {
-                                if (root.faceTracker)
-                                    root.faceTracker.trackingSmoothing = value;
-                            }
-                        }
-
-                        InfoValue {
-                            text: smoothingSlider.value.toFixed(2)
-                            width: implicitWidth
-                        }
+                    InfoValue {
+                        text: root.faceTracker ? root.faceTracker.trackingSmoothing.toFixed(2) : ""
                     }
 
                     InfoLabel {

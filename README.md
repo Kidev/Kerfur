@@ -64,7 +64,9 @@ Kerfur sees and hears with models provisioned separately from the binary, so it 
 The face, the camera preview and the microphone run without the models. The control panel names a missing model in amber beside the picture and the level meter, and keeps red for a camera or microphone that cannot capture. A stage whose model file is missing is disabled and logged at start-up.
 
 ### Camera
-*Vision > Camera* chooses the camera, saved as a device id. With nothing chosen, Kerfur opens a front facing camera, otherwise the system default. When the chosen camera is unplugged, Kerfur falls back to that rule and switches back once the camera returns. A browser lists no capture modes, so a camera there delivers its own default size.
+*Vision > Camera* chooses the camera, saved as a device id. With nothing chosen, Kerfur opens a front facing camera, otherwise the system default. When the chosen camera is unplugged, Kerfur falls back to that rule and switches back once the camera returns. The drop down below it sets the capture size, saved as `Perception/captureResolution` (1920x1080 by default); a camera without that size delivers the smallest one that covers it. A browser lists no capture modes, so a camera there delivers its own default size.
+
+A Raspberry Pi camera module appears after the other cameras once `gstreamer1.0-libcamera` is installed. Kerfur captures it through GStreamer's `libcamerasrc`, which it loads at run time. Every size up to the sensor's 2x2 binned mode comes from that mode, which keeps the whole field of view: on a Camera Module 3 that is 2304x1296 at 30 frames a second, and the full 4608x2592 runs at 14. The sensor turns the picture of a module mounted upside down once the device tree says so: for a Camera Module 3 on the CAM/DISP 0 connector, put `camera_auto_detect=0` and `dtoverlay=imx708,cam0,rotation=0` in `/boot/firmware/config.txt` and reboot (the overlay's default, `rotation=180`, describes a module mounted the right way up).
 
 *Vision > Analysis detail* sets the longer side the camera frame is reduced to before any model runs: 960 pixels by default, up to 1920. A face across the room or a hand at arm's length is a few dozen pixels wide after that reduction, so a larger frame is what makes them detectable. The cost grows faster than the size, and the panel prints it beside the update rate in milliseconds per pass.
 
@@ -76,13 +78,29 @@ Both sizes stop at what the camera delivers. Sizes above it are dimmed in both d
 
 The picture is held back until the pass measured on it returns, so the boxes are drawn on the frame they were measured on.
 
+*Vision > Confidence* holds one threshold per stage, because each model scores on a scale of its own: the face detector (0.60 by default), a person from the pose model (0.40), a single body keypoint, which places the head and the wrists (0.40), the cosine similarity a face needs to a gallery sample to be named (0.363), the palm detector (0.55), the hand landmark model (0.50) and the object detector (0.35). Each moves in hundredths, by dragging or with the buttons on either side. Something shaped like a person, such as a coat on a hanger, stops counting as one once the person threshold is above the score the pose model gives it. *Tracking smoothing* is the only smoothing between two positions of the eyes: at 0 they go straight to each new position, gliding there in less time than one tick takes.
+
+#### Placement and distance
+The *Vision* section also says where the camera is: its height above the floor, its tilt (0 looks straight ahead, 90 straight up, negative values down), how far above the centre of the screen it sits, and its horizontal field of view. The screen is taken to tilt with the camera. The field of view defaults to the known figure of a Raspberry Pi camera module (66 degrees for a Camera Module 3, 102 for the wide one) and to 70 degrees for any other camera; set it when a camera of your own differs.
+
+From these, Kerfur places every face in the room and prints how far away it is along the floor, with what the figure came from:
+
+- `feet`: the ankles the pose model sees, projected onto the floor. The most accurate, and it needs the feet in shot.
+- `height`: the face projected to the eye height of a person whose height is recorded (see [Adding someone](#adding-someone)). It needs the camera to look up or down at the face by at least 8 degrees.
+- `eyes`: the distance between the eyes, against an average adult's 63 mm, corrected for a turned head. It works at any height, to within the spread of adult eye spacings.
+
+A stranger with neither feet nor eyes in view is assumed to be 1.70 m tall. The eyes then turn from the centre of the screen towards the face, so somebody standing close is looked at from where the eyes are drawn rather than from the lens. *Eye movement range* scales that turn: at 1 the pupils turn exactly as far as the face is off axis. Lens distortion is not modelled, so on a wide lens a face near the edge of the picture is placed a little too far out.
+
+#### Watching for motion
+With nobody in view for 30 seconds, Kerfur stops running the models and only compares frames with each other, twice a second. Each frame is reduced to a 128 pixel wide grey thumbnail (on a Pi camera module, from the luma plane alone, without converting the frame to colour) and compared with the first thumbnail taken after the models stopped. A change of exposure or of the room light, which moves every pixel at once, is subtracted first. Once more than 1% of the picture has changed, the models run again; if they find nobody within 3 seconds, watching resumes and the current picture becomes the new reference. All four figures are in the *Vision* section, beside a readout of how much of the picture changed last. Turning off *Watch for motion when nobody is around* keeps the models running.
+
 ### Knowing people
 Kerfur ships with an empty gallery. Every profile carries the two models that learn a person (face recognition and speaker recognition), and people are taught from the control panel.
 
 #### Adding someone
-*Add a person* in the *People* section opens the form. Give a name, a title and a rank, stage a photo (*Take from camera*, or *Choose a picture*) and a voice (*Use last sentence*, or *Choose a recording*), and press *Save person*. After the save the form stays open as that person's edit form. Each save adds what was staged to that person as one more sample. Adding samples of the same person in other light, from another angle or in a noisier room makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Each person keeps up to ten pictures and ten recordings, the oldest dropped first.
+*Add a person* in the *People* section opens the form. Give a name, a title, a rank and optionally a height in metres, stage a photo (*Take from camera*, or *Choose a picture*) and a voice (*Use last sentence*, or *Choose a recording*), and press *Save person*. After the save the form stays open as that person's edit form. Each save adds what was staged to that person as one more sample. Adding samples of the same person in other light, from another angle or in a noisier room makes them easier to recognise: every sample is enrolled on its own, and the closest one decides. Each person keeps up to ten pictures and ten recordings, the oldest dropped first.
 
-Each person is listed as a card with their newest photo, their title, and their rank and sample counts. *Edit* opens the form on that person: it changes the title and the rank and adds whatever is staged, and a save with nothing staged changes only the title and rank. The red cross on the card deletes the person. Pressing the card opens it on every photo and every recording. Each recording plays from its own button, each sample has a red cross that deletes that sample alone, and *Delete all* deletes every photo or every recording. A person left with no sample is forgotten. A red cross acts on the second press.
+Each person is listed as a card with their newest photo, their title, and their rank and sample counts. *Edit* opens the form on that person: it changes the title, the rank and the height and adds whatever is staged, and a save with nothing staged changes only those. The red cross on the card deletes the person. Pressing the card opens it on every photo and every recording. Each recording plays from its own button, each sample has a red cross that deletes that sample alone, and *Delete all* deletes every photo or every recording. A person left with no sample is forgotten. A red cross acts on the second press.
 
 Both recognisers re-enrol as soon as a person is saved or changed. Everything taught is kept in `identities/` under the application data directory (`~/.local/share/kidev/Kerfur/identities` on Linux) and read back on the next start. The web build keeps that directory in the browser's IndexedDB, where it survives a reload and stays in the browser. Embeddings are cached against a hash of each file, so a new sample costs one inference and a restart costs none.
 
@@ -103,7 +121,8 @@ The directory holds an `ids.json` and the files it names:
         "faces": ["faces/kidev-1.png", "faces/kidev-2.png"],
         "voices": ["voices/kidev-1.wav"],
         "priority": 0,
-        "title": "owner"
+        "title": "owner",
+        "height": 1.82
     }
 }
 ```
@@ -112,6 +131,7 @@ The directory holds an `ids.json` and the files it names:
 - `voices`: recordings of the person speaking alone, a few seconds each
 - `priority`: the rank, zero being the top
 - `title`: what the interface calls them ("owner", "trusted", anything)
+- `height`: standing height in metres, between 0.5 and 2.5, used to tell how far away they are; optional
 
 Paths are relative to the manifest, so the directory copies to another machine as it is; an absolute path is left alone. Either kind of sample works alone: a person with only photographs is recognised by sight. A single `face` or `voice` string, as older manifests write, is read as the first sample of that kind.
 

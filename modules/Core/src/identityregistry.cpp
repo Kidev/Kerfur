@@ -120,6 +120,28 @@ int readPriority(const QJsonValue &value, bool *ok)
     return IdentityRegistry::unknownPriority;
 }
 
+/// A height in metres, written as a number or as a string like the rank. Zero
+/// for an absent value and for one outside the accepted range: a height is a
+/// refinement, and a typo in it must not cost the person their record.
+double readHeight(const QJsonValue &value)
+{
+    double height{0.0};
+    if (value.isDouble()) {
+        height = value.toDouble();
+    } else if (value.isString()) {
+        bool converted{false};
+        height = value.toString().trimmed().toDouble(&converted);
+        if (!converted) {
+            return 0.0;
+        }
+    }
+    if (height < IdentityRegistry::minimumHeightMetres
+        || height > IdentityRegistry::maximumHeightMetres) {
+        return 0.0;
+    }
+    return height;
+}
+
 /// Resolves one declared path against the manifest's own directory. An absolute
 /// path is left alone, which is what lets a shared gallery live outside the
 /// application tree.
@@ -202,6 +224,7 @@ bool readRecord(const QDir &base,
     }
 
     record.title = entry.value(QStringLiteral("title")).toString().trimmed();
+    record.heightMetres = readHeight(entry.value(QStringLiteral("height")));
 
     record.facePaths = readSamples(base, entry, QStringLiteral("face"), QStringLiteral("faces"));
     record.voicePaths = readSamples(base, entry, QStringLiteral("voice"), QStringLiteral("voices"));
@@ -491,6 +514,12 @@ QString IdentityRegistry::titleOf(const QString &nameOrId) const
 {
     const std::optional<IdentityRecord> record{find(nameOrId)};
     return record.has_value() ? record->title : QString{};
+}
+
+double IdentityRegistry::heightOf(const QString &nameOrId) const
+{
+    const std::optional<IdentityRecord> record{find(nameOrId)};
+    return record.has_value() ? record->heightMetres : 0.0;
 }
 
 QString IdentityRegistry::standingOf(const QString &nameOrId) const

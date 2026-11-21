@@ -42,6 +42,9 @@ Item {
     property bool maintainEyePosition: faceTracker.enabled && !faceTracker.faceDetected
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
+    // Shorter than the gap between two analysis passes, so the pupils have
+    // arrived before the next position does rather than chasing it.
+    readonly property int pupilGlide: Math.min(150, Math.round(700 / Math.max(1, faceTracker.updateHz)))
     readonly property real meowVolume: 1
     readonly property int minBlinkInterval: 4000
     readonly property string pathEyesClosed: "/assets/img/eyes_closed.png"
@@ -317,11 +320,29 @@ Item {
         id: faceTracker
 
         analysisMaxSide: KSettings.analysisMaxSide
+        cameraHeight: KSettings.cameraHeight
         cameraId: KSettings.cameraId
+        cameraTilt: KSettings.cameraTilt
+        detectionConfidence: KSettings.faceConfidence
         enabled: KSettings.faceTrackingEnabled
+        fieldOfView: KSettings.fieldOfView
+        handConfidence: KSettings.handConfidence
+        idleAfterSeconds: KSettings.idleAfterSeconds
+        idleWatch: KSettings.idleWatch
+        identityThreshold: KSettings.identityThreshold
+        keypointConfidence: KSettings.keypointConfidence
         loneStrangerHands: KSettings.loneStrangerHands
+        objectConfidence: KSettings.objectConfidence
+        palmConfidence: KSettings.palmConfidence
+        personConfidence: KSettings.personConfidence
         previewMaxSide: KSettings.previewMaxSide
+        probeSeconds: KSettings.probeSeconds
+        requestedResolution: KSettings.captureResolution
+        screenOffset: KSettings.screenOffset
+        trackingSmoothing: KSettings.trackingSmoothing
         updateHz: KSettings.visionUpdateHz
+        wakePercent: KSettings.wakePercent
+        watchHz: KSettings.watchHz
 
         onEnabledChanged: {
             if (!enabled) {
@@ -334,39 +355,15 @@ Item {
                 console.warn("FaceTracker error:", errorString);
             }
         }
-        onFaceCenterChanged: {
+        // The tracker gives the turn from the centre of the screen to the
+        // face, in degrees, already smoothed by the one smoothing setting
+        // there is. 90 is straight ahead on both axes and the range scales the
+        // turn, so at 1 the pupils turn exactly as far as the face is off
+        // axis, and reach the rim at a face 90 degrees to the side.
+        onGazeChanged: {
             if (faceTracker.faceDetected && !root.isBlinking && !root.isTouched && !root.isWinking && faceTracker.enabled) {
-
-                // Calculate relative movement from center (0.5, 0.5)
-                const faceRelativeX = faceCenter.x - 0.5; // Range: -0.5 to 0.5
-                const faceRelativeY = faceCenter.y - 0.5; // Range: -0.5 to 0.5
-
-                // Apply eye movement range multiplier
-                const eyeMovementX = faceRelativeX * root.eyeMovementRange;
-                const eyeMovementY = faceRelativeY * root.eyeMovementRange;
-
-                // Convert to angle range (90 degrees is center, 0-180 is full range)
-                const centerAngle = 90;
-                const maxAngleRange = 90; // 90 degrees in each direction from center
-
-                const newLeftRight = centerAngle + (eyeMovementX * maxAngleRange);
-                const newUpDown = centerAngle + (eyeMovementY * maxAngleRange);
-
-                // Clamp to valid range (0-180)
-                const clampedLeftRight = Math.max(0, Math.min(180, newLeftRight));
-                const clampedUpDown = Math.max(0, Math.min(180, newUpDown));
-
-                // Additional smoothing on top of the tracker's own, and it has
-                // to be worked out from the rate rather than written down: this
-                // runs once per analysis pass, so a fixed step means the eyes
-                // reach a face in a second at ten passes a second and in three
-                // at three. The exponent converts the old per-pass figure,
-                // which was chosen at ten hertz, into the same movement per
-                // second at whatever rate the vision is actually running at.
-                const smoothingFactor = 1.0 - Math.pow(0.85, 10.0 / Math.max(1, faceTracker.updateHz));
-
-                root.targetLeftRightAngle = root.targetLeftRightAngle + (clampedLeftRight - root.targetLeftRightAngle) * smoothingFactor;
-                root.targetUpDownAngle = root.targetUpDownAngle + (clampedUpDown - root.targetUpDownAngle) * smoothingFactor;
+                root.targetLeftRightAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazeYaw * root.eyeMovementRange));
+                root.targetUpDownAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazePitch * root.eyeMovementRange));
             }
         }
         onFaceDetectedChanged: {
@@ -464,7 +461,7 @@ Item {
                 enabled: root.faceTrackingActive
 
                 NumberAnimation {
-                    duration: 200
+                    duration: root.pupilGlide
                     easing.type: Easing.OutQuad
                 }
             }
@@ -472,7 +469,7 @@ Item {
                 enabled: root.faceTrackingActive
 
                 NumberAnimation {
-                    duration: 200
+                    duration: root.pupilGlide
                     easing.type: Easing.OutQuad
                 }
             }
@@ -493,7 +490,7 @@ Item {
                 enabled: root.faceTrackingActive
 
                 NumberAnimation {
-                    duration: 200
+                    duration: root.pupilGlide
                     easing.type: Easing.OutQuad
                 }
             }
@@ -501,7 +498,7 @@ Item {
                 enabled: root.faceTrackingActive
 
                 NumberAnimation {
-                    duration: 200
+                    duration: root.pupilGlide
                     easing.type: Easing.OutQuad
                 }
             }

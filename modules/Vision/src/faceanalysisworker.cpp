@@ -39,8 +39,6 @@ constexpr float headExpansion{2.6F};
 // large is one extra downscale.
 constexpr float headFallbackFraction{0.32F};
 
-constexpr float poseKeypointConfidence{0.4F};
-
 // How far beyond the wrist, as a fraction of the forearm, the middle of the
 // hand is taken to be. Anatomically the hand's centroid sits at roughly a third
 // of a forearm past the wrist, and the pose model puts its wrist keypoint at
@@ -209,7 +207,7 @@ QString identityCachePath()
 
 FaceAnalysisWorker::FaceAnalysisWorker(QObject *parent) : QObject{parent}
 {
-    m_pose.setConfidenceThreshold(poseKeypointConfidence);
+    m_pose.setConfidenceThreshold(static_cast<float>(m_personConfidence));
 }
 
 void FaceAnalysisWorker::initialize()
@@ -319,10 +317,42 @@ void FaceAnalysisWorker::enrolGallery()
     emit ready(capabilities);
 }
 
-void FaceAnalysisWorker::setFaceConfidence(double confidence)
+void FaceAnalysisWorker::setThreshold(VisionThreshold which, double value)
 {
-    m_faceConfidence = std::clamp(confidence, 0.1, 0.95);
-    m_faces.setDetectionThreshold(static_cast<float>(m_faceConfidence));
+    const double bounded{std::clamp(value, 0.01, 0.99)};
+    const auto score{static_cast<float>(bounded)};
+    switch (which) {
+    case VisionThreshold::Face:
+        m_faceConfidence = bounded;
+        m_faces.setDetectionThreshold(score);
+        break;
+    case VisionThreshold::Person:
+        m_personConfidence = bounded;
+        m_pose.setConfidenceThreshold(score);
+        // The standing skeleton was found under the old threshold.
+        m_lastPoseFrame = cv::Size{};
+        break;
+    case VisionThreshold::Keypoint:
+        m_keypointConfidence = score;
+        break;
+    case VisionThreshold::Identity:
+        m_identities.setThreshold(bounded);
+        // A name voted for under the old threshold is not evidence under the
+        // new one.
+        m_tracks.clear();
+        break;
+    case VisionThreshold::Palm:
+        m_handLandmarker.setPalmScoreThreshold(score);
+        break;
+    case VisionThreshold::Hand:
+        m_handLandmarker.setHandConfidenceThreshold(score);
+        break;
+    case VisionThreshold::Object:
+        m_objects.setConfidenceThreshold(score);
+        // As with names: held objects were voted for under the old threshold.
+        m_held.clear();
+        break;
+    }
 }
 
 void FaceAnalysisWorker::setLoneStrangerHands(bool enabled)
@@ -407,7 +437,7 @@ void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mir
                 if (regions.size() >= maxFaces) {
                     break;
                 }
-                regions.append(headRegionFromKeypoints(person, frame, poseKeypointConfidence));
+                regions.append(headRegionFromKeypoints(person, frame, m_keypointConfidence));
             }
         }
         if (regions.isEmpty()) {
@@ -487,7 +517,7 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
         // through a person is guaranteed to associate back to them; a face
         // found on the whole frame, because the pose stage saw nobody, has no
         // person to associate with and keeps its name to itself.
-        const cv::Rect region{headRegionFromKeypoints(person, frame, poseKeypointConfidence)};
+        const cv::Rect region{headRegionFromKeypoints(person, frame, m_keypointConfidence)};
         const QRectF head{normalize(cv::Rect2f{static_cast<float>(region.x),
                                                static_cast<float>(region.y),
                                                static_cast<float>(region.width),
@@ -524,13 +554,13 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
                                             ownLeftElbow,
                                             QStringLiteral("left"),
                                             result.frameSize,
-                                            poseKeypointConfidence);
+                                            m_keypointConfidence);
         person.rightHand = handFromKeypoints(person,
                                              ownRightWrist,
                                              ownRightElbow,
                                              QStringLiteral("right"),
                                              result.frameSize,
-                                             poseKeypointConfidence);
+                                             m_keypointConfidence);
     }
 }
 
@@ -835,6 +865,7 @@ AnalysedFace FaceAnalysisWorker::describeFace(const cv::Mat &bgr,
         // "unranked", which is true and is also the manifest speaking about
         // somebody it has never heard of.
         face.title = face.identity.isEmpty() ? QString{} : m_registry.standingOf(face.identity);
+        face.heightMetres = m_registry.heightOf(face.identity);
     }
 
     // The preview is a mirror, so what the detector called the subject's right

@@ -65,6 +65,8 @@ private slots:
     void reportsAManifestThatIsNotJson();
     void splitsFaceAndVoiceEntries();
     void readsTheDeclaredTitle();
+    void readsADeclaredHeight();
+    void ignoresAHeightOutsideTheRange();
     void spellsOutTheRankWhenThereIsNoTitle();
     void saysNothingAboutAStranger();
     void aLaterDirectoryReplacesARecordOfTheSameId();
@@ -289,6 +291,39 @@ void TestIdentityRegistry::readsTheDeclaredTitle()
     const IdentityRegistry registry{IdentityRegistry::load(directory)};
     QCOMPARE(registry.titleOf(QStringLiteral("kidev")), QStringLiteral("owner"));
     QCOMPARE(registry.standingOf(QStringLiteral("ada")), QStringLiteral("trusted"));
+}
+
+void TestIdentityRegistry::readsADeclaredHeight()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"kidev":{"priority":0,"height":1.82},)"
+                                    R"("ada":{"priority":2,"height":"1.65"}})"),
+                     {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QCOMPARE(registry.heightOf(QStringLiteral("kidev")), 1.82);
+    QCOMPARE(registry.heightOf(QStringLiteral("ada")), 1.65);
+}
+
+void TestIdentityRegistry::ignoresAHeightOutsideTheRange()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"kidev":{"priority":0,"height":182},)"
+                                    R"("ada":{"priority":2,"height":"tall"},)"
+                                    R"("bob":{"priority":3}})"),
+                     {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QCOMPARE(registry.heightOf(QStringLiteral("kidev")), 0.0);
+    QCOMPARE(registry.heightOf(QStringLiteral("ada")), 0.0);
+    QCOMPARE(registry.heightOf(QStringLiteral("bob")), 0.0);
+    // The record itself survives a height it cannot read.
+    QCOMPARE(registry.priorityOf(QStringLiteral("ada")), 2);
+    QCOMPARE(registry.heightOf(QStringLiteral("stranger")), 0.0);
 }
 
 /// A manifest written before titles existed still has to produce something for

@@ -87,6 +87,9 @@ struct AnalysedFace
     /// this is what an overlay writes, because a number under somebody's chin
     /// says who is first without saying what being first means.
     QString title;
+    /// The manifest's height for this person in metres, or 0 for a stranger
+    /// and for a record that gives none.
+    double heightMetres{0.0};
 };
 
 /// One hand.
@@ -207,6 +210,25 @@ struct AnalysisResult
     quint64 peopleRevision{0};
 
     qint64 elapsedMs{0};
+};
+
+/// The thresholds a pass can be tuned with, each a score from 0 to 1 that a
+/// stage's output has to reach to be kept.
+enum class VisionThreshold {
+    /// A face from the face detector.
+    Face,
+    /// A person from the pose model.
+    Person,
+    /// One body keypoint, for finding the head and the wrists.
+    Keypoint,
+    /// The cosine similarity a face needs to a gallery sample to be named.
+    Identity,
+    /// A palm from the palm detector.
+    Palm,
+    /// A hand from the hand landmark model.
+    Hand,
+    /// An object near a hand, from the object detector.
+    Object,
 };
 
 /// Which stages the worker actually loaded, and who it knows.

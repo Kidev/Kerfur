@@ -242,6 +242,8 @@ Rectangle {
             return "off";
         if (root.faceTracker.errorString !== "")
             return "error";
+        if (root.faceTracker.watching)
+            return "watching";
         if (!root.faceTracker.faceDetected)
             return "searching";
         if (root.faceTracker.identity !== "")
@@ -530,63 +532,65 @@ Rectangle {
         }
     }
 
-    /// A slider over something that is not a setting: it lives on the tracker
-    /// for this run only, so it is bound one way and pushed back on `moved`.
-    component ValueSlider: Column {
-        id: valueSlider
+    /// A slider over a threshold setting, in hundredths, with a step button
+    /// on each side for the last hundredth a drag cannot place.
+    component FineSlider: Column {
+        id: fineSlider
 
-        property int decimals: 2
-        property real from: 0
+        property real from: 0.01
         property string label: ""
-        property real to: 1
-        property real value: 0
+        property string settingName: ""
+        property real step: 0.01
+        property real to: 0.99
 
-        signal moved(real value)
+        function nudge(direction) {
+            const next = Math.round((KSettings[fineSlider.settingName] + direction * fineSlider.step) * 100) / 100;
+            KSettings[fineSlider.settingName] = Math.max(fineSlider.from, Math.min(fineSlider.to, next));
+        }
 
         spacing: 3
         width: parent ? parent.width : 0
 
         Caption {
-            label: valueSlider.label
-            value: valueSlider.value.toFixed(valueSlider.decimals)
+            label: fineSlider.label
+            value: Number(KSettings[fineSlider.settingName]).toFixed(2)
         }
 
-        Slider {
-            id: slider
-
-            from: valueSlider.from
-            implicitHeight: 18
-            to: valueSlider.to
-            value: valueSlider.value
+        Item {
+            height: 20
             width: parent.width
 
-            background: Rectangle {
-                color: "#3a3f47"
-                height: 4
-                radius: 2
-                width: slider.availableWidth
-                x: slider.leftPadding
-                y: slider.topPadding + (slider.availableHeight / 2) - (height / 2)
+            SmallButton {
+                id: lowerButton
 
-                Rectangle {
-                    color: root.colorAccent
-                    height: parent.height
-                    radius: 2
-                    width: slider.visualPosition * parent.width
-                }
-            }
-            handle: Rectangle {
-                border.color: root.colorAccent
-                border.width: 1
-                color: slider.pressed ? "#ffffff" : "#d7dbe2"
-                height: 12
-                radius: 6
-                width: 12
-                x: slider.leftPadding + (slider.visualPosition * (slider.availableWidth - width))
-                y: slider.topPadding + (slider.availableHeight / 2) - (height / 2)
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                label: "-"
+
+                onClicked: fineSlider.nudge(-1)
             }
 
-            onMoved: valueSlider.moved(value)
+            KSlider {
+                anchors.left: lowerButton.right
+                anchors.leftMargin: 6
+                anchors.right: raiseButton.left
+                anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                from: fineSlider.from
+                settingName: fineSlider.settingName
+                stepSize: fineSlider.step
+                to: fineSlider.to
+            }
+
+            SmallButton {
+                id: raiseButton
+
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                label: "+"
+
+                onClicked: fineSlider.nudge(1)
+            }
         }
     }
 
@@ -1063,7 +1067,10 @@ Rectangle {
 
         function save() {
             const name = form.editing ? form.person.name : nameField.text;
-            if (Identities.enrol(name, titleField.text, root.rankValues[rankCombo.currentIndex]))
+            // Empty records no height. A comma is accepted as the decimal
+            // separator, since that is how half the world types one.
+            const height = heightField.text === "" ? 0 : Number(heightField.text.replace(",", "."));
+            if (Identities.enrol(name, titleField.text, root.rankValues[rankCombo.currentIndex], height))
                 form.saved(Identities.personIdFor(name));
         }
 
@@ -1078,6 +1085,7 @@ Rectangle {
             if (!form.editing)
                 return;
             titleField.text = form.person.title;
+            heightField.text = form.person.height > 0 ? form.person.height.toFixed(2) : "";
             const rank = root.rankValues.indexOf(form.person.priority);
             rankCombo.currentIndex = rank >= 0 ? rank : root.defaultRankIndex;
         }
@@ -1123,7 +1131,7 @@ Rectangle {
             Text {
                 color: root.colorDim
                 font.pixelSize: 9
-                text: form.editing ? "Change the title or the rank, or stage another photo or recording. Each save adds them as one more sample, up to " + Identities.sampleLimit + " of each." : "A name and at least a photo or a recording. A few samples taken in different light and rooms make recognition more reliable."
+                text: form.editing ? "Change the title, rank or height, or stage another photo or recording. Each save adds them as one more sample, up to " + Identities.sampleLimit + " of each." : "A name and at least a photo or a recording. A few samples taken in different light and rooms make recognition more reliable."
                 width: parent.width
                 wrapMode: Text.WordWrap
             }
@@ -1170,6 +1178,24 @@ Rectangle {
 
                 currentIndex: root.defaultRankIndex
                 model: root.rankLabels
+            }
+
+            // Lets Kerfur tell how far away this person is from where their
+            // face appears, when the camera looks up or down at them.
+            FieldLabel {
+                text: "Height in metres (optional)"
+            }
+
+            Field {
+                id: heightField
+
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                maximumLength: 4
+                placeholderText: "1.75"
+
+                validator: RegularExpressionValidator {
+                    regularExpression: /^[0-2]?([.,][0-9]{0,2})?$/
+                }
             }
 
             Item {
@@ -1336,6 +1362,9 @@ Rectangle {
         property string kind: "face"
 
         nameFilters: identityFileDialog.kind === "face" ? ["Pictures (*.png *.jpg *.jpeg *.bmp)"] : ["Recordings (*.wav *.mp3 *.flac *.ogg *.m4a)"]
+        // Drawn by Qt Quick: while the GTK dialog Linux would otherwise get is
+        // open, x0vncserver loses its X connection and drops every viewer.
+        options: FileDialog.DontUseNativeDialog
         title: identityFileDialog.kind === "face" ? "Choose a picture" : "Choose a recording"
 
         onAccepted: {
@@ -1349,6 +1378,8 @@ Rectangle {
     ColorDialog {
         id: glowColorDialog
 
+        // Qt Quick for the same reason as identityFileDialog.
+        options: ColorDialog.DontUseNativeDialog
         title: "Choose a glow colour"
 
         onAccepted: {
@@ -1669,10 +1700,7 @@ Rectangle {
                     // it ignored, next to the delivered size above.
                     currentIndex: root.faceTracker ? root.faceTracker.availableResolutions.indexOf(root.faceTracker.requestedResolution) : -1
 
-                    onActivated: {
-                        if (root.faceTracker)
-                            root.faceTracker.setResolution(resolutionCombo.currentText);
-                    }
+                    onActivated: KSettings.captureResolution = resolutionCombo.currentText
                 }
 
                 Caption {
@@ -1734,28 +1762,57 @@ Rectangle {
                     }
                 }
 
-                ValueSlider {
-                    label: "Detection confidence"
-                    from: 0.3
-                    to: 0.9
-                    value: root.faceTracker ? root.faceTracker.detectionConfidence : 0.6
-
-                    onMoved: value => {
-                        if (root.faceTracker)
-                            root.faceTracker.detectionConfidence = value;
-                    }
+                // One threshold per stage: the models score on scales of
+                // their own, and a value right for one is wrong for another.
+                Caption {
+                    label: "Confidence"
+                    value: "score a detection must reach"
                 }
 
-                ValueSlider {
-                    label: "Tracking smoothing"
-                    from: 0.0
-                    to: 1.0
-                    value: root.faceTracker ? root.faceTracker.trackingSmoothing : 0.0
+                FineSlider {
+                    label: "Face"
+                    settingName: "faceConfidence"
+                }
 
-                    onMoved: value => {
-                        if (root.faceTracker)
-                            root.faceTracker.trackingSmoothing = value;
-                    }
+                // Raising it is what stops a coat on a hanger counting as
+                // somebody.
+                FineSlider {
+                    label: "Person"
+                    settingName: "personConfidence"
+                }
+
+                FineSlider {
+                    label: "Body keypoint (head, wrists)"
+                    settingName: "keypointConfidence"
+                }
+
+                // A cosine similarity rather than a score: higher names fewer
+                // people, and names them more surely.
+                FineSlider {
+                    label: "Face recognition match"
+                    settingName: "identityThreshold"
+                }
+
+                FineSlider {
+                    label: "Palm"
+                    settingName: "palmConfidence"
+                }
+
+                FineSlider {
+                    label: "Hand landmarks"
+                    settingName: "handConfidence"
+                }
+
+                FineSlider {
+                    label: "Held object"
+                    settingName: "objectConfidence"
+                }
+
+                SettingSlider {
+                    from: 0.0
+                    label: "Tracking smoothing"
+                    settingName: "trackingSmoothing"
+                    to: 0.95
                 }
 
                 SettingSlider {
@@ -1764,6 +1821,105 @@ Rectangle {
                     label: "Eye movement range"
                     settingName: "eyeMovementRange"
                     to: 3.0
+                }
+
+                // Where the camera is. The distances drawn on the preview and
+                // the angle the eyes turn through both come from these.
+                Caption {
+                    label: "Distance"
+                    value: root.faceTracker && root.faceTracker.attentionDistance > 0 ? root.faceTracker.attentionDistance.toFixed(2) + " m" : "-"
+                }
+
+                SettingSlider {
+                    decimals: 2
+                    from: 0.0
+                    label: "Camera height (m)"
+                    settingName: "cameraHeight"
+                    stepSize: 0.01
+                    to: 2.5
+                }
+
+                SettingSlider {
+                    decimals: 0
+                    from: -90
+                    label: "Camera tilt (degrees, 90 is up)"
+                    settingName: "cameraTilt"
+                    stepSize: 1
+                    to: 90
+                }
+
+                SettingSlider {
+                    decimals: 2
+                    from: -0.5
+                    label: "Camera above screen centre (m)"
+                    settingName: "screenOffset"
+                    stepSize: 0.01
+                    to: 0.5
+                }
+
+                SettingSlider {
+                    decimals: 0
+                    from: 0
+                    label: "Field of view (degrees)"
+                    settingName: "fieldOfView"
+                    stepSize: 1
+                    to: 170
+                    valueText: KSettings.fieldOfView < 20 ? ("auto, " + (root.faceTracker ? Math.round(root.faceTracker.effectiveFieldOfView) : 70)) : Math.round(KSettings.fieldOfView).toString()
+                }
+
+                // With nobody in view the models stop, and frames are only
+                // compared with each other until enough of the picture changes.
+                Toggle {
+                    checked: KSettings.idleWatch
+                    label: "Watch for motion when nobody is around"
+
+                    onToggled: KSettings.idleWatch = !KSettings.idleWatch
+                }
+
+                Caption {
+                    label: "Motion"
+                    value: root.faceTracker ? ((root.faceTracker.watching ? "watching, " : "analysing, ") + root.faceTracker.motionPercent.toFixed(1) + "% changed") : ""
+                    visible: KSettings.idleWatch
+                }
+
+                SettingSlider {
+                    decimals: 0
+                    from: 5
+                    label: "Watch after nobody for (s)"
+                    settingName: "idleAfterSeconds"
+                    stepSize: 5
+                    to: 300
+                    visible: KSettings.idleWatch
+                }
+
+                SettingSlider {
+                    decimals: 1
+                    from: 0.5
+                    label: "Watch rate (Hz)"
+                    settingName: "watchHz"
+                    stepSize: 0.5
+                    to: 10
+                    visible: KSettings.idleWatch
+                }
+
+                SettingSlider {
+                    decimals: 1
+                    from: 0.1
+                    label: "Wake at (% of picture changed)"
+                    settingName: "wakePercent"
+                    stepSize: 0.1
+                    to: 20
+                    visible: KSettings.idleWatch
+                }
+
+                SettingSlider {
+                    decimals: 0
+                    from: 1
+                    label: "Look for somebody for (s)"
+                    settingName: "probeSeconds"
+                    stepSize: 1
+                    to: 30
+                    visible: KSettings.idleWatch
                 }
 
                 // People the gallery knows always have their hands tracked.

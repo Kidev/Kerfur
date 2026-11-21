@@ -38,6 +38,12 @@ set(
     src/videoframeimage.cpp
     src/cameraselection.h
     src/cameraselection.cpp
+    src/libcameracapture.h
+    src/libcameracapture.cpp
+    src/motiongate.h
+    src/motiongate.cpp
+    src/scenegeometry.h
+    src/scenegeometry.cpp
 )
 
 # The headless graph that feeds WorldModel, on its own capture thread. Built
@@ -108,3 +114,20 @@ target_include_directories(${VISION_MODULE} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/s
 # includes, may not name a cv:: type. It holds its frame queue behind a pointer
 # for exactly that reason.
 target_include_directories(${VISION_MODULE} PRIVATE ${OpenCV_INCLUDE_DIRS})
+
+# Cameras only libcamera can drive are captured through GStreamer's
+# libcamerasrc. Headers only: the libraries are opened at run time, so a
+# machine without GStreamer still starts and lists no such camera.
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT EMSCRIPTEN)
+    find_package(PkgConfig QUIET)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(KERFUR_GSTREAMER QUIET gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
+    endif ()
+endif ()
+if (KERFUR_GSTREAMER_FOUND)
+    target_compile_definitions(${VISION_MODULE} PRIVATE KERFUR_HAS_LIBCAMERA)
+    target_include_directories(${VISION_MODULE} SYSTEM PRIVATE ${KERFUR_GSTREAMER_INCLUDE_DIRS})
+    message(STATUS "Vision: libcamera capture through GStreamer")
+else ()
+    message(STATUS "Vision: no GStreamer headers, libcamera capture disabled")
+endif ()

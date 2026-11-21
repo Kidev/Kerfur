@@ -212,6 +212,33 @@ private slots:
         QCOMPARE(ada->facePaths, QStringList{directory.filePath(QStringLiteral("faces/ada-1.png"))});
     }
 
+    void aHeightIsRecordedAndCleared()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2, 1.65));
+        QCOMPARE(IdentityRegistry::load(directory.path()).heightOf(QStringLiteral("ada")), 1.65);
+        QCOMPARE(library.people().first().toMap().value(QStringLiteral("height")).toDouble(),
+                 1.65);
+
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2, 0.0));
+        QCOMPARE(IdentityRegistry::load(directory.path()).heightOf(QStringLiteral("ada")), 0.0);
+    }
+
+    void aHeightOutsideTheRangeIsRefused()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(!library.enrol(QStringLiteral("Ada"), QString{}, 2, 175.0));
+        QVERIFY(!library.problem().isEmpty());
+        // Nothing was written, and the staged picture is still there to retry with.
+        QVERIFY(!IdentityRegistry::load(directory.path()).find(QStringLiteral("ada")).has_value());
+        QVERIFY(!library.stagedFace().isEmpty());
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2, 1.75));
+    }
+
     void aRankIsClampedIntoTheDeclarableRange()
     {
         QTemporaryDir directory;

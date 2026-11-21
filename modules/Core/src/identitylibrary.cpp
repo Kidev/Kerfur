@@ -539,13 +539,25 @@ void IdentityLibrary::clearStaged()
     emit stagedChanged();
 }
 
-bool IdentityLibrary::enrol(const QString &name, const QString &title, int priority)
+bool IdentityLibrary::enrol(const QString &name,
+                            const QString &title,
+                            int priority,
+                            double heightMetres)
 {
     if (m_directory.isEmpty()) {
         return fail(QStringLiteral("This platform offers no writable location for identities."));
     }
     if (!m_ready) {
         return fail(QStringLiteral("Stored identities are still loading. Try again in a moment."));
+    }
+
+    const bool hasHeight{heightMetres > 0.0};
+    if (hasHeight
+        && (heightMetres < IdentityRegistry::minimumHeightMetres
+            || heightMetres > IdentityRegistry::maximumHeightMetres)) {
+        return fail(QStringLiteral("A height is given in metres, between %1 and %2.")
+                        .arg(IdentityRegistry::minimumHeightMetres)
+                        .arg(IdentityRegistry::maximumHeightMetres));
     }
 
     const QString displayName{name.simplified().left(maximumTextLength)};
@@ -592,6 +604,11 @@ bool IdentityLibrary::enrol(const QString &name, const QString &title, int prior
         entry.insert(QStringLiteral("title"), standing);
     }
     entry.insert(QStringLiteral("priority"), std::clamp(priority, 0, maximumPriority));
+    if (hasHeight) {
+        entry.insert(QStringLiteral("height"), heightMetres);
+    } else {
+        entry.remove(QStringLiteral("height"));
+    }
     manifest->insert(id, entry);
 
     if (!writeManifest(*manifest)) {
@@ -943,6 +960,7 @@ void IdentityLibrary::refreshPeople()
                 {QStringLiteral("title"), record.title},
                 {QStringLiteral("priority"), record.priority},
                 {QStringLiteral("standing"), registry.standingOf(record.id)},
+                {QStringLiteral("height"), record.heightMetres},
                 {QStringLiteral("hasFace"), !record.facePaths.isEmpty()},
                 {QStringLiteral("hasVoice"), !record.voicePaths.isEmpty()},
                 {QStringLiteral("faceCount"), record.facePaths.size()},

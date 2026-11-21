@@ -43,7 +43,7 @@ find_package(OpenCV 4.8 REQUIRED COMPONENTS core dnn)
 # microphone, a model file or an accelerator, which is what makes them runnable
 # in CI.
 set(VISION_SUITES visiondecode modelcatalog identitystore headpose handgeometry bgrimage
-                  handlandmarker)
+                  handlandmarker scenegeometry motiongate)
 foreach (SUITE ${VISION_SUITES})
     kerfur_add_test(${SUITE} Vision)
 endforeach ()
@@ -67,6 +67,7 @@ endforeach ()
 target_compile_definitions(tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 kerfur_add_test(cameraselection Vision)
+kerfur_add_test(libcameracapture Vision)
 
 # Capture without models: the tracker and the recognizer themselves, in a
 # process with no model directory. Their headers name Qt Multimedia types,

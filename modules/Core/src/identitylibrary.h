@@ -55,8 +55,9 @@ class IdentityLibrary : public QObject
     /// FileDialog, which on the web build has no file system to show.
     Q_PROPERTY(bool browserFiles READ browserFiles CONSTANT)
     /// One map per person enrolled here: `id`, `name`, `title`, `priority`,
-    /// `standing`, `hasFace`, `hasVoice`, `faceCount`, `voiceCount`, and
-    /// `faces` and `voices`, the samples as file URLs, oldest first. People
+    /// `standing`, `height` (metres, 0 when not given), `hasFace`, `hasVoice`,
+    /// `faceCount`, `voiceCount`, and `faces` and `voices`, the samples as
+    /// file URLs, oldest first. People
     /// from a gallery configured by hand are not listed: they cannot be
     /// changed from here.
     Q_PROPERTY(QVariantList people READ people NOTIFY peopleChanged)
@@ -141,8 +142,15 @@ public:
     /// keeps every earlier sample (up to `maximumSamples` of each, oldest
     /// dropped first) and takes the new name, title and rank. A new id needs at
     /// least one of the two staged; a known one may be saved with neither, to
-    /// change only its title or rank.
-    Q_INVOKABLE bool enrol(const QString &name, const QString &title, int priority);
+    /// change only its title, rank or height.
+    ///
+    /// `heightMetres` is the person's standing height; 0 records none, and
+    /// anything else outside `IdentityRegistry::minimumHeightMetres` to
+    /// `maximumHeightMetres` is refused.
+    Q_INVOKABLE bool enrol(const QString &name,
+                           const QString &title,
+                           int priority,
+                           double heightMetres = 0.0);
 
     /// Forgets somebody enrolled here, and deletes their files.
     Q_INVOKABLE bool remove(const QString &id);

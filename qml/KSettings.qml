@@ -13,14 +13,27 @@ QtObject {
     property int analysisMaxSide: 960
     readonly property string appDataPath: StandardPaths.writableLocation(StandardPaths.AppDataLocation)
     property bool autoPaddingEnabled: true
+    /// Height of the camera lens above the floor, in metres.
+    property real cameraHeight: 1.0
     property real blurMultiplier: 1
     /// The camera chosen in the panel, by device id. Empty means automatic: a
     /// front facing camera, otherwise the system default.
     property string cameraId: ""
+    /// The capture size asked of the camera, as `WxH`. A camera that does not
+    /// offer it delivers the smallest size that covers it.
+    property string captureResolution: "1920x1080"
+    /// Tilt of the camera, and of the screen with it, in degrees: 0 looks
+    /// straight ahead, 90 straight up, negative values down.
+    property real cameraTilt: 0
     property real eyeMovementRange: 3.0
+    /// Score the face detector needs before a face counts.
+    property real faceConfidence: 0.6
     property bool faceTrackingDebug: false
     property bool faceTrackingEnabled: false
     property string facesGalleryPath: root.appDataPath + "/faces/"
+    /// Horizontal field of view of the camera in degrees, or 0 for the known
+    /// figure of a Raspberry Pi camera module (70 for any other camera).
+    property real fieldOfView: 0
     property Settings general: Settings {
         id: settingsGeneral
 
@@ -36,6 +49,18 @@ QtObject {
     /// `glowColor` so the custom swatch still offers it after a preset is picked.
     property color glowCustomColor: "#ff8000"
     property real glowMaxBrightness: 1.0
+    /// Score the hand landmark model needs before a hand counts.
+    property real handConfidence: 0.5
+    /// Seconds without anybody in view before the models stop and only
+    /// motion is looked for.
+    property int idleAfterSeconds: 30
+    /// Whether the models stop while nobody is in view.
+    property bool idleWatch: true
+    /// Cosine similarity a face needs to a gallery sample to be named.
+    property real identityThreshold: 0.363
+    /// Score one body keypoint needs before the head or a wrist is placed on
+    /// it.
+    property real keypointConfidence: 0.4
     property int ledScreenLedSize: 6
     property real leftRightAngle: 90
     /// Whether a stranger's hands are tracked while they are the only person
@@ -46,14 +71,36 @@ QtObject {
     property real maskThresholdMax: 1.0
     property real maskThresholdMin: 0.25
     property string modelsPath: root.appDataPath + "/models/"
+    /// Score the object detector needs before something near a hand counts.
+    property real objectConfidence: 0.35
+    /// Score the palm detector needs before a palm counts.
+    property real palmConfidence: 0.55
     property Settings perception: Settings {
         id: settingsPerception
 
         property alias analysisMaxSide: root.analysisMaxSide
+        property alias cameraHeight: root.cameraHeight
         property alias cameraId: root.cameraId
+        property alias cameraTilt: root.cameraTilt
+        property alias captureResolution: root.captureResolution
+        property alias faceConfidence: root.faceConfidence
+        property alias fieldOfView: root.fieldOfView
+        property alias idleAfterSeconds: root.idleAfterSeconds
+        property alias handConfidence: root.handConfidence
+        property alias idleWatch: root.idleWatch
+        property alias identityThreshold: root.identityThreshold
+        property alias keypointConfidence: root.keypointConfidence
         property alias loneStrangerHands: root.loneStrangerHands
+        property alias objectConfidence: root.objectConfidence
+        property alias palmConfidence: root.palmConfidence
+        property alias personConfidence: root.personConfidence
         property alias previewMaxSide: root.previewMaxSide
+        property alias probeSeconds: root.probeSeconds
+        property alias screenOffset: root.screenOffset
+        property alias trackingSmoothing: root.trackingSmoothing
         property alias visionUpdateHz: root.visionUpdateHz
+        property alias wakePercent: root.wakePercent
+        property alias watchHz: root.watchHz
 
         category: "Perception"
     }
@@ -61,6 +108,8 @@ QtObject {
     /// the panel. Separate from the analysis size: this one is what a person
     /// looks at, that one is what the models are shown.
     property int previewMaxSide: 960
+    /// Score the pose model needs before something counts as a person.
+    property real personConfidence: 0.4
     property Settings paths: Settings {
         id: settingsPaths
 
@@ -94,6 +143,12 @@ QtObject {
 
         category: "Shader"
     }
+    /// Seconds the models get, after motion woke them, to find somebody
+    /// before watching resumes.
+    property real probeSeconds: 3
+    /// How far below the camera the centre of the screen is, along the
+    /// screen, in metres. Negative when the camera is below it.
+    property real screenOffset: 0.1
     property bool showControls: false
     property Settings speech: Settings {
         id: settingsSpeech
@@ -105,6 +160,9 @@ QtObject {
     }
     property bool speechRecognitionDebug: false
     property bool speechRecognitionEnabled: false
+    /// How much of each new position the eyes keep from the last one, from 0
+    /// (none) to 1.
+    property real trackingSmoothing: 0
     property real upDownAngle: 90
     /// How many times a second the camera is looked at: one frame taken, one
     /// pass of every vision model run on it, one picture published. Persisted
@@ -112,6 +170,11 @@ QtObject {
     /// and not of the session -- and it is the setting that decides what Kerfur
     /// costs to keep running.
     property int visionUpdateHz: 6
+    /// Share of the picture, in percent, that has to change while watching
+    /// for the models to run again.
+    property real wakePercent: 1.0
+    /// Frames compared a second while watching.
+    property real watchHz: 2
 
     Behavior on leftRightAngle {
         enabled: false

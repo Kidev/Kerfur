@@ -51,6 +51,11 @@ struct IdentityRecord
     /// the room and takes commands only from rank zero, so this is the field
     /// that decides who it is talking to when several people are present.
     int priority{0};
+
+    /// Standing height in metres, or 0 when the manifest gives none. Used to
+    /// place this person in the room: with the camera's own height and tilt,
+    /// the height of a face says how far away it is.
+    double heightMetres{0.0};
 };
 
 /// Every declared identity, read from one manifest.
@@ -126,6 +131,15 @@ public:
     /// declares no titles at all, and refusing to say anything about those
     /// people would be a regression dressed up as a feature.
     QString standingOf(const QString &nameOrId) const;
+
+    /// The declared height in metres, or 0 for a stranger and for a record
+    /// that gives none.
+    double heightOf(const QString &nameOrId) const;
+
+    /// The heights a manifest may declare, in metres. Anything outside is read
+    /// as no height at all.
+    static constexpr double minimumHeightMetres{0.5};
+    static constexpr double maximumHeightMetres{2.5};
 
     /// The ids, sorted.
     QStringList names() const;

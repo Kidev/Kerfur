@@ -65,6 +65,11 @@ public:
     /// to be certain is a vote that names the mug after it has been put down.
     static constexpr int heldVotes{3};
 
+    /// The pose stage's person threshold, and the threshold of a single body
+    /// keypoint, until `setThreshold` moves them.
+    static constexpr double defaultPersonConfidence{0.4};
+    static constexpr double defaultKeypointConfidence{0.4};
+
 public slots:
     /// Loads every model the catalog has a file for and enrols the gallery.
     /// Emits `ready` in all cases, including the one where nothing loaded, so
@@ -77,7 +82,10 @@ public slots:
     /// head rotation is solved and must not be undone anywhere else.
     void analyse(const QImage &image, quint64 sequence, bool mirrored);
 
-    void setFaceConfidence(double confidence);
+    /// Moves one threshold. Each stage scores on its own scale, so each has
+    /// its own: raising `Person` is how something person shaped (a coat on a
+    /// hanger) stops counting as somebody, without losing faces with it.
+    void setThreshold(Kerfur::VisionThreshold which, double value);
 
     /// Whether a stranger's hands are located when they are the only person in
     /// view. See `locatesHandsOf`.
@@ -211,6 +219,8 @@ private:
     quint64 m_peopleRevision{0};
     quint64 m_peopleFingerprint{0};
     double m_faceConfidence{0.6};
+    double m_personConfidence{defaultPersonConfidence};
+    float m_keypointConfidence{static_cast<float>(defaultKeypointConfidence)};
     bool m_loneStrangerHands{true};
     bool m_initialized{false};
 };
