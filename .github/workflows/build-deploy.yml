@@ -227,6 +227,26 @@ jobs:
         run: |
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
 
+      - name: Check ggml runs on a Raspberry Pi 5
+        if: matrix.qt_host == 'linux_arm64'
+        shell: bash
+        run: |
+          # Rejects SVE, SME, i8mm, bf16 and LRCPC2, all outside the -march in
+          # triplets/arm64-linux-release.cmake. Keep the two in step.
+          archives=(vcpkg_installed/arm64-linux-release/lib/libggml*.a)
+          if [ ! -f "${archives[0]}" ]; then
+            echo "No ggml archive under vcpkg_installed/arm64-linux-release/lib"
+            exit 1
+          fi
+          found=$(objdump -d --no-show-raw-insn "${archives[@]}" \
+            | grep -P '\t(stlur|ldapur|smmla|ummla|usmmla|usdot|sudot|bfdot|bfmmla|bfmlal[bt]|bfcvtn?2?|smstart)\b|\b(z\d+\.[bhsdq]|p\d+/[zm])\b' \
+            || true)
+          if [ -n "${found}" ]; then
+            echo "ggml holds instructions a Cortex-A76 lacks:"
+            echo "${found}" | head -20
+            exit 1
+          fi
+
       - name: Save vcpkg cache
         if: steps.vcpkg-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
