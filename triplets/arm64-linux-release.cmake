@@ -10,8 +10,8 @@ set(VCPKG_CMAKE_SYSTEM_NAME Linux)
 set(VCPKG_BUILD_TYPE release)
 
 # ggml targets the Raspberry Pi 5 (Cortex-A76) instead of the build host, whose
-# -mcpu=native adds SVE, i8mm and LRCPC2. Keep the -march value identical to
-# the one the Linux ARM64 workflow job checks the ggml archives against.
+# -mcpu=native adds SVE, i8mm and LRCPC2. cmake/check-ggml-baseline.sh reads
+# this -march and knows which instructions fall outside it.
 if (PORT STREQUAL "ggml")
     list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS
         -DGGML_NATIVE=OFF

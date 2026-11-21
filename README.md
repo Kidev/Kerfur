@@ -8,20 +8,23 @@ Installer with updates:
 - [Windows x64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Windows-x64.exe)
 - [Windows arm64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Windows-arm64.exe)
 - [Linux x64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Linux-x64)
-- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Linux-arm64) (glibc 2.38 or newer)
+- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Linux-arm64) (Armv8.2 with dotprod, such as a Raspberry Pi 5; glibc 2.38 or newer)
+- [Linux arm64 for a Raspberry Pi 4](https://github.com/Kidev/Kerfur/releases/latest/download/KerfurInstaller-Linux-arm64-rpi4) (any Armv8 CPU; glibc 2.38 or newer)
 
 Application bundle for macOS:
 - [macOS 15 arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-macos-15-arm64.tar.gz)
 
 AppImage:
 - [Linux x64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-x64.AppImage)
-- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.AppImage) (glibc 2.38 or newer)
+- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.AppImage) (Armv8.2 with dotprod, such as a Raspberry Pi 5; glibc 2.38 or newer)
+- [Linux arm64 for a Raspberry Pi 4](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64-rpi4.AppImage) (any Armv8 CPU; glibc 2.38 or newer)
 
 Archive to extract:
 - [Windows x64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-windows-x64.zip)
 - [Windows arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-windows-arm64.zip)
 - [Linux x64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-x64.tar.gz)
-- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz) (glibc 2.38 or newer)
+- [Linux arm64](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64.tar.gz) (Armv8.2 with dotprod, such as a Raspberry Pi 5; glibc 2.38 or newer)
+- [Linux arm64 for a Raspberry Pi 4](https://github.com/Kidev/Kerfur/releases/latest/download/Kerfur-linux-arm64-rpi4.tar.gz) (any Armv8 CPU; glibc 2.38 or newer)
 
 ## Using
 `Tab` shows and hides the control panel. On a touch screen or with a mouse, holding a finger or the left button on the face for three seconds does the same, and the button at the top right of the panel hides it. `Esc` quits when the `allowEscapeShortcut` setting is on. In a browser it closes the tab, or goes back to the previous page when the browser refuses (a browser lets a script close only a tab with a single page in its history). While a text field or the skill editor has the keyboard, `Tab` and `Esc` go to it instead.

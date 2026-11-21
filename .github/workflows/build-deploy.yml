@@ -31,9 +31,23 @@ jobs:
             qt_arch: linux_gcc_arm64
             artifact_name: linux-arm64
             build_name: '-arm64'
+            vcpkg_triplet: 'arm64-linux-release'
             qt_tools: 'tools_ifw'
-            build_command: 'make'
-            installer_command: 'make installer'
+            build_command: 'make VCPKG_TRIPLET=arm64-linux-release'
+            installer_command: 'make installer VCPKG_TRIPLET=arm64-linux-release'
+
+          - name: 'Linux ARM64 (Raspberry Pi 4)'
+            os: ubuntu-24.04-arm
+            qt_version: '6.12.0'
+            qt_host: linux_arm64
+            qt_target: desktop
+            qt_arch: linux_gcc_arm64
+            artifact_name: linux-arm64-rpi4
+            build_name: '-arm64-rpi4'
+            vcpkg_triplet: 'arm64-linux-rpi4-release'
+            qt_tools: 'tools_ifw'
+            build_command: 'make VCPKG_TRIPLET=arm64-linux-rpi4-release'
+            installer_command: 'make installer VCPKG_TRIPLET=arm64-linux-rpi4-release'
 
           - name: 'Windows x64'
             os: windows-2025
@@ -217,35 +231,22 @@ jobs:
           path: |
             vcpkg
             vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*.cmake') }}-
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ matrix.artifact_name }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*.cmake') }}-
           restore-keys: |
-            vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*.cmake') }}-
-            vcpkg-${{ runner.os }}-${{ runner.arch }}-
+            vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ matrix.artifact_name }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*.cmake') }}-
+            vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ matrix.artifact_name }}-
 
       - name: Build
         shell: bash
         run: |
           ${{ matrix.build_command }} VERSION_TAG=${{ steps.get_version.outputs.VERSION_TAG }} BUILD_NAME=${{ matrix.build_name }}
 
-      - name: Check ggml runs on a Raspberry Pi 5
-        if: matrix.qt_host == 'linux_arm64'
+      - name: Check ggml against the instruction set of its triplet
+        if: startsWith(matrix.vcpkg_triplet, 'arm64-linux')
         shell: bash
         run: |
-          # Rejects SVE, SME, i8mm, bf16 and LRCPC2, all outside the -march in
-          # triplets/arm64-linux-release.cmake. Keep the two in step.
-          archives=(vcpkg_installed/arm64-linux-release/lib/libggml*.a)
-          if [ ! -f "${archives[0]}" ]; then
-            echo "No ggml archive under vcpkg_installed/arm64-linux-release/lib"
-            exit 1
-          fi
-          found=$(objdump -d --no-show-raw-insn "${archives[@]}" \
-            | grep -P '\t(stlur|ldapur|smmla|ummla|usmmla|usdot|sudot|bfdot|bfmmla|bfmlal[bt]|bfcvtn?2?|smstart)\b|\b(z\d+\.[bhsdq]|p\d+/[zm])\b' \
-            || true)
-          if [ -n "${found}" ]; then
-            echo "ggml holds instructions a Cortex-A76 lacks:"
-            echo "${found}" | head -20
-            exit 1
-          fi
+          cmake/check-ggml-baseline.sh "triplets/${{ matrix.vcpkg_triplet }}.cmake" \
+            vcpkg_installed/${{ matrix.vcpkg_triplet }}/lib/libggml*.a
 
       - name: Save vcpkg cache
         if: steps.vcpkg-cache.outputs.cache-hit != 'true'
@@ -254,7 +255,7 @@ jobs:
           path: |
             vcpkg
             vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*.cmake') }}-
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ matrix.artifact_name }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*.cmake') }}-
 
       - name: Craft installer
         if: matrix.installer_command != ''
