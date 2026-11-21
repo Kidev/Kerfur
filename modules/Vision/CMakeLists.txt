@@ -44,6 +44,12 @@ set(
     src/motiongate.cpp
     src/scenegeometry.h
     src/scenegeometry.cpp
+    src/attention.h
+    src/attention.cpp
+    src/acceleratordecode.h
+    src/acceleratordecode.cpp
+    src/clipclassifier.h
+    src/clipclassifier.cpp
 )
 
 # The headless graph that feeds WorldModel, on its own capture thread. Built

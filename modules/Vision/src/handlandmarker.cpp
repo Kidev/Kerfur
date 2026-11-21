@@ -3,6 +3,8 @@
 
 #include "handlandmarker.h"
 
+#include "acceleratordecode.h"
+
 #include <QLoggingCategory>
 
 #include <opencv2/imgproc.hpp>
@@ -483,6 +485,93 @@ HandGesture handGesture(const std::array<cv::Point2f, handPointCount> &landmarks
     return HandGesture::None;
 }
 
+bool HandLandmarker::loadPalm(const QString &palmModelPath)
+{
+    if (palmModelPath.isEmpty()) {
+        return false;
+    }
+    try {
+        m_palmNet = cv::dnn::readNetFromONNX(palmModelPath.toStdString());
+    } catch (const cv::Exception &error) {
+        qCWarning(handLog) << "cannot read palm model" << error.what();
+        return false;
+    }
+    if (m_palmNet.empty()) {
+        return false;
+    }
+    m_palmNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+    m_palmNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+    return true;
+}
+
+bool HandLandmarker::loadAccelerated(const QString &palmModelPath,
+                                     Accel::Device &device,
+                                     const QString &landmarkModelPath)
+{
+    m_loaded = false;
+    m_accelerated.reset();
+    if (landmarkModelPath.isEmpty() || !loadPalm(palmModelPath)) {
+        return false;
+    }
+    std::string error;
+    std::unique_ptr<Accel::Model> model{device.openModel(landmarkModelPath.toStdString(), error)};
+    if (model == nullptr) {
+        qCWarning(handLog) << "accelerated hand landmark model did not open:" << error.c_str();
+        return false;
+    }
+    if (model->input().height != handInputSide || model->input().width != handInputSide) {
+        qCWarning(handLog) << landmarkModelPath << "does not take" << handInputSide << "pixels";
+        return false;
+    }
+    m_accelerated = std::move(model);
+    m_reportedFailure = false;
+    m_loaded = true;
+    return true;
+}
+
+bool HandLandmarker::runLandmarks(const cv::Mat &rgb224,
+                                  std::vector<float> &points,
+                                  double &confidence)
+{
+    if (m_accelerated != nullptr) {
+        const std::string error{runImage(*m_accelerated, rgb224, m_outputs)};
+        // By layer: fc1 holds the screen landmarks and fc2 the presence score.
+        // The two 63 value outputs cannot be told apart by shape, and the
+        // names are fixed by the file, which the manifest pins by sha256.
+        const Accel::Tensor *const landmarks{outputNamed(m_outputs, "fc1")};
+        const Accel::Tensor *const presence{outputNamed(m_outputs, "fc2")};
+        if (!error.empty() || landmarks == nullptr || presence == nullptr
+            || landmarks->values.size() < handPointCount * 3 || presence->values.empty()) {
+            if (!m_reportedFailure) {
+                qCWarning(handLog) << "accelerated hand landmarks failed:"
+                                   << (error.empty() ? "unexpected outputs" : error.c_str());
+                m_reportedFailure = true;
+            }
+            return false;
+        }
+        points = landmarks->values;
+        confidence = static_cast<double>(presence->values.front());
+        return true;
+    }
+
+    cv::Mat blob;
+    rgb224.convertTo(blob, CV_32FC3, 1.0 / 255.0);
+    m_handNet.setInput(blobFromRgb(blob));
+    // By name, not by position. Two of this graph's four outputs are 21x3 and
+    // two are scalars, so an enumeration order that shifted would swap screen
+    // landmarks for metric ones silently. The names are fixed by the file, and
+    // the file is pinned by sha256 in the manifest.
+    std::vector<cv::Mat> outputs;
+    m_handNet.forward(outputs, std::vector<cv::String>{"Identity", "Identity_1"});
+    if (outputs.size() < 2 || outputs[0].total() < handPointCount * 3 || outputs[1].total() < 1) {
+        return false;
+    }
+    const auto *raw{outputs[0].ptr<float>()};
+    points.assign(raw, raw + handPointCount * 3);
+    confidence = static_cast<double>(outputs[1].ptr<float>()[0]);
+    return true;
+}
+
 bool HandLandmarker::load(const QString &palmModelPath, const QString &landmarkModelPath)
 {
     m_loaded = false;
@@ -510,7 +599,34 @@ bool HandLandmarker::load(const QString &palmModelPath, const QString &landmarkM
     return true;
 }
 
-std::optional<HandPose> HandLandmarker::detect(const cv::Mat &bgr, const cv::Rect &region)
+PalmDetection palmFromHand(const HandPose &hand)
+{
+    // The palm graph's order: wrist, the four finger bases from the index
+    // outwards, then the thumb's base and first joint.
+    constexpr std::array<HandPoint, 7> palmPoints{
+        HandWrist, IndexMcp, MiddleMcp, RingMcp, PinkyMcp, ThumbCmc, ThumbMcp};
+
+    PalmDetection palm;
+    palm.score = static_cast<float>(hand.confidence);
+    float minX{std::numeric_limits<float>::max()};
+    float minY{std::numeric_limits<float>::max()};
+    float maxX{std::numeric_limits<float>::lowest()};
+    float maxY{std::numeric_limits<float>::lowest()};
+    for (std::size_t index{0}; index < palmPoints.size(); ++index) {
+        const cv::Point2f point{hand.landmarks[static_cast<std::size_t>(palmPoints[index])]};
+        palm.landmarks[index] = point;
+        minX = std::min(minX, point.x);
+        minY = std::min(minY, point.y);
+        maxX = std::max(maxX, point.x);
+        maxY = std::max(maxY, point.y);
+    }
+    palm.box = cv::Rect2f{minX, minY, maxX - minX, maxY - minY};
+    return palm;
+}
+
+std::optional<HandPose> HandLandmarker::detect(const cv::Mat &bgr,
+                                               const cv::Rect &region,
+                                               const HandPose *previous)
 {
     if (!m_loaded || bgr.empty() || region.empty()) {
         return std::nullopt;
@@ -522,6 +638,16 @@ std::optional<HandPose> HandLandmarker::detect(const cv::Mat &bgr, const cv::Rec
     }
 
     try {
+        if (previous != nullptr) {
+            std::optional<HandPose> followed{landmarksFor(bgr, palmFromHand(*previous))};
+            // Still a hand, and still this arm's: a hand followed onto
+            // somebody else's is a hand the skeleton no longer points at.
+            const cv::Point2f wrist{followed ? followed->landmarks[HandWrist] : cv::Point2f{}};
+            if (followed && cv::Rect2f{roi}.contains(wrist)) {
+                return followed;
+            }
+        }
+
         const cv::Mat crop{bgr(roi)};
 
         const Letterbox letterbox{letterboxForPalm(crop)};
@@ -615,28 +741,23 @@ std::optional<HandPose> HandLandmarker::landmarksFor(const cv::Mat &bgrRoi, cons
         return std::nullopt;
     }
 
-    cv::Mat blob;
-    cv::resize(framed.image, blob, cv::Size{handInputSide, handInputSide}, 0.0, 0.0, cv::INTER_AREA);
-    blob.convertTo(blob, CV_32FC3, 1.0 / 255.0);
+    cv::Mat resized;
+    cv::resize(framed.image,
+               resized,
+               cv::Size{handInputSide, handInputSide},
+               0.0,
+               0.0,
+               cv::INTER_AREA);
 
-    m_handNet.setInput(blobFromRgb(blob));
-    // By name, not by position. Two of this graph's four outputs are 21x3 and
-    // two are scalars, so an enumeration order that shifted would swap screen
-    // landmarks for metric ones silently. The names are fixed by the file, and
-    // the file is pinned by sha256 in the manifest.
-    std::vector<cv::Mat> outputs;
-    m_handNet.forward(outputs, std::vector<cv::String>{"Identity", "Identity_1"});
-    if (outputs.size() < 2 || outputs[0].total() < handPointCount * 3 || outputs[1].total() < 1) {
-        return std::nullopt;
-    }
-
-    const auto confidence{static_cast<double>(reinterpret_cast<const float *>(outputs[1].data)[0])};
-    if (confidence < static_cast<double>(m_handConfidence)) {
+    std::vector<float> landmarkValues;
+    double confidence{0.0};
+    if (!runLandmarks(resized, landmarkValues, confidence)
+        || confidence < static_cast<double>(m_handConfidence)) {
         return std::nullopt;
     }
 
     // Undo the 224 box, then the rotation, then the crop, in that order.
-    const auto *raw{reinterpret_cast<const float *>(outputs[0].data)};
+    const float *const raw{landmarkValues.data()};
     const float scaleFactor{std::max(framed.box.width, framed.box.height)
                             / static_cast<float>(handInputSide)};
     const cv::Mat coordsRotation{cv::getRotationMatrix2D(cv::Point2f{0.0F, 0.0F}, angle, 1.0)};

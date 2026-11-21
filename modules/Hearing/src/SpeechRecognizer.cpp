@@ -25,6 +25,10 @@ Q_LOGGING_CATEGORY(speechLog, "kerfur.hearing.speech")
 // checksum and `make models` is what puts the file on disk.
 constexpr QLatin1StringView speechModelFile{"ggml-tiny.en.bin"};
 
+// The `speech-hailo` entry: Whisper Base compiled for the accelerator, used in
+// place of the file above whenever an accelerator is present and opens it.
+constexpr QLatin1StringView acceleratedSpeechModelFile{"Whisper-Base.hef"};
+
 // A tenth of a second of audio per callback. The previous value was two
 // hundred bytes, which is six milliseconds, and turned every second of
 // listening into a hundred and sixty signal emissions and buffer copies.
@@ -199,6 +203,14 @@ void SpeechRecognizer::startVoiceIdentification()
 void SpeechRecognizer::applyModelPath()
 {
     m_modelError.clear();
+
+    const QString accelerated{Kerfur::ModelDirectory::locate(acceleratedSpeechModelFile)};
+    if (!accelerated.isEmpty() && m_whisperEngine->initializeAccelerated(accelerated)) {
+        m_modelPath = accelerated;
+        qCInfo(speechLog) << "speech recognition on the accelerator with" << m_modelPath;
+        emit modelPathChanged();
+        return;
+    }
 
     if (m_modelPath.isEmpty()) {
         m_modelError = QStringLiteral("Speech recognition model %1 not found. Searched %2. "

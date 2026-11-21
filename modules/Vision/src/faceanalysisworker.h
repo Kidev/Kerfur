@@ -4,6 +4,7 @@
 #ifndef KERFUR_FACEANALYSISWORKER_H
 #define KERFUR_FACEANALYSISWORKER_H
 
+#include "clipclassifier.h"
 #include "faceanalysis.h"
 #include "facepipeline.h"
 #include "handlandmarker.h"
@@ -59,6 +60,14 @@ public:
     /// at all when somebody has a located hand in view, so this stride is the
     /// cadence of the rarer case rather than of every frame.
     static constexpr int objectStride{2};
+    static_assert(poseStride > 1 && objectStride % poseStride == 0,
+                  "the object pass runs one pass after the pose pass and must never share it");
+
+    /// Passes between two expression reads when CLIP reads them. A face does
+    /// not change expression between two frames, and the encoder is the
+    /// costliest model on the accelerator; the read lands on the pose pass,
+    /// because the object pass is the other one.
+    static constexpr int expressionStride{2};
 
     /// Looks kept per hand before a held object's name is considered settled.
     /// Short, because a hold is an event with a beginning: a vote long enough
@@ -90,6 +99,9 @@ public slots:
     /// Whether a stranger's hands are located when they are the only person in
     /// view. See `locatesHandsOf`.
     void setLoneStrangerHands(bool enabled);
+
+    /// Whether faces are read for an expression at all. Off by default.
+    void setExpressionEnabled(bool enabled);
 
     /// Reads the galleries again and re-enrols, then emits `ready` with the
     /// new roster. Connected to `IdentityLibrary::galleryChanged`; a face
@@ -170,6 +182,11 @@ private:
     /// does not run the network at all, when nobody has a located hand in view.
     void attributeHeldObjects(const cv::Mat &bgr, AnalysisResult &result);
 
+    /// Reads the expression of the largest face with CLIP, every
+    /// `expressionStride` passes, and gives the last reading to the face that
+    /// stands where it was taken in between.
+    void readExpressions(const cv::Mat &bgr, AnalysisResult &result);
+
     /// The one object in a crop around `hand` that the hand is actually inside,
     /// in frame coordinates, or nothing. The best single object per hand rather
     /// than every overlapping one: a hand covered by three boxes is a hand
@@ -197,12 +214,35 @@ private:
     IdentityStore m_identities;
     ObjectDetector m_objects;
     HandLandmarker m_handLandmarker;
+    /// The CLIP image encoder on the accelerator, which names what a hand holds
+    /// and reads expressions in place of the CPU models when it loaded.
+    ClipClassifier m_clip;
     IdentityRegistry m_registry;
 
     /// What the models said at start up. A gallery reload changes the roster
     /// and nothing else, so it starts from these.
     AnalysisCapabilities m_capabilities;
     QStringList m_modelProblems;
+
+    /// Each hand measured on the last pass, for following it into this one
+    /// from its landmarks instead of searching for its palm again. Keyed like
+    /// `m_held`, and holding only the hands the last pass measured.
+    struct TrackedHand
+    {
+        HandPose pose;
+        quint64 pass{0};
+    };
+    QHash<QString, TrackedHand> m_trackedHands;
+
+    /// The last expression CLIP read, and where and when.
+    struct ExpressionReading
+    {
+        QRectF box;
+        QString label;
+        double confidence{0.0};
+        quint64 pass{0};
+    };
+    std::optional<ExpressionReading> m_expression;
 
     QList<FaceTrack> m_tracks;
     QList<AnalysedPerson> m_lastPeople;
@@ -222,6 +262,8 @@ private:
     double m_personConfidence{defaultPersonConfidence};
     float m_keypointConfidence{static_cast<float>(defaultKeypointConfidence)};
     bool m_loneStrangerHands{true};
+    bool m_expressionEnabled{false};
+    float m_objectConfidence{0.35F};
     bool m_initialized{false};
 };
 

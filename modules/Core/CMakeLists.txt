@@ -11,7 +11,9 @@ qt_add_qml_module(
     ${CORE_MODULE}
     URI "Core"
     VERSION 1.0
-    SOURCES src/queuestatssource.cpp
+    SOURCES src/accelerator.cpp
+            src/accelerator.h
+            src/queuestatssource.cpp
             src/queuestatssource.h
             src/modeldirectory.cpp
             src/modeldirectory.h

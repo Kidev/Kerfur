@@ -28,7 +28,7 @@ Item {
     readonly property alias speechRecognizer: speechRecognizer
 
     // Face tracking properties
-    readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.faceDetected
+    readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.following
     // How long a press on the face lasts before it counts as `held`.
     readonly property int holdDuration: 3000
     property bool isBlinking: false
@@ -36,15 +36,18 @@ Item {
     property bool isTouched: false
     property bool isWinking: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
-    readonly property real leftOffset: ((root.targetLeftRightAngle - 90) / 90) * root.maxPupilMovement
+    readonly property real leftOffset: ((root.shownLeftRightAngle - 90) / 90) * root.maxPupilMovement
     readonly property point leftPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool leftPupilVisible: true
-    property bool maintainEyePosition: faceTracker.enabled && !faceTracker.faceDetected
+    property bool maintainEyePosition: faceTracker.enabled && !faceTracker.following
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
-    // Shorter than the gap between two analysis passes, so the pupils have
-    // arrived before the next position does rather than chasing it.
-    readonly property int pupilGlide: Math.min(150, Math.round(700 / Math.max(1, faceTracker.updateHz)))
+    // How quickly the drawn pupils catch up with the target angles, in
+    // seconds: the time to cover a little more than half the way. A fraction
+    // of the gap between two analysis passes, so a pupil has nearly arrived
+    // when the next position comes in, and it keeps its speed through that
+    // update instead of stopping on each one.
+    readonly property real pupilSmoothTime: Math.max(0.03, Math.min(0.08, 0.4 / Math.max(1, faceTracker.updateHz)))
     readonly property real meowVolume: 1
     readonly property int minBlinkInterval: 4000
     readonly property string pathEyesClosed: "/assets/img/eyes_closed.png"
@@ -56,9 +59,15 @@ Item {
     readonly property string pathSoundMeow: "/assets/sound/meow.wav"
     property bool pendingDoubleBlink: false
     readonly property point rightEyeCenter: Qt.point(90, 22)
-    readonly property real rightOffset: ((root.targetUpDownAngle - 90) / 90) * root.maxPupilMovement
+    readonly property real rightOffset: ((root.shownUpDownAngle - 90) / 90) * root.maxPupilMovement
     readonly property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool rightPupilVisible: true
+
+    // Where the pupils are drawn, chasing the target angles below.
+    property real shownLeftRightAngle: 90
+    property real shownUpDownAngle: 90
+    property real shownLeftRightVelocity: 0
+    property real shownUpDownVelocity: 0
 
     // Properties for synchronization
     property real targetLeftRightAngle: 90
@@ -68,6 +77,21 @@ Item {
     // A press, touch or left button, kept on the face for `holdDuration`. The
     // way to reach the control panel on a screen with no keyboard.
     signal held
+
+    // One step of a critically damped spring from `current` towards `target`,
+    // `dt` seconds long. Returns the new position and velocity. The velocity
+    // carries over from one target to the next, which is what turns a few
+    // positions a second into one continuous movement, and the time to arrive
+    // is the same for a long move as for a short one, so smoothing never slows
+    // a jump to somebody else.
+    function chase(current, velocity, target, dt) {
+        const omega = 2 / root.pupilSmoothTime;
+        const x = omega * dt;
+        const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+        const offset = current - target;
+        const pull = (velocity + omega * offset) * dt;
+        return [target + (offset + pull) * decay, (velocity - omega * pull) * decay];
+    }
 
     function cancelDoubleBlink() {
         root.pendingDoubleBlink = false;
@@ -254,7 +278,45 @@ Item {
     Component.onCompleted: {
         root.targetLeftRightAngle = KSettings.leftRightAngle;
         root.targetUpDownAngle = KSettings.upDownAngle;
+        root.shownLeftRightAngle = root.targetLeftRightAngle;
+        root.shownUpDownAngle = root.targetUpDownAngle;
         root.resetBlinkTimer();
+    }
+
+    // Runs only while the pupils are away from their target, once per frame
+    // drawn, so their movement is as smooth as the display whatever the
+    // analysis rate is.
+    FrameAnimation {
+        id: pupilChase
+
+        // Close enough to stop, in degrees and degrees per second. A tenth of
+        // a degree is far below a pixel of pupil travel.
+        readonly property real settled: 0.1
+
+        running: root.shownLeftRightAngle !== root.targetLeftRightAngle || root.shownUpDownAngle !== root.targetUpDownAngle
+
+        onRunningChanged: {
+            if (!running) {
+                root.shownLeftRightVelocity = 0;
+                root.shownUpDownVelocity = 0;
+            }
+        }
+        onTriggered: {
+            // A stalled frame is not a reason to jump.
+            const dt = Math.min(pupilChase.frameTime, 0.05);
+            const leftRight = root.chase(root.shownLeftRightAngle, root.shownLeftRightVelocity, root.targetLeftRightAngle, dt);
+            const upDown = root.chase(root.shownUpDownAngle, root.shownUpDownVelocity, root.targetUpDownAngle, dt);
+            const done = Math.abs(leftRight[0] - root.targetLeftRightAngle) < pupilChase.settled && Math.abs(upDown[0] - root.targetUpDownAngle) < pupilChase.settled && Math.abs(leftRight[1]) < pupilChase.settled && Math.abs(upDown[1]) < pupilChase.settled;
+            if (done) {
+                root.shownLeftRightAngle = root.targetLeftRightAngle;
+                root.shownUpDownAngle = root.targetUpDownAngle;
+                return;
+            }
+            root.shownLeftRightVelocity = leftRight[1];
+            root.shownUpDownVelocity = upDown[1];
+            root.shownLeftRightAngle = leftRight[0];
+            root.shownUpDownAngle = upDown[0];
+        }
     }
 
     // Synchronize eye angles with settings
@@ -325,6 +387,7 @@ Item {
         cameraTilt: KSettings.cameraTilt
         detectionConfidence: KSettings.faceConfidence
         enabled: KSettings.faceTrackingEnabled
+        expressionEnabled: KSettings.expressionEnabled
         fieldOfView: KSettings.fieldOfView
         handConfidence: KSettings.handConfidence
         idleAfterSeconds: KSettings.idleAfterSeconds
@@ -356,21 +419,22 @@ Item {
             }
         }
         // The tracker gives the turn from the centre of the screen to the
-        // face, in degrees, already smoothed by the one smoothing setting
-        // there is. 90 is straight ahead on both axes and the range scales the
-        // turn, so at 1 the pupils turn exactly as far as the face is off
-        // axis, and reach the rim at a face 90 degrees to the side.
+        // person followed, in degrees, with its jitter filtered. 90 is
+        // straight ahead on both axes and the range scales the turn, so at 1
+        // the pupils turn exactly as far as the person is off axis, and reach
+        // the rim at somebody 90 degrees to the side. `pupilChase` moves the
+        // drawn pupils there.
         onGazeChanged: {
-            if (faceTracker.faceDetected && !root.isBlinking && !root.isTouched && !root.isWinking && faceTracker.enabled) {
+            if (faceTracker.following && !root.isBlinking && !root.isTouched && !root.isWinking && faceTracker.enabled) {
                 root.targetLeftRightAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazeYaw * root.eyeMovementRange));
                 root.targetUpDownAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazePitch * root.eyeMovementRange));
             }
         }
-        onFaceDetectedChanged: {
-            if (!faceDetected && root.faceTrackingActive) {
+        onFollowingChanged: {
+            if (!following && root.faceTrackingActive) {
                 // Face lost but tracking still active - do NOT return to center
                 centerReturnTimer.stop();
-            } else if (!faceDetected && !faceTracker.enabled) {
+            } else if (!following && !faceTracker.enabled) {
                 // Face tracking disabled - gradually return to center
                 centerReturnTimer.start();
             } else {
@@ -455,24 +519,6 @@ Item {
             width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
             x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + root.leftPupilOffset.x)
             y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + root.leftPupilOffset.y)
-
-            // Smooth transitions for face tracking
-            Behavior on x {
-                enabled: root.faceTrackingActive
-
-                NumberAnimation {
-                    duration: root.pupilGlide
-                    easing.type: Easing.OutQuad
-                }
-            }
-            Behavior on y {
-                enabled: root.faceTrackingActive
-
-                NumberAnimation {
-                    duration: root.pupilGlide
-                    easing.type: Easing.OutQuad
-                }
-            }
         }
 
         Image {
@@ -484,24 +530,6 @@ Item {
             width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
             x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + root.rightPupilOffset.x)
             y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + root.rightPupilOffset.y)
-
-            // Smooth transitions for face tracking
-            Behavior on x {
-                enabled: root.faceTrackingActive
-
-                NumberAnimation {
-                    duration: root.pupilGlide
-                    easing.type: Easing.OutQuad
-                }
-            }
-            Behavior on y {
-                enabled: root.faceTrackingActive
-
-                NumberAnimation {
-                    duration: root.pupilGlide
-                    easing.type: Easing.OutQuad
-                }
-            }
         }
     }
 
@@ -607,9 +635,9 @@ Item {
     MouseArea {
         id: pupilTrackingArea
 
-        property bool maintainPosition: faceTracker.enabled && !faceTracker.faceDetected
+        property bool maintainPosition: faceTracker.enabled && !faceTracker.following
         property bool shouldTrack: !root.isBlinking && !root.isTouched && (!pupilTrackingArea.pressed || root.isWinking)
-        property bool useFaceTracking: faceTracker.enabled && faceTracker.faceDetected
+        property bool useFaceTracking: faceTracker.enabled && faceTracker.following
 
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         anchors.fill: parent
@@ -647,34 +675,6 @@ Item {
             } else if (mouse.button === Qt.RightButton) {
                 root.stopWinking();
                 mouse.accepted = true;
-            }
-        }
-    }
-
-    // Face tracking status indicator
-    Rectangle {
-        anchors.margins: 10
-        anchors.right: parent.right
-        anchors.top: parent.top
-        color: root.faceTrackingActive ? "lime" : (faceTracker.enabled ? "orange" : "gray")
-        height: 20
-        opacity: 0.7
-        radius: 10
-        visible: faceTracker.enabled
-        width: 20
-
-        SequentialAnimation on opacity {
-            loops: Animation.Infinite
-            running: faceTracker.enabled && !root.faceTrackingActive
-
-            NumberAnimation {
-                duration: 500
-                to: 0.3
-            }
-
-            NumberAnimation {
-                duration: 500
-                to: 0.7
             }
         }
     }

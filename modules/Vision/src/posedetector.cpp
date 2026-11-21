@@ -3,6 +3,8 @@
 
 #include "posedetector.h"
 
+#include "acceleratordecode.h"
+
 #include <QLoggingCategory>
 
 #include <opencv2/imgproc.hpp>
@@ -45,9 +47,60 @@ bool PoseDetector::load(const QString &modelPath)
     return true;
 }
 
+bool PoseDetector::loadAccelerated(Accel::Device &device, const QString &modelPath)
+{
+    m_accelerated.reset();
+    if (modelPath.isEmpty()) {
+        return false;
+    }
+    std::string error;
+    m_accelerated = device.openModel(modelPath.toStdString(), error);
+    if (m_accelerated == nullptr) {
+        qCWarning(poseLog) << "accelerated pose model did not open:" << error.c_str();
+        return false;
+    }
+    m_reportedFailure = false;
+    return true;
+}
+
+QList<PersonDetection> PoseDetector::detectAccelerated(const cv::Mat &bgr)
+{
+    LetterboxTransform transform;
+    std::string error;
+    try {
+        error = runLetterboxed(*m_accelerated, bgr, transform, m_outputs);
+    } catch (const cv::Exception &exception) {
+        error = exception.what();
+    }
+    if (!error.empty()) {
+        if (!m_reportedFailure) {
+            qCWarning(poseLog) << "accelerated inference failed:" << error.c_str();
+            m_reportedFailure = true;
+        }
+        return {};
+    }
+
+    QList<PersonDetection> detections{decodeYoloPoseHeads(m_outputs,
+                                                          m_accelerated->input().width,
+                                                          transform,
+                                                          m_confidenceThreshold,
+                                                          m_nmsThreshold)};
+    const cv::Rect2f frame{0.0F, 0.0F, static_cast<float>(bgr.cols), static_cast<float>(bgr.rows)};
+    for (PersonDetection &detection : detections) {
+        detection.box = detection.box & frame;
+    }
+    return detections;
+}
+
 QList<PersonDetection> PoseDetector::detect(const cv::Mat &bgr)
 {
-    if (!m_loaded || bgr.empty()) {
+    if (bgr.empty()) {
+        return {};
+    }
+    if (m_accelerated != nullptr) {
+        return detectAccelerated(bgr);
+    }
+    if (!m_loaded) {
         return {};
     }
 

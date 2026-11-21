@@ -3,6 +3,9 @@
 
 #include "facepipeline.h"
 
+#include "acceleratordecode.h"
+
+#include <QFileInfo>
 #include <QLoggingCategory>
 #include <QStringList>
 
@@ -129,12 +132,125 @@ bool FacePipeline::loadExpression(const QString &modelPath)
     return true;
 }
 
+bool FacePipeline::loadAcceleratedDetector(Accel::Device &device, const QString &modelPath)
+{
+    m_acceleratedDetector.reset();
+    if (modelPath.isEmpty()) {
+        return false;
+    }
+    std::string error;
+    m_acceleratedDetector = device.openModel(modelPath.toStdString(), error);
+    if (m_acceleratedDetector == nullptr) {
+        qCWarning(faceLog) << "accelerated face detector did not open:" << error.c_str();
+        return false;
+    }
+    m_reportedFailure = false;
+    return true;
+}
+
+bool FacePipeline::loadAcceleratedRecognizer(Accel::Device &device, const QString &modelPath)
+{
+    m_acceleratedRecognizer.reset();
+    m_recognizerName.clear();
+    if (modelPath.isEmpty()) {
+        return false;
+    }
+    std::string error;
+    std::unique_ptr<Accel::Model> model{device.openModel(modelPath.toStdString(), error)};
+    if (model == nullptr) {
+        qCWarning(faceLog) << "accelerated face recognizer did not open:" << error.c_str();
+        return false;
+    }
+    if (model->input().height != alignedFaceSide || model->input().width != alignedFaceSide
+        || model->outputs().size() != 1) {
+        qCWarning(faceLog) << modelPath << "is not a" << alignedFaceSide
+                           << "pixel face embedding model";
+        return false;
+    }
+    m_acceleratedRecognizer = std::move(model);
+    m_recognizerName = QFileInfo{modelPath}.completeBaseName();
+    m_reportedFailure = false;
+    return true;
+}
+
 void FacePipeline::setDetectionThreshold(float threshold)
 {
-    if (m_detector.empty()) {
-        return;
+    m_detectionThreshold = std::clamp(threshold, 0.05F, 0.99F);
+    if (!m_detector.empty()) {
+        m_detector->setScoreThreshold(m_detectionThreshold);
     }
-    m_detector->setScoreThreshold(std::clamp(threshold, 0.05F, 0.99F));
+}
+
+void FacePipeline::reportFailure(const std::string &error)
+{
+    if (!m_reportedFailure) {
+        qCWarning(faceLog) << "accelerated inference failed:" << error.c_str();
+        m_reportedFailure = true;
+    }
+}
+
+std::vector<cv::Mat> FacePipeline::detectAccelerated(const cv::Mat &image)
+{
+    LetterboxTransform transform;
+    const std::string error{runLetterboxed(*m_acceleratedDetector, image, transform, m_outputs)};
+    if (!error.empty()) {
+        reportFailure(error);
+        return {};
+    }
+
+    QList<FaceDetection> faces{decodeScrfd(m_outputs,
+                                           m_acceleratedDetector->input().width,
+                                           transform,
+                                           m_detectionThreshold,
+                                           detectorNmsThreshold)};
+    std::sort(faces.begin(),
+              faces.end(),
+              [](const FaceDetection &left, const FaceDetection &right) {
+                  return left.box.area() > right.box.area();
+              });
+
+    // As YuNet rows, which is what the alignment and everything after it read.
+    std::vector<cv::Mat> rows;
+    rows.reserve(static_cast<std::size_t>(faces.size()));
+    for (const FaceDetection &face : std::as_const(faces)) {
+        cv::Mat row{cv::Mat::zeros(1, detectionColumns, CV_32F)};
+        row.at<float>(0, 0) = face.box.x;
+        row.at<float>(0, 1) = face.box.y;
+        row.at<float>(0, 2) = face.box.width;
+        row.at<float>(0, 3) = face.box.height;
+        for (int index{0}; index < landmarkCount; ++index) {
+            const cv::Point2f &point{face.landmarks[static_cast<std::size_t>(index)]};
+            row.at<float>(0, landmarkOffset + (index * 2)) = point.x;
+            row.at<float>(0, landmarkOffset + (index * 2) + 1) = point.y;
+        }
+        row.at<float>(0, detectionColumns - 1) = face.score;
+        rows.push_back(row);
+    }
+    return rows;
+}
+
+cv::Mat FacePipeline::embed(const cv::Mat &aligned)
+{
+    if (m_acceleratedRecognizer != nullptr) {
+        cv::Mat rgb;
+        cv::cvtColor(aligned, rgb, cv::COLOR_BGR2RGB);
+        const std::string error{runImage(*m_acceleratedRecognizer, rgb, m_outputs)};
+        if (!error.empty() || m_outputs.empty()) {
+            reportFailure(error);
+            return {};
+        }
+        std::vector<float> &values{m_outputs.front().values};
+        return cv::Mat{1, static_cast<int>(values.size()), CV_32F, values.data()}.clone();
+    }
+    if (m_recognizer.empty()) {
+        return {};
+    }
+    cv::Mat feature;
+    m_recognizer->feature(aligned, feature);
+    // The recognizer hands back a view onto its own buffer, which the next
+    // call overwrites. Cloning here is what stops every enrolled identity from
+    // becoming whatever was embedded last.
+    return feature.clone();
 }
 
 cv::Mat FacePipeline::detectLargestFace(const cv::Mat &image)
@@ -216,86 +332,118 @@ FaceObservation FacePipeline::analyse(const cv::Mat &bgr, const cv::Rect &roi)
 
         // One row, but in crop coordinates. Everything downstream of here works
         // on the crop, and only the reported box is lifted back to the frame.
-        cv::Mat row{faces.row(0).clone()};
-        const cv::Mat aligned{alignFace(crop, row)};
-        if (aligned.empty()) {
-            return observation;
-        }
-
-        observation.box = cv::Rect2f{row.at<float>(0, 0) + static_cast<float>(bounded.x),
-                                     row.at<float>(0, 1) + static_cast<float>(bounded.y),
-                                     row.at<float>(0, 2),
-                                     row.at<float>(0, 3)};
-        for (int index{0}; index < landmarkCount; ++index) {
-            observation.landmarks[static_cast<size_t>(index)] = cv::Point2f{
-                row.at<float>(0, landmarkOffset + (index * 2)) + static_cast<float>(bounded.x),
-                row.at<float>(0, landmarkOffset + (index * 2) + 1) + static_cast<float>(bounded.y)};
-        }
-        observation.valid = true;
-
-        if (!m_recognizer.empty()) {
-            cv::Mat feature;
-            m_recognizer->feature(aligned, feature);
-            // The recognizer hands back a view onto its own buffer, which the
-            // next call overwrites. Cloning here is what stops every enrolled
-            // identity from becoming whatever was embedded last.
-            observation.embedding = feature.clone();
-        }
-
-        if (!m_expression.empty()) {
-            cv::Mat rgb;
-            cv::cvtColor(aligned, rgb, cv::COLOR_BGR2RGB);
-            cv::Mat normalized;
-            rgb.convertTo(normalized, CV_32FC3, 1.0 / 255.0);
-            normalized -= cv::Scalar::all(0.5);
-            normalized /= 0.5;
-
-            m_expression.setInput(cv::dnn::blobFromImage(normalized));
-            const cv::Mat logits{m_expression.forward()};
-            const QStringList &labels{emotionLabels()};
-            if (logits.total() == static_cast<size_t>(labels.size())) {
-                const float *const scores{logits.ptr<float>()};
-                const int best{static_cast<int>(
-                    std::distance(scores,
-                                  std::max_element(scores, scores + labels.size())))};
-
-                // The model emits raw logits, so a softmax is needed before the
-                // number means anything. Reporting the bare logit as a
-                // confidence would give the behaviour engine a value that is
-                // not comparable between frames.
-                float total{0.0F};
-                for (qsizetype index{0}; index < labels.size(); ++index) {
-                    total += std::exp(scores[index] - scores[best]);
-                }
-                observation.emotion = labels.at(best);
-                observation.emotionConfidence = total > 0.0F ? 1.0F / total : 0.0F;
-            }
-        }
-        return observation;
+        return describe(crop,
+                        faces.row(0),
+                        cv::Point2f{static_cast<float>(bounded.x), static_cast<float>(bounded.y)});
     } catch (const cv::Exception &error) {
         qCWarning(faceLog) << "face stage failed" << error.what();
         return FaceObservation{};
     }
 }
 
+QList<FaceObservation> FacePipeline::analyseFrame(const cv::Mat &bgr, int maxFaces)
+{
+    QList<FaceObservation> observations;
+    if (bgr.empty() || m_acceleratedDetector == nullptr || maxFaces <= 0) {
+        return observations;
+    }
+    try {
+        for (const cv::Mat &row : detectAccelerated(bgr)) {
+            if (observations.size() >= maxFaces) {
+                break;
+            }
+            const FaceObservation observation{describe(bgr, row, cv::Point2f{})};
+            if (observation.valid) {
+                observations.append(observation);
+            }
+        }
+    } catch (const cv::Exception &error) {
+        qCWarning(faceLog) << "face stage failed" << error.what();
+    }
+    return observations;
+}
+
+FaceObservation FacePipeline::describe(const cv::Mat &image,
+                                       const cv::Mat &row,
+                                       const cv::Point2f &offset)
+{
+    FaceObservation observation;
+    const cv::Mat aligned{alignFace(image, row)};
+    if (aligned.empty()) {
+        return observation;
+    }
+
+    observation.box = cv::Rect2f{row.at<float>(0, 0) + offset.x,
+                                 row.at<float>(0, 1) + offset.y,
+                                 row.at<float>(0, 2),
+                                 row.at<float>(0, 3)};
+    for (int index{0}; index < landmarkCount; ++index) {
+        observation.landmarks[static_cast<size_t>(index)] = cv::Point2f{
+            row.at<float>(0, landmarkOffset + (index * 2)) + offset.x,
+            row.at<float>(0, landmarkOffset + (index * 2) + 1) + offset.y};
+    }
+    observation.valid = true;
+    observation.embedding = embed(aligned);
+
+    if (m_expressionEnabled && !m_expression.empty()) {
+        cv::Mat rgb;
+        cv::cvtColor(aligned, rgb, cv::COLOR_BGR2RGB);
+        cv::Mat normalized;
+        rgb.convertTo(normalized, CV_32FC3, 1.0 / 255.0);
+        normalized -= cv::Scalar::all(0.5);
+        normalized /= 0.5;
+
+        m_expression.setInput(cv::dnn::blobFromImage(normalized));
+        const cv::Mat logits{m_expression.forward()};
+        const QStringList &labels{emotionLabels()};
+        if (logits.total() == static_cast<size_t>(labels.size())) {
+            const float *const scores{logits.ptr<float>()};
+            const int best{static_cast<int>(
+                std::distance(scores, std::max_element(scores, scores + labels.size())))};
+
+            // The model emits raw logits, so a softmax is needed before the
+            // number means anything. Reporting the bare logit as a confidence
+            // would give the behaviour engine a value that is not comparable
+            // between frames.
+            float total{0.0F};
+            for (qsizetype index{0}; index < labels.size(); ++index) {
+                total += std::exp(scores[index] - scores[best]);
+            }
+            observation.emotion = labels.at(best);
+            observation.emotionConfidence = total > 0.0F ? 1.0F / total : 0.0F;
+        }
+    }
+    return observation;
+}
+
 std::optional<cv::Mat> FacePipeline::embedLargestFace(const cv::Mat &bgr)
 {
-    if (bgr.empty() || m_detector.empty() || m_recognizer.empty()) {
+    if (bgr.empty() || !hasDetector() || !hasRecognizer()) {
         return std::nullopt;
     }
 
     try {
-        const cv::Mat faces{detectLargestFace(bgr)};
-        if (faces.empty()) {
+        cv::Mat face;
+        if (m_acceleratedDetector != nullptr) {
+            const std::vector<cv::Mat> rows{detectAccelerated(bgr)};
+            if (!rows.empty()) {
+                face = rows.front();
+            }
+        } else {
+            face = detectLargestFace(bgr);
+        }
+        if (face.empty()) {
             return std::nullopt;
         }
-        const cv::Mat aligned{alignFace(bgr, faces.row(0))};
+        const cv::Mat aligned{alignFace(bgr, face.row(0))};
         if (aligned.empty()) {
             return std::nullopt;
         }
-        cv::Mat feature;
-        m_recognizer->feature(aligned, feature);
-        return feature.clone();
+        cv::Mat feature{embed(aligned)};
+        if (feature.empty()) {
+            return std::nullopt;
+        }
+        return feature;
     } catch (const cv::Exception &error) {
         qCWarning(faceLog) << "enrolment failed" << error.what();
         return std::nullopt;

@@ -100,6 +100,7 @@ class TestHandLandmarker : public QObject
 
 private slots:
     void anchorsMatchThePublishedTable();
+    void palmFromHandKeepsThePalmGraphOrder();
     void anchorsAreTheStandardGrid();
     void gripIsZeroForAnOpenHand();
     void gripSaturatesForAFist();
@@ -125,6 +126,29 @@ private slots:
 /// The first and last rows of upstream's 2016 entry literal table. The
 /// generator has to agree with the file the model was exported against, and
 /// these two rows pin both ends of it.
+void TestHandLandmarker::palmFromHandKeepsThePalmGraphOrder()
+{
+    HandPose hand;
+    hand.landmarks = posedHand({0.0F, -1.0F}, HandSpec{true, true, true, true, true}, 100.0F,
+                               {300.0F, 400.0F});
+    hand.confidence = 0.9;
+
+    const PalmDetection palm{palmFromHand(hand)};
+    // The wrist and the middle finger base are the two points the crop is
+    // turned between, so they have to land where the palm graph puts them.
+    QCOMPARE(palm.landmarks[0], hand.landmarks[HandWrist]);
+    QCOMPARE(palm.landmarks[2], hand.landmarks[MiddleMcp]);
+    QCOMPARE(palm.landmarks[6], hand.landmarks[ThumbMcp]);
+    QVERIFY(qFuzzyCompare(palm.score, 0.9F));
+
+    // The box holds the palm and leaves the fingertips out.
+    for (const cv::Point2f &point : palm.landmarks) {
+        QVERIFY(point.x >= palm.box.x && point.x <= palm.box.x + palm.box.width);
+        QVERIFY(point.y >= palm.box.y && point.y <= palm.box.y + palm.box.height);
+    }
+    QVERIFY(hand.landmarks[MiddleTip].y < palm.box.y);
+}
+
 void TestHandLandmarker::anchorsMatchThePublishedTable()
 {
     const std::vector<cv::Point2f> &anchors{palmAnchors()};

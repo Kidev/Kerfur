@@ -864,7 +864,7 @@ Rectangle {
                     }
 
                     InfoValue {
-                        text: root.faceTracker ? (root.faceTracker.analysisResolution + " in " + root.faceTracker.analysisMs + " ms" + (root.faceTracker.poseReady ? ", pose on" : ", pose off") + (root.faceTracker.emotionReady ? ", expression on" : ", expression off")) : ""
+                        text: root.faceTracker ? (root.faceTracker.analysisResolution + " in " + root.faceTracker.analysisMs + " ms" + (root.faceTracker.poseReady ? ", pose on" : ", pose off") + (root.faceTracker.emotionReady && root.faceTracker.expressionEnabled ? ", expression on" : ", expression off")) : ""
                     }
 
                     InfoLabel {

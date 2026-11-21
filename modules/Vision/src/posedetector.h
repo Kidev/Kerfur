@@ -4,12 +4,16 @@
 #ifndef KERFUR_POSEDETECTOR_H
 #define KERFUR_POSEDETECTOR_H
 
+#include "accelerator.h"
 #include "visiontypes.h"
 
 #include <QList>
 #include <QString>
 
 #include <opencv2/dnn.hpp>
+
+#include <memory>
+#include <vector>
 
 namespace Kerfur {
 
@@ -25,7 +29,12 @@ class PoseDetector
 {
 public:
     bool load(const QString &modelPath);
-    bool isLoaded() const { return m_loaded; }
+    bool isLoaded() const { return m_loaded || m_accelerated != nullptr; }
+
+    /// Runs the stage on `device` from a compiled YOLOv8 pose model instead.
+    /// True when it opened, in which case `load` is not needed.
+    bool loadAccelerated(Accel::Device &device, const QString &modelPath);
+    bool isAccelerated() const { return m_accelerated != nullptr; }
 
     /// Returns an empty list rather than throwing when the model is not loaded
     /// or the frame is unusable. OpenCV throws and Kerfur does not, so its
@@ -41,8 +50,14 @@ public:
     static constexpr int inputSide{640};
 
 private:
+    QList<PersonDetection> detectAccelerated(const cv::Mat &bgr);
+
     cv::dnn::Net m_net;
     bool m_loaded{false};
+    std::unique_ptr<Accel::Model> m_accelerated;
+    std::vector<Accel::Tensor> m_outputs;
+    /// A failing device fails every pass; the log says so once.
+    bool m_reportedFailure{false};
     float m_confidenceThreshold{0.35F};
     float m_nmsThreshold{0.45F};
 };

@@ -1929,6 +1929,13 @@ Rectangle {
 
                     onToggled: KSettings.loneStrangerHands = !KSettings.loneStrangerHands
                 }
+
+                Toggle {
+                    checked: KSettings.expressionEnabled
+                    label: "Read facial expressions"
+
+                    onToggled: KSettings.expressionEnabled = !KSettings.expressionEnabled
+                }
             }
 
             Section {

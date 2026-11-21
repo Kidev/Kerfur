@@ -9,5 +9,6 @@
         <file>assets/favicon.ico</file>
         <file>assets/img/eyes_left_wink.png</file>
         <file>assets/img/eyes_right_wink.png</file>
+        <file>assets/clip/clip_vit_l_14_laion2B_image_encoder.json</file>
     </qresource>
 </RCC>

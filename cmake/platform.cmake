@@ -32,10 +32,10 @@ endif ()
 # without touching the module list by hand, which is what the soak harness and
 # any headless CI job want.
 #
-# Automatic resolution never selects `hailo`, even on a Pi with the accelerator
-# present, because that backend lands with P2. Until then the Pi runs the same
-# CPU graph as everything else, which is slower than the hardware it is sitting
-# on and is still a working robot.
+# Automatic resolution never selects `hailo`. The live view reaches a Hailo
+# device through the accelerator plugin in modules/Hailo, which is built
+# whenever HailoRT is found and loaded at run time, whatever this says; the
+# value only chooses the graph of the headless producer.
 if (NOT DEFINED KERFUR_PERCEPTION_BACKEND OR KERFUR_PERCEPTION_BACKEND STREQUAL "auto")
     set(KERFUR_PERCEPTION_BACKEND "cpu")
 endif ()
@@ -54,8 +54,8 @@ endif ()
 if (KERFUR_PERCEPTION_BACKEND STREQUAL "hailo")
     message(
         FATAL_ERROR
-        "KERFUR_PERCEPTION_BACKEND=hailo lands with P2. Configure with "
-        "-DKERFUR_PERCEPTION_BACKEND=cpu until then."
+        "KERFUR_PERCEPTION_BACKEND=hailo has no headless producer graph. Configure with "
+        "-DKERFUR_PERCEPTION_BACKEND=cpu; the accelerator plugin is built either way."
     )
 endif ()
 

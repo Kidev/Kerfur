@@ -33,8 +33,8 @@ jobs:
             build_name: '-arm64'
             vcpkg_triplet: 'arm64-linux-release'
             qt_tools: 'tools_ifw'
-            build_command: 'make VCPKG_TRIPLET=arm64-linux-release'
-            installer_command: 'make installer VCPKG_TRIPLET=arm64-linux-release'
+            build_command: 'make VCPKG_TRIPLET=arm64-linux-release MODELS_ACCELERATOR=hailo'
+            installer_command: 'make installer VCPKG_TRIPLET=arm64-linux-release MODELS_ACCELERATOR=hailo'
 
           - name: 'Linux ARM64 (Raspberry Pi 4)'
             os: ubuntu-24.04-arm
@@ -154,6 +154,21 @@ jobs:
           lib=/usr/lib/aarch64-linux-gnu
           sudo ln -sf "$lib/libtiff.so.6" "$lib/libtiff.so.5"
           sudo ln -sf "$lib/libwebp.so.7" "$lib/libwebp.so.6"
+
+      - name: Provide HailoRT for the accelerator plugin
+        if: matrix.qt_host == 'linux_arm64'
+        shell: bash
+        env:
+          # The h10-hailort package of the version modules/Hailo/CMakeLists.txt pins.
+          HAILORT_DEB_SHA256: '6d19ca247030d4ab2f0ede3fe9f7c4959f12c0924d3d7d1d7368cecda450b2bf'
+        run: |
+          version=$(sed -n 's/^set(KERFUR_HAILORT_VERSION \(.*\))$/\1/p' modules/Hailo/CMakeLists.txt)
+          deb="h10-hailort_${version}_arm64.deb"
+          curl -4 -L --fail --retry 3 -o "$RUNNER_TEMP/$deb" \
+            "https://archive.raspberrypi.com/debian/pool/main/h/h10-hailort/$deb"
+          echo "$HAILORT_DEB_SHA256  $RUNNER_TEMP/$deb" | sha256sum --check
+          dpkg-deb -x "$RUNNER_TEMP/$deb" "$RUNNER_TEMP/hailort"
+          echo "HailoRT_ROOT=$RUNNER_TEMP/hailort/usr" >> "$GITHUB_ENV"
 
       - name: Install lftp on Windows
         if: runner.os == 'Windows'
@@ -314,13 +329,18 @@ jobs:
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_PLATFORMS="minimal"
           export LINUXDEPLOY_PLUGIN_QT_IGNORE_IMAGEFORMATS=""
 
-          if ! ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage; then
+          # The accelerator plugin links the target's own HailoRT, which must match its driver: resolve it, never bundle it.
+          if [ -n "${HailoRT_ROOT:-}" ]; then
+            export LD_LIBRARY_PATH="$HailoRT_ROOT/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          fi
+
+          if ! ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --exclude-library 'libhailort*' --output appimage; then
             echo "Failed with multimedia plugins, trying without problematic multimedia plugins..."
 
             find AppDir -name "*gstreamer*" -type f -delete 2>/dev/null || true
             find AppDir -name "*multimedia*" -path "*/plugins/*" -type f -delete 2>/dev/null || true
 
-            ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --output appimage
+            ./linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage --appdir AppDir --plugin qt --exclude-library 'libhailort*' --output appimage
           fi
 
           echo "Available AppImages before rename:"

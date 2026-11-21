@@ -12,9 +12,18 @@ namespace Kerfur {
 
 namespace {
 
-constexpr ModelId allModels[]{ModelId::Pose,     ModelId::Objects,  ModelId::Face,
-                              ModelId::Identity, ModelId::Emotion,  ModelId::Palm,
-                              ModelId::HandLandmarks};
+constexpr ModelId allModels[]{ModelId::Pose,
+                              ModelId::Objects,
+                              ModelId::Face,
+                              ModelId::Identity,
+                              ModelId::Emotion,
+                              ModelId::Palm,
+                              ModelId::HandLandmarks,
+                              ModelId::PoseHailo,
+                              ModelId::ClipHailo,
+                              ModelId::FaceHailo,
+                              ModelId::IdentityHailo,
+                              ModelId::HandLandmarksHailo};
 
 } // namespace
 
@@ -35,6 +44,16 @@ QString ModelCatalog::fileName(ModelId id)
         return QStringLiteral("palm_detection_mediapipe_2023feb.onnx");
     case ModelId::HandLandmarks:
         return QStringLiteral("handpose_estimation_mediapipe_2023feb.onnx");
+    case ModelId::PoseHailo:
+        return QStringLiteral("yolov8m_pose.hef");
+    case ModelId::ClipHailo:
+        return QStringLiteral("clip_vit_l_14_laion2B_image_encoder.hef");
+    case ModelId::FaceHailo:
+        return QStringLiteral("scrfd_10g.hef");
+    case ModelId::IdentityHailo:
+        return QStringLiteral("arcface_r50.hef");
+    case ModelId::HandLandmarksHailo:
+        return QStringLiteral("hand_landmark_lite.hef");
     }
     return {};
 }
@@ -56,6 +75,16 @@ QString ModelCatalog::stageName(ModelId id)
         return QStringLiteral("palm");
     case ModelId::HandLandmarks:
         return QStringLiteral("handlandmarks");
+    case ModelId::PoseHailo:
+        return QStringLiteral("pose-hailo");
+    case ModelId::ClipHailo:
+        return QStringLiteral("clip-hailo");
+    case ModelId::FaceHailo:
+        return QStringLiteral("face-hailo");
+    case ModelId::IdentityHailo:
+        return QStringLiteral("identity-hailo");
+    case ModelId::HandLandmarksHailo:
+        return QStringLiteral("handlandmarks-hailo");
     }
     return {};
 }
@@ -79,10 +108,34 @@ ModelCatalog ModelCatalog::resolve()
     return catalog;
 }
 
-QStringList ModelCatalog::missingStages() const
+bool ModelCatalog::isAccelerated(ModelId id)
+{
+    switch (id) {
+    case ModelId::PoseHailo:
+    case ModelId::ClipHailo:
+    case ModelId::FaceHailo:
+    case ModelId::IdentityHailo:
+    case ModelId::HandLandmarksHailo:
+        return true;
+    case ModelId::Pose:
+    case ModelId::Objects:
+    case ModelId::Face:
+    case ModelId::Identity:
+    case ModelId::Emotion:
+    case ModelId::Palm:
+    case ModelId::HandLandmarks:
+        return false;
+    }
+    return false;
+}
+
+QStringList ModelCatalog::missingStages(bool includeAccelerated) const
 {
     QStringList missing;
     for (const ModelId id : allModels) {
+        if (!includeAccelerated && isAccelerated(id)) {
+            continue;
+        }
         if (!has(id)) {
             missing.append(stageName(id));
         }

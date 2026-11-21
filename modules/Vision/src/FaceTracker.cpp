@@ -3,6 +3,7 @@
 
 #include "FaceTracker.hpp"
 
+#include "attention.h"
 #include "cameraselection.h"
 #include "faceanalysisworker.h"
 #include "identitylibrary.h"
@@ -176,6 +177,28 @@ QVariantMap personToVariant(const Kerfur::AnalysedPerson &person)
                        {QStringLiteral("held"), heldOf(person)}};
 }
 
+/// The midpoint of the ankles the pose stage is at least this sure of, which
+/// stand on the floor.
+std::optional<QPointF> feetOf(const Kerfur::AnalysedPerson &person)
+{
+    constexpr double ankleConfidence{0.5};
+    QPointF sum;
+    int seen{0};
+    for (const Kerfur::Keypoint ankle :
+         {Kerfur::Keypoint::LeftAnkle, Kerfur::Keypoint::RightAnkle}) {
+        const auto index{static_cast<qsizetype>(ankle)};
+        if (index < person.keypoints.size() && index < person.keypointScores.size()
+            && person.keypointScores.at(index) >= ankleConfidence) {
+            sum += person.keypoints.at(index);
+            ++seen;
+        }
+    }
+    if (seen == 0) {
+        return std::nullopt;
+    }
+    return sum / seen;
+}
+
 QString describeSize(const QSize &size)
 {
     if (!size.isValid() || size.isEmpty()) {
@@ -290,6 +313,7 @@ void FaceTracker::startWorker()
     for (const auto &[which, value] : thresholds) {
         m_worker->setThreshold(which, value);
     }
+    m_worker->setExpressionEnabled(m_expressionEnabled);
 
     m_workerThread.setObjectName(QStringLiteral("kerfur-vision"));
     m_workerThread.start();
@@ -663,6 +687,7 @@ void FaceTracker::uninitializeCamera()
     stopWatching(false);
 
     setFaceDetected(false);
+    setFollowing(false);
     m_pendingPreview = QImage{};
     setCameraFrame(QImage{});
     setCaptureResolution(QSize{});
@@ -914,20 +939,15 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
     }
 
     // Rank first, size second. Kerfur looks at the highest ranked person in the
-    // room, and only falls back to the nearest one among equals -- which, since
-    // every stranger shares the same unknown rank, is what a room full of
-    // strangers reduces to. Sorting the other way round was the old behaviour
-    // and it meant whoever leaned closest to the camera won.
+    // room, and among equals at the nearest one, except that the person already
+    // being followed keeps the eyes until somebody clearly nearer arrives:
+    // every stranger shares the same unknown rank, and two strangers of about
+    // the same size would otherwise trade places on every pass. A lone face is
+    // first whatever its name, so nobody waits on the gallery to be looked at.
+    const std::optional<QPointF> previous{
+        m_hasLastKnownPosition ? std::optional<QPointF>{m_attentionPoint} : std::nullopt};
     QList<Kerfur::AnalysedFace> ordered{result.faces};
-    std::sort(ordered.begin(),
-              ordered.end(),
-              [](const Kerfur::AnalysedFace &left, const Kerfur::AnalysedFace &right) {
-                  if (left.priority != right.priority) {
-                      return left.priority < right.priority;
-                  }
-                  return left.box.width() * left.box.height()
-                         > right.box.width() * right.box.height();
-              });
+    Kerfur::orderForAttention(ordered, previous);
 
     const Kerfur::SceneGeometry geometry{sceneGeometry(result.frameSize)};
     const QList<Kerfur::Placement> placements{placeFaces(geometry, ordered, result.people)};
@@ -943,23 +963,41 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         faces.append(face);
     }
     m_faces = faces;
-    m_attentionDistance = placements.isEmpty() || !placements.first().isValid()
-                              ? -1.0
-                              : placements.first().floorDistanceMetres;
 
     if (ordered.isEmpty()) {
         m_primaryFace.clear();
         m_faceLandmarks.clear();
-        emit facesChanged();
-        setAttention({}, {});
-
         setFaceDetected(false);
-        if (!m_hasLastKnownPosition) {
-            setFaceCenter(QPointF{0.5, 0.5});
+
+        // No face, but a body: somebody turned away, too far for the face
+        // detector, or not yet in a pose it can find a face in. Their head is
+        // followed until the face stage catches up.
+        const qsizetype body{Kerfur::chooseBody(result.people, previous)};
+        if (body < 0) {
+            m_attentionDistance = -1.0;
+            emit facesChanged();
+            setAttention({}, {});
+            setFollowing(false);
+            if (!m_hasLastKnownPosition) {
+                setFaceCenter(QPointF{0.5, 0.5});
+            }
+            return;
         }
+
+        const Kerfur::AnalysedPerson &person{result.people.at(body)};
+        Kerfur::FaceSighting sighting;
+        sighting.centre = Kerfur::headPoint(person, m_keypointConfidence);
+        sighting.feet = feetOf(person);
+        const Kerfur::Placement placement{geometry.place(sighting)};
+        m_attentionDistance = placement.isValid() ? placement.floorDistanceMetres : -1.0;
+        emit facesChanged();
+        setAttention(handsOf(person), heldOf(person));
+        follow(sighting.centre, placement, geometry);
         return;
     }
 
+    m_attentionDistance = placements.first().isValid() ? placements.first().floorDistanceMetres
+                                                       : -1.0;
     const Kerfur::AnalysedFace &primary{ordered.first()};
     m_primaryFace = faces.first().toMap();
     m_faceLandmarks = landmarksToVariant(primary.landmarks);
@@ -985,27 +1023,35 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         setAttention(handsOf(*attention), heldOf(*attention));
     }
 
-    const QPointF centre{primary.box.center()};
-    const qreal smoothing{std::clamp(m_trackingSmoothing, 0.0, 1.0)};
-    if (m_hasLastKnownPosition && smoothing > 0.0) {
-        setFaceCenter(QPointF{m_faceCenter.x() * smoothing + centre.x() * (1.0 - smoothing),
-                              m_faceCenter.y() * smoothing + centre.y() * (1.0 - smoothing)});
-    } else {
-        setFaceCenter(centre);
-    }
-    m_hasLastKnownPosition = true;
-
-    // Aimed at the face itself when it could be placed, so that somebody close
-    // to the screen is looked at from where the eyes are drawn rather than
-    // from the lens. A face that could not be placed is far enough away, or
-    // unknown enough, for the direction of its ray to be all there is.
-    //
     // Detected first: a view that follows the gaze only while a face is
     // detected must not miss the first one.
     setFaceDetected(true);
-    const Kerfur::Placement &placement{placements.first()};
+    follow(primary.box.center(), placements.first(), geometry);
+}
+
+void FaceTracker::follow(const QPointF &point,
+                         const Kerfur::Placement &placement,
+                         const Kerfur::SceneGeometry &geometry)
+{
+    if (m_hasLastKnownPosition) {
+        const QPointF delta{point - m_faceCenter};
+        const qreal keep{Kerfur::smoothingWeight(m_trackingSmoothing,
+                                                 std::hypot(delta.x(), delta.y()),
+                                                 centreSnapFraction)};
+        setFaceCenter(m_faceCenter * keep + point * (1.0 - keep));
+    } else {
+        setFaceCenter(point);
+    }
+    m_attentionPoint = point;
+    m_hasLastKnownPosition = true;
+
+    // Aimed at the person when they could be placed, so that somebody close
+    // to the screen is looked at from where the eyes are drawn rather than
+    // from the lens. Somebody who could not be placed is far enough away, or
+    // unknown enough, for the direction of their ray to be all there is.
+    setFollowing(true);
     setGaze(placement.isValid() ? geometry.gazeAt(placement.position)
-                                : geometry.gazeAlong(geometry.ray(centre)));
+                                : geometry.gazeAlong(geometry.ray(point)));
 }
 
 Kerfur::SceneGeometry FaceTracker::sceneGeometry(const QSize &frame) const
@@ -1019,26 +1065,6 @@ QList<Kerfur::Placement> FaceTracker::placeFaces(const Kerfur::SceneGeometry &ge
                                                  const QList<Kerfur::AnalysedFace> &faces,
                                                  const QList<Kerfur::AnalysedPerson> &people) const
 {
-    // Ankles the pose model is at least this sure of stand on the floor.
-    constexpr double ankleConfidence{0.5};
-    const auto feetOf = [](const Kerfur::AnalysedPerson &person) -> std::optional<QPointF> {
-        QPointF sum;
-        int seen{0};
-        for (const Kerfur::Keypoint ankle : {Kerfur::Keypoint::LeftAnkle,
-                                             Kerfur::Keypoint::RightAnkle}) {
-            const auto index{static_cast<qsizetype>(ankle)};
-            if (index < person.keypoints.size() && index < person.keypointScores.size()
-                && person.keypointScores.at(index) >= ankleConfidence) {
-                sum += person.keypoints.at(index);
-                ++seen;
-            }
-        }
-        if (seen == 0) {
-            return std::nullopt;
-        }
-        return sum / seen;
-    };
-
     QList<Kerfur::Placement> placements;
     placements.reserve(faces.size());
     for (const Kerfur::AnalysedFace &face : faces) {
@@ -1072,11 +1098,14 @@ QList<Kerfur::Placement> FaceTracker::placeFaces(const Kerfur::SceneGeometry &ge
 void FaceTracker::setGaze(const Kerfur::GazeAngles &gaze)
 {
     Kerfur::GazeAngles next{gaze};
-    const qreal smoothing{std::clamp(m_trackingSmoothing, 0.0, 1.0)};
-    if (m_hasGaze && smoothing > 0.0) {
-        next.yawDegrees = m_gaze.yawDegrees * smoothing + gaze.yawDegrees * (1.0 - smoothing);
-        next.pitchDegrees = m_gaze.pitchDegrees * smoothing
-                            + gaze.pitchDegrees * (1.0 - smoothing);
+    if (m_hasGaze) {
+        const double keep{Kerfur::smoothingWeight(m_trackingSmoothing,
+                                                  std::hypot(gaze.yawDegrees - m_gaze.yawDegrees,
+                                                             gaze.pitchDegrees
+                                                                 - m_gaze.pitchDegrees),
+                                                  gazeSnapDegrees)};
+        next.yawDegrees = m_gaze.yawDegrees * keep + gaze.yawDegrees * (1.0 - keep);
+        next.pitchDegrees = m_gaze.pitchDegrees * keep + gaze.pitchDegrees * (1.0 - keep);
     }
     m_hasGaze = true;
     if (qFuzzyCompare(next.yawDegrees, m_gaze.yawDegrees)
@@ -1519,6 +1548,21 @@ void FaceTracker::setLoneStrangerHands(bool enabled)
     emit loneStrangerHandsChanged();
 }
 
+void FaceTracker::setExpressionEnabled(bool enabled)
+{
+    if (m_expressionEnabled == enabled) {
+        return;
+    }
+    m_expressionEnabled = enabled;
+    if (m_worker != nullptr) {
+        QMetaObject::invokeMethod(m_worker,
+                                  &Kerfur::FaceAnalysisWorker::setExpressionEnabled,
+                                  Qt::QueuedConnection,
+                                  enabled);
+    }
+    emit expressionEnabledChanged();
+}
+
 void FaceTracker::setResolution(const QString &resolution)
 {
     const QStringList parts{resolution.split('x')};
@@ -1539,6 +1583,7 @@ void FaceTracker::setResolution(const QString &resolution)
     if (m_enabled && cameraActive()) {
         setCameraFrame(QImage{});
         setFaceDetected(false);
+        setFollowing(false);
         initializeCamera();
     }
 }
@@ -1575,6 +1620,15 @@ void FaceTracker::setFaceDetected(bool detected)
     }
     m_faceDetected = detected;
     emit faceDetectedChanged();
+}
+
+void FaceTracker::setFollowing(bool following)
+{
+    if (m_following == following) {
+        return;
+    }
+    m_following = following;
+    emit followingChanged();
 }
 
 void FaceTracker::setFaceCenter(const QPointF &center)

@@ -149,6 +149,16 @@ endif
 MODELS_CACHE_DIR ?= $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/$(MODELS_APP_SUFFIX)
 # The profile a desktop build bundles; `make MODELS_PROFILE=pi` for a Pi.
 MODELS_PROFILE ?= desktop
+# A profile of models compiled for an accelerator, which the installer ships as
+# an optional component of its own: `make MODELS_ACCELERATOR=hailo`.
+MODELS_ACCELERATOR ?=
+ACCELERATOR_MODELS_DIR := $(abspath $(BUILD_DIR))/accelerator-models/$(MODELS_ACCELERATOR)
+ACCELERATOR_PACKAGE := $(TARGET_PACKAGE).$(MODELS_ACCELERATOR)
+ACCELERATOR_TITLE_hailo := Hailo-10H
+ACCELERATOR_TITLE := $(or $(ACCELERATOR_TITLE_$(MODELS_ACCELERATOR)),$(MODELS_ACCELERATOR))
+ACCELERATOR_MODELS_VERSION = $(shell python3 -c 'import json, sys; print(json.load(open("$(ASSETS_DIR)/models.json"))["componentVersions"][sys.argv[1]]["version"])' $(MODELS_ACCELERATOR))
+comma := ,
+INSTALLER_PACKAGES := $(TARGET_PACKAGE)$(if $(MODELS_ACCELERATOR),$(comma)$(ACCELERATOR_PACKAGE))
 # Where an installed tree carries its models: its top level, or Resources inside
 # the macOS bundle.
 ifeq ($(OS_NAME_UNAME),Darwin)
@@ -198,8 +208,13 @@ repo:
 	mkdir -p "installer/packages/$(TARGET_PACKAGE)/data"
 	cp -Rf "$(ABS_INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/"
 	mv -f "installer/packages/$(TARGET_PACKAGE)/data/$(INSTALL_DIR)" "installer/packages/$(TARGET_PACKAGE)/data/$(PROJECT_TITLE)"
+ifneq ($(MODELS_ACCELERATOR),)
+	rm -rf "installer/packages/$(ACCELERATOR_PACKAGE)/data"
+	mkdir -p "installer/packages/$(ACCELERATOR_PACKAGE)/data/$(PROJECT_TITLE)"
+	cp -Rf "$(ACCELERATOR_MODELS_DIR)/models" "installer/packages/$(ACCELERATOR_PACKAGE)/data/$(PROJECT_TITLE)/"
+endif
 	rm -rf $(REPO_NAME)
-	$(INSTALLER_BIN_DIR)/repogen$(EXE_EXT) -p installer/packages -i $(TARGET_PACKAGE) $(REPO_NAME)
+	$(INSTALLER_BIN_DIR)/repogen$(EXE_EXT) -p installer/packages -i $(INSTALLER_PACKAGES) $(REPO_NAME)
 
 upload-repo:
 	@if [ -n "$(CDN_UPLOAD_USERNAME)" ] && [ -n "$(CDN_UPLOAD_PASSWORD)" ] && [ -n "$(CDN_UPLOAD_SOCKET)" ]; then \
@@ -225,7 +240,7 @@ upload-web:
 
 create-installer:
 	rm -rf $(INSTALLER_NAME)
-	$(INSTALLER_BIN_DIR)/binarycreator$(EXE_EXT) -p installer/packages -c installer/config/config.xml -e $(TARGET_PACKAGE) $(INSTALLER_NAME)
+	$(INSTALLER_BIN_DIR)/binarycreator$(EXE_EXT) -p installer/packages -c installer/config/config.xml -e $(INSTALLER_PACKAGES) $(INSTALLER_NAME)
 
 installer: setup-installer repo upload-repo create-installer
 
@@ -295,6 +310,24 @@ setup-installer:
 
 	cp -r installer/config/meta installer/packages/$(TARGET_PACKAGE)/
 
+ifneq ($(MODELS_ACCELERATOR),)
+	mkdir -p installer/packages/$(ACCELERATOR_PACKAGE)/meta
+	@echo '<?xml version="1.0"?>' > installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '<Package>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <DisplayName>Models for the $(ACCELERATOR_TITLE)</DisplayName>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <Description>The vision and speech models compiled for the $(ACCELERATOR_TITLE), used in place of the CPU models when one is present</Description>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <Version>$(ACCELERATOR_MODELS_VERSION)</Version>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <ReleaseDate>$(BUILD_TIME)</ReleaseDate>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <Name>$(ACCELERATOR_PACKAGE)</Name>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <Dependencies>$(TARGET_PACKAGE)</Dependencies>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <Script>installscript.qs</Script>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <SortingPriority>5</SortingPriority>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <Default>script</Default>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '    <RequiresAdminRights>false</RequiresAdminRights>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	@echo '</Package>' >> installer/packages/$(ACCELERATOR_PACKAGE)/meta/package.xml
+	cp installer/accelerator/$(MODELS_ACCELERATOR).qs installer/packages/$(ACCELERATOR_PACKAGE)/meta/installscript.qs
+endif
+
 	@echo "Installer configuration completed!"
 	@echo "Generated files:"
 	@echo "  - installer/config/config.xml"
@@ -333,12 +366,16 @@ models:
 
 models-pi:
 	@$(MODELS_SCRIPT) pi "$(MODELS_DESKTOP_DIR)" "$(MODELS_CACHE_DIR)"
+	@$(MODELS_SCRIPT) hailo "$(MODELS_DESKTOP_DIR)" "$(MODELS_CACHE_DIR)"
 
 models-web:
 	@$(MODELS_SCRIPT) wasm "$(MODELS_WEB_DIR)" "$(MODELS_CACHE_DIR)"
 
 desktop-bundle:
 	@$(MODELS_SCRIPT) $(MODELS_PROFILE) "$(BUNDLE_DATA_DIR)/models" "$(MODELS_CACHE_DIR)"
+ifneq ($(MODELS_ACCELERATOR),)
+	@$(MODELS_SCRIPT) $(MODELS_ACCELERATOR) "$(ACCELERATOR_MODELS_DIR)/models" "$(MODELS_CACHE_DIR)"
+endif
 
 test: deskop-configure
 	cmake --build $(BUILD_DIR) --config $(BUILD_MODE)

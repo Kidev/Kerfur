@@ -25,6 +25,8 @@ QtObject {
     /// Tilt of the camera, and of the screen with it, in degrees: 0 looks
     /// straight ahead, 90 straight up, negative values down.
     property real cameraTilt: 0
+    /// Whether faces are read for an expression. Off until asked for.
+    property bool expressionEnabled: false
     property real eyeMovementRange: 3.0
     /// Score the face detector needs before a face counts.
     property real faceConfidence: 0.6
@@ -83,6 +85,7 @@ QtObject {
         property alias cameraId: root.cameraId
         property alias cameraTilt: root.cameraTilt
         property alias captureResolution: root.captureResolution
+        property alias expressionEnabled: root.expressionEnabled
         property alias faceConfidence: root.faceConfidence
         property alias fieldOfView: root.fieldOfView
         property alias idleAfterSeconds: root.idleAfterSeconds
@@ -160,9 +163,11 @@ QtObject {
     }
     property bool speechRecognitionDebug: false
     property bool speechRecognitionEnabled: false
-    /// How much of each new position the eyes keep from the last one, from 0
-    /// (none) to 1.
-    property real trackingSmoothing: 0
+    /// How much of the last position the eyes keep when a new one arrives,
+    /// from 0 (none) to 1. Applies in full to small steps, which are
+    /// measurement jitter, and fades out for large ones, so a real move is
+    /// never delayed by it.
+    property real trackingSmoothing: 0.5
     property real upDownAngle: 90
     /// How many times a second the camera is looked at: one frame taken, one
     /// pass of every vision model run on it, one picture published. Persisted

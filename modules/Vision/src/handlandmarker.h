@@ -4,6 +4,8 @@
 #ifndef KERFUR_HANDLANDMARKER_H
 #define KERFUR_HANDLANDMARKER_H
 
+#include "accelerator.h"
+
 #include <QList>
 #include <QPointF>
 #include <QRectF>
@@ -12,6 +14,7 @@
 #include <opencv2/dnn.hpp>
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -113,12 +116,27 @@ public:
     bool load(const QString &palmModelPath, const QString &landmarkModelPath);
     bool isLoaded() const { return m_loaded; }
 
+    /// The palm detector on OpenCV and the landmarks on `device`, from the
+    /// compiled hand landmark model. There is no compiled palm detector.
+    bool loadAccelerated(const QString &palmModelPath,
+                         Accel::Device &device,
+                         const QString &landmarkModelPath);
+    bool isAccelerated() const { return m_accelerated != nullptr; }
+
     /// The single best hand inside `region` of `bgr`, or nothing.
     ///
     /// `region` is a coarse proposal and is enlarged before the search: what
     /// the skeleton calls a hand is a guess from a forearm direction, and the
     /// palm is regularly a little outside it.
-    std::optional<HandPose> detect(const cv::Mat &bgr, const cv::Rect &region);
+    ///
+    /// `previous` is this hand as measured on the frame before, when it was.
+    /// The crop is then taken from its landmarks and the palm detector runs
+    /// only when the landmark model no longer finds the hand there, or finds
+    /// it outside the enlarged region. This is how MediaPipe tracks a hand,
+    /// and the palm detector is the costlier of the two networks.
+    std::optional<HandPose> detect(const cv::Mat &bgr,
+                                   const cv::Rect &region,
+                                   const HandPose *previous = nullptr);
 
     void setPalmScoreThreshold(float threshold) { m_palmScore = threshold; }
     void setHandConfidenceThreshold(float threshold) { m_handConfidence = threshold; }
@@ -140,8 +158,17 @@ public:
 private:
     std::optional<HandPose> landmarksFor(const cv::Mat &bgrRoi, const PalmDetection &palm);
 
+    /// The twenty-one points in the 224 pixel crop, three values each, and
+    /// the hand presence score, from whichever landmark model is loaded.
+    bool runLandmarks(const cv::Mat &rgb224, std::vector<float> &points, double &confidence);
+
+    bool loadPalm(const QString &palmModelPath);
+
     cv::dnn::Net m_palmNet;
     cv::dnn::Net m_handNet;
+    std::unique_ptr<Accel::Model> m_accelerated;
+    std::vector<Accel::Tensor> m_outputs;
+    bool m_reportedFailure{false};
     bool m_loaded{false};
     float m_palmScore{0.55F};
     float m_palmNms{0.3F};
@@ -157,6 +184,12 @@ private:
 /// would be invisible; tst_handlandmarker checks the result against the
 /// published table's first and last entries.
 const std::vector<cv::Point2f> &palmAnchors();
+
+/// The palm a measured hand implies, in the same pixels: the box around the
+/// wrist, the five knuckles and the thumb's first joint, and those seven points
+/// in the order the palm graph reports them. Following a hand into the next
+/// frame from this crops it exactly as a fresh palm detection would.
+PalmDetection palmFromHand(const HandPose &hand);
 
 /// Turns the palm graph's two tensors into detections in source pixels.
 ///

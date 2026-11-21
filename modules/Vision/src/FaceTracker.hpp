@@ -53,6 +53,10 @@ class FaceTracker : public QObject
 
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
     Q_PROPERTY(bool faceDetected READ faceDetected NOTIFY faceDetectedChanged)
+    /// Whether the eyes have somebody to follow: the face ranked first, or,
+    /// when no face was found, the body ranked first. A body is followed from
+    /// the first pass that sees it, before its face is found or named.
+    Q_PROPERTY(bool following READ following NOTIFY followingChanged)
     Q_PROPERTY(QPointF faceCenter READ faceCenter NOTIFY faceCenterChanged)
     Q_PROPERTY(QRectF faceBox READ faceBox NOTIFY facesChanged)
     /// What stops the camera: permission, device, start-up. Empty while frames
@@ -189,6 +193,11 @@ class FaceTracker : public QObject
     Q_PROPERTY(bool loneStrangerHands READ loneStrangerHands WRITE setLoneStrangerHands NOTIFY
                    loneStrangerHandsChanged)
 
+    /// Reads faces for an expression. Off by default; `emotionReady` says
+    /// whether a model to read them with loaded.
+    Q_PROPERTY(bool expressionEnabled READ expressionEnabled WRITE setExpressionEnabled NOTIFY
+                   expressionEnabledChanged)
+
     /// The size the preview is actually being drawn at, which is the capture
     /// size reduced to `previewMaxSide` and never enlarged past it. Published
     /// because a panel that names one resolution while showing a picture built
@@ -244,8 +253,8 @@ class FaceTracker : public QObject
 
     /// Where the drawn eyes should look, from the centre of the screen
     /// towards the face being followed, in degrees: yaw positive towards the
-    /// viewer's right, pitch positive downwards. Smoothed by
-    /// `trackingSmoothing` and by nothing else.
+    /// viewer's right, pitch positive downwards. `trackingSmoothing` filters
+    /// small steps and lets large ones through (see `smoothingWeight`).
     Q_PROPERTY(qreal gazeYaw READ gazeYaw NOTIFY gazeChanged)
     Q_PROPERTY(qreal gazePitch READ gazePitch NOTIFY gazeChanged)
     /// How far along the floor the face being followed is, in metres, or -1
@@ -278,6 +287,7 @@ public:
     void setEnabled(bool enabled);
 
     bool faceDetected() const { return m_faceDetected; }
+    bool following() const { return m_following; }
     QPointF faceCenter() const { return m_faceCenter; }
     QRectF faceBox() const;
     QString errorString() const { return m_errorString; }
@@ -322,6 +332,7 @@ public:
     int previewMaxSide() const { return m_previewMaxSide; }
     int updateHz() const { return m_updateHz; }
     bool loneStrangerHands() const { return m_loneStrangerHands; }
+    bool expressionEnabled() const { return m_expressionEnabled; }
     QString previewResolution() const;
 
     QStringList knownIdentities() const { return m_capabilities.enrolled; }
@@ -367,6 +378,11 @@ public:
     /// The field of view assumed for a camera whose own is not known.
     static constexpr double fallbackFieldOfView{70.0};
 
+    /// The step past which `trackingSmoothing` mostly lets a new position
+    /// through: in degrees for the gaze, in frame widths for `faceCenter`.
+    static constexpr double gazeSnapDegrees{4.0};
+    static constexpr double centreSnapFraction{0.04};
+
 public slots:
     void setResolution(const QString &resolution);
     void setCameraId(const QString &id);
@@ -376,6 +392,7 @@ public slots:
     void setPreviewMaxSide(int side);
     void setUpdateHz(int hertz);
     void setLoneStrangerHands(bool enabled);
+    void setExpressionEnabled(bool enabled);
     void setPersonConfidence(qreal confidence);
     void setKeypointConfidence(qreal confidence);
     void setIdentityThreshold(qreal similarity);
@@ -395,6 +412,7 @@ public slots:
 signals:
     void enabledChanged();
     void faceDetectedChanged();
+    void followingChanged();
     void faceCenterChanged();
     void errorStringChanged();
     void cameraFrameChanged();
@@ -412,6 +430,7 @@ signals:
     void previewMaxSideChanged();
     void updateHzChanged();
     void loneStrangerHandsChanged();
+    void expressionEnabledChanged();
     void mountChanged();
     void gazeChanged();
     void idleWatchChanged();
@@ -465,6 +484,12 @@ private:
     bool canAnalyse() const;
 
     void setFaceDetected(bool detected);
+    void setFollowing(bool following);
+    /// Points the eyes at `point`, normalized to the analysed frame, placed at
+    /// `placement` when that is valid.
+    void follow(const QPointF &point,
+                const Kerfur::Placement &placement,
+                const Kerfur::SceneGeometry &geometry);
     void setFaceCenter(const QPointF &center);
     void setErrorString(const QString &error);
     void setCameraFrame(const QImage &frame);
@@ -503,7 +528,11 @@ private:
 
     bool m_enabled{false};
     bool m_faceDetected{false};
+    bool m_following{false};
     QPointF m_faceCenter{0.5, 0.5};
+    /// The point followed on the last pass, unsmoothed. Keeps the eyes on the
+    /// same person when another of the same rank is about as near.
+    QPointF m_attentionPoint{0.5, 0.5};
     QString m_errorString;
     QImage m_cameraFrame;
 
@@ -583,6 +612,7 @@ private:
     int m_previewMaxSide{defaultPreviewMaxSide};
     int m_updateHz{defaultUpdateHz};
     bool m_loneStrangerHands{true};
+    bool m_expressionEnabled{false};
 
     /// The preview picture belonging to the pass that is still in flight, and
     /// the sequence number that says which pass that is. Held rather than shown

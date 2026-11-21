@@ -20,7 +20,15 @@ enum class ModelId {
     Identity,      ///< stage D, face embedding
     Emotion,       ///< stage E, facial expression
     Palm,          ///< stage F, palm boxes inside a proposed region
-    HandLandmarks  ///< stage F, twenty-one hand points from a palm
+    HandLandmarks, ///< stage F, twenty-one hand points from a palm
+
+    // The same stages compiled for the Hailo-10H, run through the accelerator
+    // plugin when it finds a device. Each falls back to its CPU model above.
+    PoseHailo,
+    ClipHailo,
+    FaceHailo,
+    IdentityHailo,
+    HandLandmarksHailo
 };
 
 /// Finds the model files on disk and reports which stages can therefore run.
@@ -49,8 +57,13 @@ public:
     bool has(ModelId id) const { return !m_paths.value(id).isEmpty(); }
 
     /// Every stage whose file was not found, for one log line at startup rather
-    /// than one per stage scattered through initialization.
-    QStringList missingStages() const;
+    /// than one per stage scattered through initialization. The compiled
+    /// models only with `includeAccelerated`, which a machine without an
+    /// accelerator has no use for.
+    QStringList missingStages(bool includeAccelerated = false) const;
+
+    /// Whether `id` is a model compiled for an accelerator.
+    static bool isAccelerated(ModelId id);
 
 private:
     QString m_directory;

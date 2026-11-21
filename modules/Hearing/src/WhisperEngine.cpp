@@ -3,6 +3,8 @@
 
 #include "WhisperEngine.hpp"
 
+#include "accelerator.h"
+
 #include "transcriptfilter.h"
 
 #include <ggml.h>
@@ -87,6 +89,32 @@ bool WhisperEngine::initialize(const QString &modelPath)
     }
 
     return loadModel(modelPath);
+}
+
+bool WhisperEngine::initializeAccelerated(const QString &modelPath)
+{
+    if (m_initialized) {
+        return m_accelerated != nullptr;
+    }
+    Kerfur::Accel::Device *const device{Kerfur::Accelerator::instance().device()};
+    if (device == nullptr) {
+        m_lastError = QStringLiteral("no accelerator");
+        return false;
+    }
+
+    std::string error;
+    m_accelerated = device->openSpeechToText(modelPath.toStdString(), error);
+    if (m_accelerated == nullptr) {
+        m_lastError = QString::fromStdString(error);
+        qCWarning(whisperLog) << "accelerated speech model did not open:" << m_lastError;
+        return false;
+    }
+
+    m_initialized = true;
+    m_lastError.clear();
+    m_worker = std::thread{[this]() { workerLoop(); }};
+    qCInfo(whisperLog) << "loaded" << modelPath << "on" << device->description().c_str();
+    return true;
 }
 
 void WhisperEngine::routeLibraryLogs()
@@ -208,9 +236,47 @@ void WhisperEngine::workerLoop()
     }
 }
 
+void WhisperEngine::transcribeAccelerated(const std::vector<float> &samples, quint64 sequence)
+{
+    std::string text;
+    const std::string error{m_accelerated->transcribe(samples.data(),
+                                                      samples.size(),
+                                                      m_languageUtf8.toStdString(),
+                                                      m_translate,
+                                                      text)};
+    if (!error.empty()) {
+        qCWarning(whisperLog) << "decode failed:" << error.c_str();
+        return;
+    }
+    // The device reports no token probabilities, so there is no confidence to
+    // give; zero is what the speech view takes to mean none.
+    publish(Kerfur::cleanTranscript(QString::fromStdString(text)), 0.0F, sequence);
+}
+
+void WhisperEngine::publish(const QString &text, float confidence, quint64 sequence)
+{
+    if (text.isEmpty()) {
+        qCDebug(whisperLog) << "utterance" << sequence << "carried no speech";
+        return;
+    }
+    qCInfo(whisperLog) << "heard" << text << "at" << confidence;
+
+    emit transcriptionReady(text, confidence, sequence);
+    if (Kerfur::containsWakeWord(text)) {
+        emit keywordDetected(QStringLiteral("kerfur"));
+    }
+}
+
 void WhisperEngine::transcribe(const std::vector<float> &samples, quint64 sequence)
 {
-    if (m_context == nullptr || samples.empty()) {
+    if (samples.empty()) {
+        return;
+    }
+    if (m_accelerated != nullptr) {
+        transcribeAccelerated(samples, sequence);
+        return;
+    }
+    if (m_context == nullptr) {
         return;
     }
 
@@ -252,21 +318,10 @@ void WhisperEngine::transcribe(const std::vector<float> &samples, quint64 sequen
             }
         }
 
-        if (text.isEmpty()) {
-            qCDebug(whisperLog) << "utterance of" << samples.size() / sampleRate
-                                << "s carried no speech";
-            return;
-        }
-
         const float confidence{countedTokens > 0
                                    ? static_cast<float>(totalProbability / countedTokens)
                                    : 0.0F};
-        qCInfo(whisperLog) << "heard" << text << "at" << confidence;
-
-        emit transcriptionReady(text, confidence, sequence);
-        if (Kerfur::containsWakeWord(text)) {
-            emit keywordDetected(QStringLiteral("kerfur"));
-        }
+        publish(text, confidence, sequence);
     } catch (const std::exception &error) {
         qCWarning(whisperLog) << "decode threw" << error.what();
     }

@@ -3,6 +3,7 @@
 
 #include "faceanalysisworker.h"
 
+#include "accelerator.h"
 #include "bgrimage.h"
 #include "headpose.h"
 #include "identitydirectory.h"
@@ -10,11 +11,14 @@
 #include "modeldirectory.h"
 
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QHash>
 #include <QLoggingCategory>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QThread>
 
+#include <opencv2/core/utility.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
@@ -38,6 +42,13 @@ constexpr float headExpansion{2.6F};
 // adult, and generous rather than tight because the cost of a crop that is too
 // large is one extra downscale.
 constexpr float headFallbackFraction{0.32F};
+
+// The most threads OpenCV may spread one layer over. Its pool is process wide
+// and defaults to every logical core; each layer ends on a barrier, so a pass
+// lasts as long as its slowest stripe, and once speech recognition or anything
+// else on the machine holds a few cores a pass that takes 30 ms goes to 600.
+// These networks stop scaling well before eight threads.
+constexpr int maxInferenceThreads{8};
 
 // How far beyond the wrist, as a fraction of the forearm, the middle of the
 // hand is taken to be. Anatomically the hand's centroid sits at roughly a third
@@ -151,6 +162,29 @@ constexpr double trackOverlap{0.3};
 // enough that the next person to sit down does not inherit the last one's name.
 constexpr quint64 trackExpiry{20};
 
+// The answer sets of assets/clip/vocabulary.json, and the file the
+// application carries them in, named after the encoder they were made for.
+const QString clipHeldSet{QStringLiteral("held")};
+const QString clipExpressionSet{QStringLiteral("expression")};
+QString clipLabelsPath(const QString &encoderPath)
+{
+    return QStringLiteral(":/assets/clip/%1.json").arg(QFileInfo{encoderPath}.completeBaseName());
+}
+
+// A face's expression is read on a crop this much larger than the face box:
+// CLIP was trained on whole pictures, and a box cut at the jaw loses the
+// mouth that most expressions are in.
+constexpr double expressionCropGrowth{1.4};
+
+// Passes an expression reading is given to the face standing where it was
+// taken, and how much that face's box must overlap the reading's.
+constexpr quint64 expressionExpiry{3 * FaceAnalysisWorker::expressionStride};
+constexpr double expressionOverlap{0.3};
+
+// What CLIP names stands for the hand and what it holds, drawn this much
+// larger than the hand: the model says what is there, not where.
+constexpr double clipHeldBoxGrowth{1.8};
+
 QRectF normalize(const cv::Rect2f &box, const cv::Size &frame)
 {
     if (frame.width <= 0 || frame.height <= 0) {
@@ -197,10 +231,13 @@ QStringList rosterOf(const IdentityRegistry &registry)
     return roster;
 }
 
-QString identityCachePath()
+/// One cache per recogniser: two models' embeddings of the same picture are
+/// not comparable, and the cache is keyed by the picture alone.
+QString identityCachePath(const QString &recognizer)
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-           + QStringLiteral("/identities.json");
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+           (recognizer.isEmpty() ? QStringLiteral("/identities.json")
+                                 : QStringLiteral("/identities-%1.json").arg(recognizer));
 }
 
 } // namespace
@@ -217,6 +254,8 @@ void FaceAnalysisWorker::initialize()
     }
     m_initialized = true;
 
+    cv::setNumThreads(std::clamp(QThread::idealThreadCount(), 1, maxInferenceThreads));
+
     AnalysisCapabilities capabilities;
     QStringList problems;
 
@@ -232,16 +271,59 @@ void FaceAnalysisWorker::initialize()
     }
     qCInfo(analysisLog) << "models from" << catalog.directory();
 
-    capabilities.faceReady = m_faces.loadDetector(catalog.path(ModelId::Face));
+    // Each stage on the accelerator when there is one and its compiled model
+    // opens, otherwise on OpenCV. Per stage, so one model that fails to open
+    // costs that stage its speed and nothing else.
+    Accel::Device *const accelerator{Accelerator::instance().device()};
+    QStringList accelerated;
+    const auto onAccelerator = [&](ModelId id, const auto &open) {
+        if (accelerator == nullptr || !catalog.has(id) || !open(*accelerator, catalog.path(id))) {
+            return false;
+        }
+        accelerated.append(ModelCatalog::stageName(id));
+        return true;
+    };
+
+    capabilities.faceReady = onAccelerator(ModelId::FaceHailo,
+                                           [this](Accel::Device &device, const QString &path) {
+                                               return m_faces.loadAcceleratedDetector(device, path);
+                                           }) ||
+                             m_faces.loadDetector(catalog.path(ModelId::Face));
     m_faces.setDetectionThreshold(static_cast<float>(m_faceConfidence));
-    capabilities.identityReady = m_faces.loadRecognizer(catalog.path(ModelId::Identity));
-    capabilities.emotionReady = m_faces.loadExpression(catalog.path(ModelId::Emotion));
-    capabilities.poseReady = m_pose.load(catalog.path(ModelId::Pose));
-    capabilities.objectsReady = m_objects.load(catalog.path(ModelId::Objects));
+    capabilities.identityReady = onAccelerator(ModelId::IdentityHailo,
+                                               [this](Accel::Device &device, const QString &path) {
+                                                   return m_faces.loadAcceleratedRecognizer(device,
+                                                                                            path);
+                                               }) ||
+                                 m_faces.loadRecognizer(catalog.path(ModelId::Identity));
+    // CLIP names held objects and reads expressions when it loads, and the two
+    // CPU models it replaces are then not loaded at all.
+    const bool clip{
+        onAccelerator(ModelId::ClipHailo, [this](Accel::Device &device, const QString &path) {
+            return m_clip.load(device, path, clipLabelsPath(path));
+        })};
+    capabilities.emotionReady = (clip && m_clip.hasSet(clipExpressionSet)) ||
+                                m_faces.loadExpression(catalog.path(ModelId::Emotion));
+    m_faces.setExpressionEnabled(m_expressionEnabled && !m_clip.isLoaded());
+    capabilities.poseReady = onAccelerator(ModelId::PoseHailo,
+                                           [this](Accel::Device &device, const QString &path) {
+                                               return m_pose.loadAccelerated(device, path);
+                                           }) ||
+                             m_pose.load(catalog.path(ModelId::Pose));
+    capabilities.objectsReady = (clip && m_clip.hasSet(clipHeldSet)) ||
+                                m_objects.load(catalog.path(ModelId::Objects));
     // Both or neither: a palm box with no landmark model behind it tells
     // nobody anything the skeleton had not already said.
-    capabilities.handsReady = m_handLandmarker.load(catalog.path(ModelId::Palm),
-                                                    catalog.path(ModelId::HandLandmarks));
+    const QString palm{catalog.path(ModelId::Palm)};
+    capabilities.handsReady =
+        onAccelerator(ModelId::HandLandmarksHailo,
+                      [this, &palm](Accel::Device &device, const QString &path) {
+                          return m_handLandmarker.loadAccelerated(palm, device, path);
+                      }) ||
+        m_handLandmarker.load(palm, catalog.path(ModelId::HandLandmarks));
+    if (accelerator != nullptr) {
+        qCInfo(analysisLog) << "on" << accelerator->description().c_str() << ":" << accelerated;
+    }
 
     // The face detector is the only stage whose absence leaves nothing at all
     // to draw. Everything else degrades to a missing field, which the overlay
@@ -250,7 +332,7 @@ void FaceAnalysisWorker::initialize()
         problems.append(QStringLiteral("face detection model missing from %1")
                             .arg(catalog.directory()));
     }
-    const QStringList missing{catalog.missingStages()};
+    const QStringList missing{catalog.missingStages(accelerator != nullptr)};
     if (!missing.isEmpty()) {
         qCInfo(analysisLog) << "stages without a model file:" << missing;
     }
@@ -301,10 +383,11 @@ void FaceAnalysisWorker::enrolGallery()
             m_identities.clear();
             qCInfo(analysisLog) << capabilities.galleryDirectory << "declares nobody";
         } else if (capabilities.identityReady) {
-            m_identities.enrol(m_faces, m_registry.faceEntries(), identityCachePath());
+            m_identities.enrol(m_faces,
+                               m_registry.faceEntries(),
+                               identityCachePath(m_faces.recognizerName()));
             qCInfo(analysisLog) << "enrolled" << m_identities.size() << "faces from"
-                                << capabilities.galleryDirectory << "roster"
-                                << capabilities.roster;
+                                << capabilities.galleryDirectory << "roster" << capabilities.roster;
             if (m_identities.isEmpty() && !m_registry.faceEntries().isEmpty()) {
                 problems.append(QStringLiteral("no face could be embedded from %1")
                                     .arg(capabilities.galleryDirectory));
@@ -349,6 +432,7 @@ void FaceAnalysisWorker::setThreshold(VisionThreshold which, double value)
         break;
     case VisionThreshold::Object:
         m_objects.setConfidenceThreshold(score);
+        m_objectConfidence = score;
         // As with names: held objects were voted for under the old threshold.
         m_held.clear();
         break;
@@ -364,6 +448,15 @@ void FaceAnalysisWorker::setLoneStrangerHands(bool enabled)
     // A held object voted for under the other rule belongs to somebody whose
     // hands may no longer be looked at.
     m_held.clear();
+}
+
+void FaceAnalysisWorker::setExpressionEnabled(bool enabled)
+{
+    m_expressionEnabled = enabled;
+    m_faces.setExpressionEnabled(enabled && !m_clip.isLoaded());
+    if (!enabled) {
+        m_expression.reset();
+    }
 }
 
 void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mirrored)
@@ -422,37 +515,48 @@ void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mir
         cv::Mat gray;
         cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
 
-        QList<cv::Rect> regions;
-        if (!result.people.isEmpty()) {
-            // Largest first, so that the cap falls on whoever is furthest away
-            // rather than on whoever the detector happened to list last.
-            QList<AnalysedPerson> ordered{result.people};
-            std::sort(ordered.begin(),
-                      ordered.end(),
-                      [](const AnalysedPerson &left, const AnalysedPerson &right) {
-                          return left.box.width() * left.box.height()
-                                 > right.box.width() * right.box.height();
-                      });
-            for (const AnalysedPerson &person : ordered) {
-                if (regions.size() >= maxFaces) {
-                    break;
+        if (m_faces.detectsWholeFrame()) {
+            // One pass over the whole frame finds every face, and the largest
+            // `maxFaces` are described. A face reaches its body through
+            // attributePeople, which matches by overlap either way.
+            for (const FaceObservation &observation : m_faces.analyseFrame(bgr, maxFaces)) {
+                result.faces.append(describeFace(bgr, gray, observation, mirrored));
+            }
+        } else {
+            QList<cv::Rect> regions;
+            if (!result.people.isEmpty()) {
+                // Largest first, so that the cap falls on whoever is furthest
+                // away rather than on whoever the detector happened to list
+                // last.
+                QList<AnalysedPerson> ordered{result.people};
+                std::sort(ordered.begin(),
+                          ordered.end(),
+                          [](const AnalysedPerson &left, const AnalysedPerson &right) {
+                              return left.box.width() * left.box.height() >
+                                     right.box.width() * right.box.height();
+                          });
+                for (const AnalysedPerson &person : ordered) {
+                    if (regions.size() >= maxFaces) {
+                        break;
+                    }
+                    regions.append(headRegionFromKeypoints(person, frame, m_keypointConfidence));
                 }
-                regions.append(headRegionFromKeypoints(person, frame, m_keypointConfidence));
             }
-        }
-        if (regions.isEmpty()) {
-            // Nobody from the pose stage, either because it is not provisioned
-            // or because it saw no whole person. A face in front of the lens is
-            // still a face, and it is the case the camera view exists for.
-            regions.append(cv::Rect{0, 0, frame.width, frame.height});
-        }
+            if (regions.isEmpty()) {
+                // Nobody from the pose stage, either because it is not
+                // provisioned or because it saw no whole person. A face in
+                // front of the lens is still a face, and it is the case the
+                // camera view exists for.
+                regions.append(cv::Rect{0, 0, frame.width, frame.height});
+            }
 
-        for (const cv::Rect &region : regions) {
-            const FaceObservation observation{m_faces.analyse(bgr, region)};
-            if (!observation.valid) {
-                continue;
+            for (const cv::Rect &region : regions) {
+                const FaceObservation observation{m_faces.analyse(bgr, region)};
+                if (!observation.valid) {
+                    continue;
+                }
+                result.faces.append(describeFace(bgr, gray, observation, mirrored));
             }
-            result.faces.append(describeFace(bgr, gray, observation, mirrored));
         }
     }
 
@@ -461,6 +565,7 @@ void FaceAnalysisWorker::analyse(const QImage &image, quint64 sequence, bool mir
     // region to search than an extrapolated one and it can say whether the
     // hand is even closed; then the objects, because an object is only held if
     // there is a hand to hold it.
+    readExpressions(bgr, result);
     attributePeople(result, mirrored);
     const bool measured{refineHands(bgr, result)};
     attributeHeldObjects(bgr, result);
@@ -567,6 +672,7 @@ void FaceAnalysisWorker::attributePeople(AnalysisResult &result, bool mirrored) 
 bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
 {
     if (!m_handLandmarker.isLoaded() || result.people.isEmpty()) {
+        m_trackedHands.clear();
         return false;
     }
 
@@ -595,6 +701,7 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
         }
     }
     if (candidates.isEmpty()) {
+        m_trackedHands.clear();
         return false;
     }
     std::sort(candidates.begin(),
@@ -619,7 +726,12 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
                               cvRound(box.width() * frame.width),
                               cvRound(box.height() * frame.height)};
 
-        const std::optional<HandPose> pose{m_handLandmarker.detect(bgr, region)};
+        const QString key{heldKey(candidate.person->identity, candidate.hand->side)};
+        const auto tracked{m_trackedHands.constFind(key)};
+        const HandPose *const previous{
+            tracked != m_trackedHands.cend() && tracked->pass + 1 == m_passes ? &tracked->pose
+                                                                              : nullptr};
+        const std::optional<HandPose> pose{m_handLandmarker.detect(bgr, region, previous)};
         // The attempt is counted, not the success. The inference was run and
         // paid for whether or not it found a palm, and a frame full of hands
         // the model cannot see must not become a frame that runs the model
@@ -628,6 +740,7 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
         if (!pose) {
             continue;
         }
+        m_trackedHands.insert(key, TrackedHand{*pose, m_passes});
 
         AnalysedHand &hand{*candidate.hand};
         hand.box = normalize(pose->box, frame);
@@ -657,6 +770,8 @@ bool FaceAnalysisWorker::refineHands(const cv::Mat &bgr, AnalysisResult &result)
             candidate.person->keypoints[hand.wristKeypoint] = hand.wrist;
         }
     }
+    // A hand not measured on this pass is searched for afresh on the next.
+    m_trackedHands.removeIf([this](const auto &entry) { return entry.value().pass != m_passes; });
     return measured;
 }
 
@@ -712,9 +827,19 @@ void FaceAnalysisWorker::attributeHeldObjects(const cv::Mat &bgr, AnalysisResult
               });
 
     const cv::Size frame{bgr.size()};
-    const bool detecting{(m_passes % objectStride) == 0};
-    int budget{maxObjectCrops};
-    for (const Candidate &candidate : std::as_const(candidates)) {
+    // One pass after the pose stage, so the two largest networks never land
+    // on the same pass.
+    const bool detecting{((m_passes + 1) % objectStride) == 0};
+    // CLIP is the costliest model on the accelerator, so it looks at one hand
+    // per pass, taking the hands in turn; the vote below still settles a held
+    // object within a second at the default rate.
+    const bool clip{m_clip.hasSet(clipHeldSet)};
+    int budget{clip ? 1 : maxObjectCrops};
+    const qsizetype count{candidates.size()};
+    const qsizetype first{
+        clip && count > 0 ? static_cast<qsizetype>((m_passes / objectStride) % count) : 0};
+    for (qsizetype index{0}; index < count; ++index) {
+        const Candidate &candidate{candidates.at((first + index) % count)};
         HeldTrack &track{m_held[heldKey(candidate.person->identity, candidate.hand->side)]};
         if (detecting && budget > 0) {
             --budget;
@@ -735,6 +860,54 @@ void FaceAnalysisWorker::attributeHeldObjects(const cv::Mat &bgr, AnalysisResult
     }
 }
 
+void FaceAnalysisWorker::readExpressions(const cv::Mat &bgr, AnalysisResult &result)
+{
+    if (!m_expressionEnabled || !m_clip.hasSet(clipExpressionSet) || result.faces.isEmpty()) {
+        return;
+    }
+    const cv::Size frame{bgr.size()};
+
+    if ((m_passes % expressionStride) == 0) {
+        const auto area = [](const AnalysedFace &face) {
+            return face.box.width() * face.box.height();
+        };
+        const auto largest{std::max_element(
+            result.faces.begin(),
+            result.faces.end(),
+            [&area](const AnalysedFace &left, const AnalysedFace &right) {
+                return area(left) < area(right);
+            })};
+        const QRectF &box{largest->box};
+        const double side{std::max(box.width() * frame.width, box.height() * frame.height) *
+                          expressionCropGrowth};
+        const cv::Rect region{cvRound(box.center().x() * frame.width - side / 2.0),
+                              cvRound(box.center().y() * frame.height - side / 2.0),
+                              cvRound(side),
+                              cvRound(side)};
+        const std::optional<ClipAnswer> answer{m_clip.classify(bgr, region, clipExpressionSet)};
+        if (answer && !answer->label.isEmpty()) {
+            m_expression = ExpressionReading{box, answer->label, answer->probability, m_passes};
+        }
+    }
+
+    if (!m_expression || m_passes - m_expression->pass > expressionExpiry) {
+        m_expression.reset();
+        return;
+    }
+    for (AnalysedFace &face : result.faces) {
+        const QRectF shared{face.box & m_expression->box};
+        const double unionArea{face.box.width() * face.box.height() +
+                               m_expression->box.width() * m_expression->box.height() -
+                               shared.width() * shared.height()};
+        if (unionArea > 0.0 && shared.width() * shared.height() / unionArea >= expressionOverlap) {
+            face.emotion = m_expression->label;
+            face.emotionConfidence = m_expression->confidence;
+            m_expression->box = face.box;
+            break;
+        }
+    }
+}
+
 std::optional<HeldObject> FaceAnalysisWorker::bestHeldObject(const cv::Mat &bgr,
                                                              const AnalysedHand &hand,
                                                              const cv::Size &frame)
@@ -750,6 +923,23 @@ std::optional<HeldObject> FaceAnalysisWorker::bestHeldObject(const cv::Mat &bgr,
     const cv::Rect region{objectRegionForHand(hand, frame)};
     if (region.empty()) {
         return std::nullopt;
+    }
+
+    // CLIP answers for the whole crop at once and has an answer for an empty
+    // hand, so whatever it names is what that hand holds.
+    if (m_clip.hasSet(clipHeldSet)) {
+        const std::optional<ClipAnswer> answer{m_clip.classify(bgr, region, clipHeldSet)};
+        if (!answer || answer->label.isEmpty() || answer->probability < m_objectConfidence) {
+            return std::nullopt;
+        }
+        const QPointF centre{hand.box.center()};
+        const QSizeF size{hand.box.size() * clipHeldBoxGrowth};
+        const QRectF box{QRectF{centre.x() - size.width() / 2.0,
+                                centre.y() - size.height() / 2.0,
+                                size.width(),
+                                size.height()} &
+                         QRectF{0.0, 0.0, 1.0, 1.0}};
+        return HeldObject{box, answer->label, answer->probability, hand.side};
     }
 
     const double regionArea{static_cast<double>(region.width) * region.height};

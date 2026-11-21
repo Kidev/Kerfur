@@ -16,6 +16,10 @@
 struct whisper_context;
 struct whisper_full_params;
 
+namespace Kerfur::Accel {
+class SpeechToText;
+}
+
 /// Transcribes complete utterances, one at a time, on a thread of its own.
 ///
 /// It is given whole utterances rather than a stream. Whisper is not a
@@ -33,6 +37,13 @@ public:
     ~WhisperEngine() override;
 
     bool initialize(const QString &modelPath);
+
+    /// Transcribes on the accelerator, from a compiled Whisper model, instead
+    /// of through whisper.cpp. True when the model opened; `initialize` is
+    /// then not needed.
+    bool initializeAccelerated(const QString &modelPath);
+    bool isAccelerated() const { return m_accelerated != nullptr; }
+
     bool isInitialized() const { return m_initialized; }
     QString getLastError() const { return m_lastError; }
 
@@ -67,6 +78,9 @@ private:
     bool loadModel(const QString &modelPath);
     void workerLoop();
     void transcribe(const std::vector<float> &samples, quint64 sequence);
+    void transcribeAccelerated(const std::vector<float> &samples, quint64 sequence);
+    /// Hands a transcript to the signals, once it is known to say something.
+    void publish(const QString &text, float confidence, quint64 sequence);
 
     /// Routes whisper.cpp's and ggml's own printf logging into a Qt category.
     ///
@@ -81,6 +95,9 @@ private:
 
     whisper_context *m_context{nullptr};
     std::unique_ptr<whisper_full_params> m_params;
+    /// Set before the worker starts and never after, so the worker reads it
+    /// without a lock.
+    std::unique_ptr<Kerfur::Accel::SpeechToText> m_accelerated;
 
     bool m_initialized{false};
     QString m_lastError;

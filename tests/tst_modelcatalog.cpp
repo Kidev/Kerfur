@@ -3,6 +3,7 @@
 
 #include "modelcatalog.h"
 
+#include <QCryptographicHash>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -14,23 +15,34 @@ using namespace Kerfur;
 
 namespace {
 
-constexpr ModelId allModels[]{ModelId::Pose,     ModelId::Objects, ModelId::Face,
-                              ModelId::Identity, ModelId::Emotion, ModelId::Palm,
-                              ModelId::HandLandmarks};
+constexpr ModelId allModels[]{ModelId::Pose,
+                              ModelId::Objects,
+                              ModelId::Face,
+                              ModelId::Identity,
+                              ModelId::Emotion,
+                              ModelId::Palm,
+                              ModelId::HandLandmarks,
+                              ModelId::PoseHailo,
+                              ModelId::ClipHailo,
+                              ModelId::FaceHailo,
+                              ModelId::IdentityHailo,
+                              ModelId::HandLandmarksHailo};
+
+QJsonObject readDocument()
+{
+    QFile file{QStringLiteral(KERFUR_SOURCE_DIR) + QStringLiteral("/assets/models.json")};
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    return QJsonDocument::fromJson(file.readAll()).object();
+}
 
 // Returned by value and always copy initialized at the call sites. Braces would
 // select QJsonArray's initializer list constructor, because QJsonValue converts
 // implicitly from QJsonArray, and every entry would then be an empty object.
 QJsonArray readManifest()
 {
-    QFile file{QStringLiteral(KERFUR_SOURCE_DIR) + QStringLiteral("/assets/models.json")};
-    if (!file.open(QIODevice::ReadOnly)) {
-        return {};
-    }
-    return QJsonDocument::fromJson(file.readAll())
-        .object()
-        .value(QStringLiteral("models"))
-        .toArray();
+    return readDocument().value(QStringLiteral("models")).toArray();
 }
 
 } // namespace
@@ -51,6 +63,7 @@ private slots:
     void manifestFileNamesMatchTheCatalog();
     void everyEntryDeclaresAChecksumAndAProfile();
     void missingDirectoryDisablesEveryStage();
+    void componentVersionCoversItsModels();
 };
 
 void TestModelCatalog::manifestIsReadable()
@@ -111,11 +124,42 @@ void TestModelCatalog::missingDirectoryDisablesEveryStage()
     // a face with no perception, not to a failed start.
     const ModelCatalog empty;
     QVERIFY(empty.directory().isEmpty());
-    QCOMPARE(empty.missingStages().size(), std::size(allModels));
+    QCOMPARE(empty.missingStages(true).size(), std::size(allModels));
+    qsizetype cpuStages{0};
+    for (const ModelId id : allModels) {
+        cpuStages += ModelCatalog::isAccelerated(id) ? 0 : 1;
+    }
+    QCOMPARE(empty.missingStages().size(), cpuStages);
     for (const ModelId id : allModels) {
         QVERIFY(!empty.has(id));
         QVERIFY(empty.path(id).isEmpty());
     }
+}
+
+void TestModelCatalog::componentVersionCoversItsModels()
+{
+    // The installer ships the `hailo` profile as a component whose version
+    // decides whether an installed copy downloads it again. A model changed
+    // under an unchanged version would never reach an installation.
+    const QJsonObject hailo{readDocument()
+                                .value(QStringLiteral("componentVersions"))
+                                .toObject()
+                                .value(QStringLiteral("hailo"))
+                                .toObject()};
+    QVERIFY(!hailo.value(QStringLiteral("version")).toString().isEmpty());
+
+    QByteArray checksums;
+    const QJsonArray models = readManifest();
+    for (const QJsonValue &value : models) {
+        const QJsonObject entry{value.toObject()};
+        if (entry.value(QStringLiteral("profiles")).toArray().contains(QStringLiteral("hailo"))) {
+            checksums += entry.value(QStringLiteral("sha256")).toString().toLatin1() + '\n';
+        }
+    }
+    QVERIFY(!checksums.isEmpty());
+    QCOMPARE(hailo.value(QStringLiteral("contents")).toString(),
+             QString::fromLatin1(
+                 QCryptographicHash::hash(checksums, QCryptographicHash::Sha256).toHex()));
 }
 
 QTEST_MAIN(TestModelCatalog)

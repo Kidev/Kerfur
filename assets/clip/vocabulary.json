@@ -1,0 +1,475 @@
+{
+    "$comment": "Zero-shot labels for the CLIP image encoder. Each set lists its classes and the prompt templates they are written into; a class is the mean of its prompts. `extraClasses` names a file of more classes, added after these and skipped where a label here already says the same thing, and where `exclude` rules it out: by a WordNet synset it is a kind of, or by name. What is left is what a hand can hold. `none` is the answer that names nothing. Classes whose text embeddings are closer than `mergeAbove` share the label of the first of them, so synonyms add up instead of splitting one answer. cmake/clip-labels.py turns this file into the text embeddings the application loads, and tests/tst_cliplabels.cpp fails when the two disagree.",
+    "held": {
+        "templates": [
+            "a photo of a hand holding {}.",
+            "a photo of a person holding {} in their hand.",
+            "a close-up photo of {} held in a hand."
+        ],
+        "classes": [
+            {
+                "label": "phone",
+                "noun": "a smartphone"
+            },
+            {
+                "label": "remote",
+                "noun": "a TV remote control"
+            },
+            {
+                "label": "mug",
+                "noun": "a coffee mug"
+            },
+            {
+                "label": "cup",
+                "noun": "a cup"
+            },
+            {
+                "label": "glass",
+                "noun": "a drinking glass"
+            },
+            {
+                "label": "bottle",
+                "noun": "a bottle"
+            },
+            {
+                "label": "can",
+                "noun": "a drink can"
+            },
+            {
+                "label": "book",
+                "noun": "a book"
+            },
+            {
+                "label": "notebook",
+                "noun": "a notebook"
+            },
+            {
+                "label": "pen",
+                "noun": "a pen"
+            },
+            {
+                "label": "pencil",
+                "noun": "a pencil"
+            },
+            {
+                "label": "keys",
+                "noun": "a bunch of keys"
+            },
+            {
+                "label": "wallet",
+                "noun": "a wallet"
+            },
+            {
+                "label": "card",
+                "noun": "a card"
+            },
+            {
+                "label": "glasses",
+                "noun": "a pair of glasses"
+            },
+            {
+                "label": "headphones",
+                "noun": "a pair of headphones"
+            },
+            {
+                "label": "game controller",
+                "noun": "a game controller"
+            },
+            {
+                "label": "tablet",
+                "noun": "a tablet computer"
+            },
+            {
+                "label": "computer mouse",
+                "noun": "a computer mouse"
+            },
+            {
+                "label": "camera",
+                "noun": "a camera"
+            },
+            {
+                "label": "flashlight",
+                "noun": "a flashlight"
+            },
+            {
+                "label": "lighter",
+                "noun": "a lighter"
+            },
+            {
+                "label": "cigarette",
+                "noun": "a cigarette"
+            },
+            {
+                "label": "screwdriver",
+                "noun": "a screwdriver"
+            },
+            {
+                "label": "hammer",
+                "noun": "a hammer"
+            },
+            {
+                "label": "wrench",
+                "noun": "a wrench"
+            },
+            {
+                "label": "knife",
+                "noun": "a knife"
+            },
+            {
+                "label": "fork",
+                "noun": "a fork"
+            },
+            {
+                "label": "spoon",
+                "noun": "a spoon"
+            },
+            {
+                "label": "scissors",
+                "noun": "a pair of scissors"
+            },
+            {
+                "label": "plate",
+                "noun": "a plate"
+            },
+            {
+                "label": "bowl",
+                "noun": "a bowl"
+            },
+            {
+                "label": "banana",
+                "noun": "a banana"
+            },
+            {
+                "label": "apple",
+                "noun": "an apple"
+            },
+            {
+                "label": "orange",
+                "noun": "an orange"
+            },
+            {
+                "label": "sandwich",
+                "noun": "a sandwich"
+            },
+            {
+                "label": "pizza",
+                "noun": "a slice of pizza"
+            },
+            {
+                "label": "donut",
+                "noun": "a donut"
+            },
+            {
+                "label": "carrot",
+                "noun": "a carrot"
+            },
+            {
+                "label": "toothbrush",
+                "noun": "a toothbrush"
+            },
+            {
+                "label": "hairbrush",
+                "noun": "a hairbrush"
+            },
+            {
+                "label": "umbrella",
+                "noun": "an umbrella"
+            },
+            {
+                "label": "ball",
+                "noun": "a ball"
+            },
+            {
+                "label": "toy",
+                "noun": "a toy"
+            },
+            {
+                "label": "teddy bear",
+                "noun": "a teddy bear"
+            },
+            {
+                "label": "flower",
+                "noun": "a flower"
+            },
+            {
+                "label": "bag",
+                "noun": "a bag"
+            },
+            {
+                "label": "box",
+                "noun": "a box"
+            },
+            {
+                "label": "paper",
+                "noun": "a sheet of paper"
+            },
+            {
+                "label": "envelope",
+                "noun": "an envelope"
+            },
+            {
+                "label": "magazine",
+                "noun": "a magazine"
+            },
+            {
+                "label": "microphone",
+                "noun": "a microphone"
+            },
+            {
+                "label": "coin",
+                "noun": "a coin"
+            },
+            {
+                "label": "banknote",
+                "noun": "a banknote"
+            },
+            {
+                "label": "candy",
+                "noun": "a candy bar"
+            },
+            {
+                "label": "ice cream",
+                "noun": "an ice cream cone"
+            },
+            {
+                "label": "wine glass",
+                "noun": "a wine glass"
+            },
+            {
+                "label": "cat",
+                "noun": "a cat"
+            },
+            {
+                "label": "dog",
+                "noun": "a small dog"
+            },
+            {
+                "label": "vape",
+                "noun": "a vape"
+            }
+        ],
+        "extraClasses": "lvis_v1_categories.json",
+        "exclude": {
+            "kindsOf": [
+                "furniture.n.01",
+                "vehicle.n.01",
+                "craft.n.02",
+                "structure.n.01",
+                "home_appliance.n.01",
+                "plumbing_fixture.n.01",
+                "printer.n.03",
+                "cooling_system.n.02",
+                "clothing.n.01",
+                "jewelry.n.01",
+                "dish.n.02",
+                "person.n.01",
+                "body_part.n.01",
+                "woody_plant.n.01",
+                "way.n.06",
+                "television_receiver.n.01",
+                "display.n.06",
+                "floor_cover.n.01",
+                "blind.n.03",
+                "building_material.n.01",
+                "bedclothes.n.01",
+                "ungulate.n.01",
+                "proboscidean.n.01",
+                "big_cat.n.01",
+                "bear.n.01",
+                "primate.n.02",
+                "aquatic_mammal.n.01",
+                "crocodilian_reptile.n.01",
+                "ratite.n.01",
+                "wading_bird.n.01",
+                "seabird.n.01",
+                "shark.n.01",
+                "bird_of_prey.n.01"
+            ],
+            "names": [
+                "bulletin_board",
+                "bathtub",
+                "bath_mat",
+                "chandelier",
+                "electric_chair",
+                "Ferris_wheel",
+                "lamppost",
+                "streetlight",
+                "street_sign",
+                "stop_sign",
+                "traffic_light",
+                "telephone_pole",
+                "school_bus",
+                "bus_(vehicle)",
+                "train_(railroad_vehicle)",
+                "bullet_train",
+                "power_shovel",
+                "piano",
+                "harmonium",
+                "vending_machine",
+                "water_tower",
+                "windmill",
+                "solar_array",
+                "parking_meter",
+                "mailbox_(at_home)",
+                "postbox_(public)",
+                "manhole",
+                "dumpster",
+                "radiator",
+                "water_heater",
+                "water_cooler",
+                "generator",
+                "cistern",
+                "flagpole",
+                "mast",
+                "sail",
+                "raft",
+                "parachute",
+                "diving_board",
+                "trampoline",
+                "mattress",
+                "futon",
+                "headboard",
+                "Christmas_tree",
+                "scarecrow",
+                "snowman",
+                "mound_(baseball)",
+                "home_plate_(baseball)",
+                "baseball_base",
+                "basketball_backboard",
+                "awning",
+                "dish_antenna",
+                "radar",
+                "lightning_rod",
+                "weathervane",
+                "headlight",
+                "taillight",
+                "brake_light",
+                "blinker",
+                "steering_wheel",
+                "windshield_wiper",
+                "license_plate",
+                "rearview_mirror",
+                "tachometer",
+                "wagon_wheel",
+                "plow_(farm_equipment)",
+                "saddle_(on_an_animal)",
+                "saddle_blanket",
+                "stirrup",
+                "yoke_(animal_equipment)",
+                "headstall_(for_horses)",
+                "noseband_(for_animals)",
+                "nosebag_(for_animals)",
+                "painting",
+                "poster",
+                "tapestry",
+                "blackboard",
+                "tablecloth",
+                "sleeping_bag",
+                "gargoyle",
+                "statue_(sculpture)",
+                "sculpture",
+                "vat",
+                "keg",
+                "tank_(storage_vessel)",
+                "urn",
+                "cash_register",
+                "fume_hood",
+                "vent",
+                "wall_socket",
+                "thermostat",
+                "fire_alarm",
+                "wall_clock",
+                "lampshade",
+                "ironing_board",
+                "pegboard",
+                "easel",
+                "birdbath",
+                "birdhouse",
+                "birdfeeder",
+                "manger",
+                "nest",
+                "crossbar",
+                "pole",
+                "spice_rack",
+                "window_box_(for_plants)",
+                "speaker_(stero_equipment)",
+                "subwoofer",
+                "stereo_(sound_system)",
+                "record_player",
+                "projector",
+                "television_camera",
+                "spotlight",
+                "wind_chime",
+                "windsock",
+                "banner",
+                "life_buoy",
+                "buoy",
+                "propeller",
+                "wheel",
+                "crate",
+                "barrel",
+                "hamper",
+                "clothes_hamper",
+                "trunk",
+                "dartboard",
+                "dolphin",
+                "manatee",
+                "walrus",
+                "koala",
+                "wolf",
+                "eel",
+                "octopus_(animal)",
+                "foal",
+                "calf",
+                "bull",
+                "giant_panda"
+            ]
+        },
+        "none": [
+            "a photo of an empty hand.",
+            "a photo of an open hand with nothing in it.",
+            "a photo of a hand making a fist.",
+            "a photo of a hand giving a thumbs up."
+        ],
+        "mergeAbove": 0.94
+    },
+    "expression": {
+        "templates": [
+            "a photo of a {} face.",
+            "a close-up photo of a person looking {}.",
+            "a photo of a face with a {} expression."
+        ],
+        "classes": [
+            {
+                "label": "angry",
+                "noun": "angry"
+            },
+            {
+                "label": "disgust",
+                "noun": "disgusted"
+            },
+            {
+                "label": "fearful",
+                "noun": "scared"
+            },
+            {
+                "label": "happy",
+                "noun": "happy"
+            },
+            {
+                "label": "neutral",
+                "noun": "neutral"
+            },
+            {
+                "label": "sad",
+                "noun": "sad"
+            },
+            {
+                "label": "surprised",
+                "noun": "surprised"
+            }
+        ],
+        "none": [],
+        "mergeAbove": 1.0
+    }
+}

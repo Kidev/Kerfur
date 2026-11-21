@@ -43,7 +43,8 @@ find_package(OpenCV 4.8 REQUIRED COMPONENTS core dnn)
 # microphone, a model file or an accelerator, which is what makes them runnable
 # in CI.
 set(VISION_SUITES visiondecode modelcatalog identitystore headpose handgeometry bgrimage
-                  handlandmarker scenegeometry motiongate)
+                  handlandmarker scenegeometry motiongate attention
+                  acceleratordecode cliplabels)
 foreach (SUITE ${VISION_SUITES})
     kerfur_add_test(${SUITE} Vision)
 endforeach ()
@@ -65,6 +66,18 @@ foreach (SUITE ${VISION_SUITES} ${HEARING_SUITES})
 endforeach ()
 
 target_compile_definitions(tst_modelcatalog PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(tst_cliplabels PRIVATE KERFUR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# The accelerator plugin search, against a plugin that needs no hardware.
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_library(fakeaccelerator MODULE fakeaccelerator.cpp)
+    target_include_directories(fakeaccelerator PRIVATE ${CMAKE_SOURCE_DIR}/modules/Core/src)
+    kerfur_add_test(accelerator KerfurCore)
+    add_dependencies(tst_accelerator fakeaccelerator)
+    target_compile_definitions(
+        tst_accelerator PRIVATE KERFUR_FAKE_ACCELERATOR="$<TARGET_FILE:fakeaccelerator>"
+    )
+endif ()
 
 kerfur_add_test(cameraselection Vision)
 kerfur_add_test(libcameracapture Vision)

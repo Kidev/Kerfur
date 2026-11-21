@@ -1,5 +1,11 @@
 {
-    "$comment": "Provisioning manifest for the perception models: vision, speech and the voice the speech came from. Stage F is MediaPipe's two model hand pipeline, taken from OpenCV Zoo so that it runs on the cv::dnn already linked rather than on MediaPipe's own Bazel build. The `pi` profile is the same set as `desktop` because the Pi runs the same CPU graph until the accelerator backend lands; it exists as a separate name so that divergence is a manifest change rather than a code change. The URL is a convenience and may be replaced; the sha256 is the authority. Rationale for every entry is in docs/superpowers/specs/2026-08-19-cpu-perception-backends.md. The `file` names are duplicated as constants in modules/Vision/src/modelcatalog.cpp and in the Hearing module, and tests/tst_modelcatalog.cpp asserts the two agree.",
+    "$comment": "Provisioning manifest for the perception models: vision, speech and the voice the speech came from. Stage F is MediaPipe's two model hand pipeline, taken from OpenCV Zoo so that it runs on the cv::dnn already linked rather than on MediaPipe's own Bazel build. The `hailo` profile holds the `-hailo` entries, compiled for the Hailo-10H against HailoRT 5.1 and run through the accelerator plugin beside the CPU set, which still covers palm detection, expression and speaker embedding; the installer ships it as a component of its own, versioned by `componentVersions.hailo`: `contents` is the sha256 of the profile's own sha256 values, one per line in manifest order, and tests/tst_modelcatalog.cpp fails when it no longer matches, which is the cue to raise `version`. The URL is a convenience and may be replaced; the sha256 is the authority. Rationale for every entry is in docs/superpowers/specs/2026-08-19-cpu-perception-backends.md. The `file` names are duplicated as constants in modules/Vision/src/modelcatalog.cpp and in the Hearing module, and tests/tst_modelcatalog.cpp asserts the two agree.",
+    "componentVersions": {
+        "hailo": {
+            "version": "1.0.0",
+            "contents": "533a8908ae8f64e8b94559af4e5e1fbf90d59804f68df225036e8de80eb65562"
+        }
+    },
     "models": [
         {
             "id": "pose",
@@ -125,6 +131,78 @@
                 "desktop",
                 "pi",
                 "wasm"
+            ]
+        },
+        {
+            "id": "pose-hailo",
+            "stage": "A",
+            "file": "yolov8m_pose.hef",
+            "url": "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v5.1.0/hailo10h/yolov8m_pose.hef",
+            "bytes": 29367944,
+            "sha256": "7095c18700ab92de490cd5279a6d2ffd790eaa3223f6140d17287a9bf5679193",
+            "license": "AGPL-3.0-only",
+            "profiles": [
+                "hailo"
+            ]
+        },
+        {
+            "id": "clip-hailo",
+            "stage": "B",
+            "file": "clip_vit_l_14_laion2B_image_encoder.hef",
+            "url": "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v5.1.0/hailo10h/clip_vit_l_14_laion2B_image_encoder.hef",
+            "bytes": 268215808,
+            "sha256": "348c1ac5fb1d2396780af2eda20af4a173f9c020d8addc8a7a188e0cfbdfa8de",
+            "license": "MIT",
+            "profiles": [
+                "hailo"
+            ]
+        },
+        {
+            "id": "face-hailo",
+            "stage": "C",
+            "file": "scrfd_10g.hef",
+            "url": "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v5.1.0/hailo10h/scrfd_10g.hef",
+            "bytes": 6033680,
+            "sha256": "37e4db473d1085f7a9de60855fadd1a9ae399d7e6a4d95381fe2edcb48b4a509",
+            "license": "MIT",
+            "profiles": [
+                "hailo"
+            ]
+        },
+        {
+            "id": "identity-hailo",
+            "stage": "D",
+            "file": "arcface_r50.hef",
+            "url": "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v5.1.0/hailo10h/arcface_r50.hef",
+            "bytes": 24968192,
+            "sha256": "3e10537e1a41f0306cb8d1e9c737e43adaceb62b80fa8a454c94fb7a453d75c2",
+            "license": "MIT",
+            "profiles": [
+                "hailo"
+            ]
+        },
+        {
+            "id": "handlandmarks-hailo",
+            "stage": "F",
+            "file": "hand_landmark_lite.hef",
+            "url": "https://hailo-model-zoo.s3.eu-west-2.amazonaws.com/ModelZoo/Compiled/v5.1.0/hailo10h/hand_landmark_lite.hef",
+            "bytes": 1260888,
+            "sha256": "6c9f7c15ceb3ea5ed6f05329fb101efdf489730ab3cc3600d91484154c66582f",
+            "license": "Apache-2.0",
+            "profiles": [
+                "hailo"
+            ]
+        },
+        {
+            "id": "speech-hailo",
+            "stage": "hearing",
+            "file": "Whisper-Base.hef",
+            "url": "https://dev-public.hailo.ai/v5.1.0/blob/Whisper-Base.hef",
+            "bytes": 136889274,
+            "sha256": "7fa469e68e31b5c4a3a02da54c5e3f05bdfab36a67bc959911a2e78d149000a1",
+            "license": "MIT",
+            "profiles": [
+                "hailo"
             ]
         }
     ]
