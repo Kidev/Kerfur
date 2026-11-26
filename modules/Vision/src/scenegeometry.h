@@ -4,7 +4,9 @@
 #ifndef KERFUR_SCENEGEOMETRY_H
 #define KERFUR_SCENEGEOMETRY_H
 
+#include <QList>
 #include <QPointF>
+#include <QRectF>
 #include <QSize>
 #include <QString>
 
@@ -47,15 +49,20 @@ struct SceneVector
 /// How a distance was measured, best first.
 enum class RangeSource {
     None,
+    /// The whole body against the person's declared height: the angle from
+    /// the ankles up to the face.
+    Stature,
     /// The ankles, projected onto the floor.
     Feet,
+    /// The face against the size this person's face was measured at.
+    Head,
     /// The face, projected onto the plane at the person's eye height.
     Height,
     /// The distance between the eyes, against an average adult's.
     EyeSpacing,
 };
 
-/// `feet`, `height`, `eyes`, or empty for `None`.
+/// `stature`, `feet`, `head`, `height`, `eyes`, or empty for `None`.
 QString rangeSourceName(RangeSource source);
 
 /// What one pass says about one face, normalized to the analysed (mirrored)
@@ -63,6 +70,8 @@ QString rangeSourceName(RangeSource source);
 struct FaceSighting
 {
     QPointF centre;
+    /// The face detector's box, or an empty one when there is none.
+    QRectF box;
     /// The two eye landmarks, when the detector gave them.
     std::optional<QPointF> rightEye;
     std::optional<QPointF> leftEye;
@@ -73,6 +82,9 @@ struct FaceSighting
     std::optional<QPointF> feet;
     /// The person's declared standing height, or 0 when there is none.
     double heightMetres{0.0};
+    /// How tall the face detector's box is on this person, in metres, or 0
+    /// when it was never measured.
+    double headMetres{0.0};
 };
 
 /// Where a face is.
@@ -83,6 +95,8 @@ struct Placement
     /// Along the floor, from the point below the camera to the point below the
     /// face.
     double floorDistanceMetres{0.0};
+    /// In a straight line, from the centre of the screen to the face.
+    double screenDistanceMetres{0.0};
     RangeSource source{RangeSource::None};
 
     bool isValid() const { return source != RangeSource::None; }
@@ -116,6 +130,10 @@ public:
     /// The best placement the sighting allows, or one whose source is `None`.
     Placement place(const FaceSighting &sighting) const;
 
+    /// How tall the face's box is in metres, at the depth `placement` puts it,
+    /// or 0 when the box is missing or cut off by the edge of the frame.
+    double headSizeAt(const FaceSighting &sighting, const Placement &placement) const;
+
     /// The turn from the screen centre to a point in the camera frame.
     GazeAngles gazeAt(const SceneVector &point) const;
 
@@ -140,22 +158,58 @@ public:
     /// eye height too far from where it meets it a few centimetres higher for
     /// the height to say anything.
     static constexpr double minimumElevationDegrees{8.0};
-    /// Placements outside this range along the floor are discarded.
-    static constexpr double nearestMetres{0.2};
+    /// A placement closer to the lens than this, or farther along the floor
+    /// than that, is discarded.
+    static constexpr double nearestMetres{0.1};
     static constexpr double farthestMetres{25.0};
+    /// A face box closer than this to an edge of the frame, as a fraction of
+    /// the frame, may be cut off by it and does not say how large the face is.
+    static constexpr double frameEdgeMargin{0.01};
 
 private:
+    std::optional<Placement> fromStature(const FaceSighting &sighting) const;
     std::optional<Placement> fromFeet(const FaceSighting &sighting) const;
+    std::optional<Placement> fromHead(const FaceSighting &sighting) const;
     std::optional<Placement> fromHeight(const FaceSighting &sighting, double heightMetres) const;
     std::optional<Placement> fromEyeSpacing(const FaceSighting &sighting) const;
     /// Fills in the floor distance, and refuses a placement out of range.
     std::optional<Placement> finish(const SceneVector &position, RangeSource source) const;
+    /// The tangent of the angle above the horizon of a camera frame vector.
+    double slopeOf(const SceneVector &vector) const;
+    /// Whether the face box lies whole inside the frame.
+    static bool isWhole(const QRectF &box);
 
     CameraMount m_mount;
     QSize m_frame;
     double m_focalPixels{0.0};
     double m_sinTilt{0.0};
     double m_cosTilt{1.0};
+};
+
+/// The size of one person's face, settled from several measurements.
+///
+/// Each measurement is the face box's height at a distance taken from the
+/// whole body. A measurement outside the range a face can have is dropped,
+/// and the result is the median of the last `windowSize`, given once
+/// `requiredSamples` have been kept, so one bad frame moves nothing.
+class HeadMeasure
+{
+public:
+    static constexpr qsizetype requiredSamples{15};
+    static constexpr qsizetype windowSize{31};
+
+    /// `minimumMetres` and `maximumMetres` bound a plausible face box height.
+    HeadMeasure(double minimumMetres, double maximumMetres);
+
+    void add(double metres);
+    qsizetype count() const { return m_samples.size(); }
+    /// The median, once there are `requiredSamples`.
+    std::optional<double> result() const;
+
+private:
+    double m_minimum{0.0};
+    double m_maximum{0.0};
+    QList<double> m_samples;
 };
 
 } // namespace Kerfur

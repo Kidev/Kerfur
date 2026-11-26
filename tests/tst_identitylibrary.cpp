@@ -239,6 +239,47 @@ private slots:
         QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2, 1.75));
     }
 
+    void aHeadSizeIsRecordedAndForgotten()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2, 1.65));
+        QSignalSpy changed{&library, &IdentityLibrary::galleryChanged};
+
+        QVERIFY(library.setHeadSize(QStringLiteral("ada"), 0.2134));
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(IdentityRegistry::load(directory.path()).headOf(QStringLiteral("ada")), 0.213);
+        QCOMPARE(library.people().first().toMap().value(QStringLiteral("head")).toDouble(), 0.213);
+
+        // Saving the person again keeps the measurement.
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QStringLiteral("friend"), 2, 1.65));
+        QCOMPARE(IdentityRegistry::load(directory.path()).headOf(QStringLiteral("ada")), 0.213);
+
+        QVERIFY(library.setHeadSize(QStringLiteral("ada"), 0.0));
+        QCOMPARE(IdentityRegistry::load(directory.path()).headOf(QStringLiteral("ada")), 0.0);
+        QCOMPARE(IdentityRegistry::load(directory.path()).heightOf(QStringLiteral("ada")), 1.65);
+    }
+
+    void aHeadSizeOutsideTheRangeOrForANobodyIsRefused()
+    {
+        QTemporaryDir directory;
+        IdentityLibrary library{directory.path()};
+        QVERIFY(library.stageFaceImage(picture(), QStringLiteral("camera")));
+        QVERIFY(library.enrol(QStringLiteral("Ada"), QString{}, 2));
+        QSignalSpy changed{&library, &IdentityLibrary::galleryChanged};
+
+        QVERIFY(!library.setHeadSize(QStringLiteral("ada"), 21.0));
+        QVERIFY(!library.problem().isEmpty());
+        QVERIFY(!library.setHeadSize(QStringLiteral("bob"), 0.21));
+        QCOMPARE(changed.count(), 0);
+        QVERIFY(!IdentityRegistry::load(directory.path()).find(QStringLiteral("bob")).has_value());
+        QCOMPARE(IdentityRegistry::load(directory.path()).headOf(QStringLiteral("ada")), 0.0);
+
+        QVERIFY(library.setHeadSize(QStringLiteral("ada"), 0.21));
+        QVERIFY(library.problem().isEmpty());
+    }
+
     void aRankIsClampedIntoTheDeclarableRange()
     {
         QTemporaryDir directory;

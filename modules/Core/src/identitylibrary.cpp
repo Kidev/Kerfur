@@ -21,6 +21,7 @@
 #include <QVariantMap>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #ifdef Q_OS_WASM
@@ -629,6 +630,50 @@ bool IdentityLibrary::enrol(const QString &name,
     return true;
 }
 
+bool IdentityLibrary::setHeadSize(const QString &id, double metres)
+{
+    if (m_directory.isEmpty() || !m_ready) {
+        return fail(QStringLiteral("Stored identities are not available yet."));
+    }
+    const bool hasHead{metres > 0.0};
+    if (hasHead
+        && (metres < IdentityRegistry::minimumHeadMetres
+            || metres > IdentityRegistry::maximumHeadMetres)) {
+        return fail(QStringLiteral("A head size is given in metres, between %1 and %2.")
+                        .arg(IdentityRegistry::minimumHeadMetres)
+                        .arg(IdentityRegistry::maximumHeadMetres));
+    }
+
+    std::optional<QJsonObject> manifest{readManifest()};
+    if (!manifest.has_value()) {
+        return false;
+    }
+    if (!manifest->contains(id)) {
+        return fail(QStringLiteral("%1 is not among the people added here.").arg(id));
+    }
+
+    QJsonObject entry{manifest->value(id).toObject()};
+    if (hasHead) {
+        // A millimetre is finer than the measurement.
+        entry.insert(QStringLiteral("head"), std::round(metres * 1000.0) / 1000.0);
+    } else {
+        entry.remove(QStringLiteral("head"));
+    }
+    manifest->insert(id, entry);
+    if (!writeManifest(*manifest)) {
+        return false;
+    }
+
+    if (hasHead) {
+        qCInfo(libraryLog) << "head size of" << id << "is" << metres << "m";
+    } else {
+        qCInfo(libraryLog) << "forgot the head size of" << id;
+    }
+    commit();
+    succeed();
+    return true;
+}
+
 bool IdentityLibrary::remove(const QString &id)
 {
     if (m_directory.isEmpty() || !m_ready) {
@@ -961,6 +1006,7 @@ void IdentityLibrary::refreshPeople()
                 {QStringLiteral("priority"), record.priority},
                 {QStringLiteral("standing"), registry.standingOf(record.id)},
                 {QStringLiteral("height"), record.heightMetres},
+                {QStringLiteral("head"), record.headMetres},
                 {QStringLiteral("hasFace"), !record.facePaths.isEmpty()},
                 {QStringLiteral("hasVoice"), !record.voicePaths.isEmpty()},
                 {QStringLiteral("faceCount"), record.facePaths.size()},

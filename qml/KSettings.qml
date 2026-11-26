@@ -11,6 +11,7 @@ KSettingsValues {
     property Settings behaviour: Settings {
         id: settingsBehaviour
 
+        property alias crossEyeDistance: root.crossEyeDistance
         property alias greetAfterHours: root.greetAfterHours
         property alias greetingEnabled: root.greetingEnabled
         property alias lookAheadAfterSeconds: root.lookAheadAfterSeconds

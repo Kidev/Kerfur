@@ -120,26 +120,26 @@ int readPriority(const QJsonValue &value, bool *ok)
     return IdentityRegistry::unknownPriority;
 }
 
-/// A height in metres, written as a number or as a string like the rank. Zero
-/// for an absent value and for one outside the accepted range: a height is a
-/// refinement, and a typo in it must not cost the person their record.
-double readHeight(const QJsonValue &value)
+/// A length in metres, written as a number or as a string like the rank. Zero
+/// for an absent value and for one outside `[minimum, maximum]`: a height or a
+/// face size is a refinement, and a typo in it must not cost the person their
+/// record.
+double readMetres(const QJsonValue &value, double minimum, double maximum)
 {
-    double height{0.0};
+    double metres{0.0};
     if (value.isDouble()) {
-        height = value.toDouble();
+        metres = value.toDouble();
     } else if (value.isString()) {
         bool converted{false};
-        height = value.toString().trimmed().toDouble(&converted);
+        metres = value.toString().trimmed().toDouble(&converted);
         if (!converted) {
             return 0.0;
         }
     }
-    if (height < IdentityRegistry::minimumHeightMetres
-        || height > IdentityRegistry::maximumHeightMetres) {
+    if (metres < minimum || metres > maximum) {
         return 0.0;
     }
-    return height;
+    return metres;
 }
 
 /// Resolves one declared path against the manifest's own directory. An absolute
@@ -224,7 +224,12 @@ bool readRecord(const QDir &base,
     }
 
     record.title = entry.value(QStringLiteral("title")).toString().trimmed();
-    record.heightMetres = readHeight(entry.value(QStringLiteral("height")));
+    record.heightMetres = readMetres(entry.value(QStringLiteral("height")),
+                                     IdentityRegistry::minimumHeightMetres,
+                                     IdentityRegistry::maximumHeightMetres);
+    record.headMetres = readMetres(entry.value(QStringLiteral("head")),
+                                   IdentityRegistry::minimumHeadMetres,
+                                   IdentityRegistry::maximumHeadMetres);
 
     record.facePaths = readSamples(base, entry, QStringLiteral("face"), QStringLiteral("faces"));
     record.voicePaths = readSamples(base, entry, QStringLiteral("voice"), QStringLiteral("voices"));
@@ -520,6 +525,12 @@ double IdentityRegistry::heightOf(const QString &nameOrId) const
 {
     const std::optional<IdentityRecord> record{find(nameOrId)};
     return record.has_value() ? record->heightMetres : 0.0;
+}
+
+double IdentityRegistry::headOf(const QString &nameOrId) const
+{
+    const std::optional<IdentityRecord> record{find(nameOrId)};
+    return record.has_value() ? record->headMetres : 0.0;
 }
 
 QString IdentityRegistry::standingOf(const QString &nameOrId) const

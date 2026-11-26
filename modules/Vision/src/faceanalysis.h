@@ -90,6 +90,9 @@ struct AnalysedFace
     /// The manifest's height for this person in metres, or 0 for a stranger
     /// and for a record that gives none.
     double heightMetres{0.0};
+    /// The manifest's face size for this person in metres, or 0 for a
+    /// stranger and for a record where it was never measured.
+    double headMetres{0.0};
 };
 
 /// One hand.

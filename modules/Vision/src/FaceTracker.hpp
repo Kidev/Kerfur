@@ -13,6 +13,7 @@
 #include <QCamera>
 #include <QCameraDevice>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QImage>
 #include <QList>
 #include <QMediaCaptureSession>
@@ -21,6 +22,7 @@
 #include <QPointF>
 #include <QQmlEngine>
 #include <QRectF>
+#include <QSet>
 #include <QSize>
 #include <QStringList>
 #include <QThread>
@@ -261,6 +263,10 @@ class FaceTracker : public QObject
     /// when it could not be placed. Every entry of `faces` carries its own
     /// `distance` and the `distanceSource` it came from.
     Q_PROPERTY(qreal attentionDistance READ attentionDistance NOTIFY facesChanged)
+    /// How far the face being followed is from the centre of the screen, in a
+    /// straight line and in metres, or -1 when it could not be placed. Every
+    /// entry of `faces` carries its own `screenDistance`.
+    Q_PROPERTY(qreal attentionScreenDistance READ attentionScreenDistance NOTIFY facesChanged)
 
     /// Idle watching. Once nobody has been seen for `idleAfterSeconds`, the
     /// models stop and frames are only compared with each other, at
@@ -361,6 +367,7 @@ public:
     qreal gazeYaw() const { return m_gaze.yawDegrees; }
     qreal gazePitch() const { return m_gaze.pitchDegrees; }
     qreal attentionDistance() const { return m_attentionDistance; }
+    qreal attentionScreenDistance() const { return m_attentionScreenDistance; }
 
     bool idleWatch() const { return m_idleWatch; }
     int idleAfterSeconds() const { return m_idleAfterSeconds; }
@@ -498,12 +505,22 @@ private:
 
     /// The geometry of the current mount over an analysed frame.
     Kerfur::SceneGeometry sceneGeometry(const QSize &frame) const;
-    /// Where each face of a pass is, in the order given. Each face is matched
-    /// to its body (by name, otherwise by the body containing the face) for
-    /// the ankles.
+    /// What a pass says about one face, with the ankles of its body: matched
+    /// by name, otherwise the body containing the face.
+    Kerfur::FaceSighting sightingOf(const Kerfur::AnalysedFace &face,
+                                    const QList<Kerfur::AnalysedPerson> &people) const;
+    /// Where each face of a pass is, in the order given.
     QList<Kerfur::Placement> placeFaces(const Kerfur::SceneGeometry &geometry,
                                         const QList<Kerfur::AnalysedFace> &faces,
                                         const QList<Kerfur::AnalysedPerson> &people) const;
+    /// Measures the face size of every known person whose whole body placed
+    /// them, and saves it once it has settled, for those with none saved.
+    void measureHeads(const Kerfur::SceneGeometry &geometry,
+                      const QList<Kerfur::AnalysedFace> &faces,
+                      const QList<Kerfur::Placement> &placements,
+                      const QList<Kerfur::AnalysedPerson> &people);
+    /// Publishes where the person being followed is.
+    void setAttentionPlacement(const Kerfur::Placement &placement);
     void setGaze(const Kerfur::GazeAngles &gaze);
     /// Stores one threshold and hands it to the worker, queued onto its
     /// thread with the value.
@@ -596,6 +613,15 @@ private:
     Kerfur::GazeAngles m_gaze;
     bool m_hasGaze{false};
     qreal m_attentionDistance{-1.0};
+    qreal m_attentionScreenDistance{-1.0};
+    /// Face size measurements in progress, by identity, for people with no
+    /// saved size.
+    QHash<QString, Kerfur::HeadMeasure> m_headMeasures;
+    /// Settled sizes, by identity, used until the saved one comes back from
+    /// the gallery, and for the rest of the session when saving is refused.
+    QHash<QString, double> m_measuredHeads;
+    /// Identities whose settled size was handed to the identity library.
+    QSet<QString> m_headsSaved;
 
     bool m_idleWatch{true};
     int m_idleAfterSeconds{30};

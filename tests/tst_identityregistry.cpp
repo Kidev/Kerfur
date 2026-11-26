@@ -67,6 +67,8 @@ private slots:
     void readsTheDeclaredTitle();
     void readsADeclaredHeight();
     void ignoresAHeightOutsideTheRange();
+    void readsAMeasuredHeadSize();
+    void ignoresAHeadSizeOutsideTheRange();
     void spellsOutTheRankWhenThereIsNoTitle();
     void saysNothingAboutAStranger();
     void aLaterDirectoryReplacesARecordOfTheSameId();
@@ -324,6 +326,38 @@ void TestIdentityRegistry::ignoresAHeightOutsideTheRange()
     // The record itself survives a height it cannot read.
     QCOMPARE(registry.priorityOf(QStringLiteral("ada")), 2);
     QCOMPARE(registry.heightOf(QStringLiteral("stranger")), 0.0);
+}
+
+void TestIdentityRegistry::readsAMeasuredHeadSize()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"kidev":{"priority":0,"head":0.22},)"
+                                    R"("ada":{"priority":2,"head":"0.19"}})"),
+                     {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QCOMPARE(registry.headOf(QStringLiteral("kidev")), 0.22);
+    QCOMPARE(registry.headOf(QStringLiteral("ada")), 0.19);
+}
+
+void TestIdentityRegistry::ignoresAHeadSizeOutsideTheRange()
+{
+    QTemporaryDir root;
+    const QString directory{
+        buildGallery(root,
+                     QStringLiteral(R"({"kidev":{"priority":0,"head":22},)"
+                                    R"("ada":{"priority":2,"head":"small"},)"
+                                    R"("bob":{"priority":3}})"),
+                     {})};
+
+    const IdentityRegistry registry{IdentityRegistry::load(directory)};
+    QCOMPARE(registry.headOf(QStringLiteral("kidev")), 0.0);
+    QCOMPARE(registry.headOf(QStringLiteral("ada")), 0.0);
+    QCOMPARE(registry.headOf(QStringLiteral("bob")), 0.0);
+    QCOMPARE(registry.priorityOf(QStringLiteral("kidev")), 0);
+    QCOMPARE(registry.headOf(QStringLiteral("stranger")), 0.0);
 }
 
 /// A manifest written before titles existed still has to produce something for

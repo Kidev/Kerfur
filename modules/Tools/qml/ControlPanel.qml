@@ -1094,8 +1094,16 @@ Rectangle {
             // Empty records no height. A comma is accepted as the decimal
             // separator, since that is how half the world types one.
             const height = heightField.text === "" ? 0 : Number(heightField.text.replace(",", "."));
-            if (Identities.enrol(name, titleField.text, root.rankValues[rankCombo.currentIndex], height))
-                form.saved(Identities.personIdFor(name));
+            // Centimetres in the field, metres on disk. Empty forgets the
+            // size, so it is measured again.
+            const head = headField.text === "" ? 0 : Number(headField.text.replace(",", ".")) / 100;
+            if (!Identities.enrol(name, titleField.text, root.rankValues[rankCombo.currentIndex], height))
+                return;
+            const id = Identities.personIdFor(name);
+            const recorded = Identities.people.find(entry => entry.id === id);
+            if (recorded && Math.abs(recorded.head - head) >= 0.0005 && !Identities.setHeadSize(id, head))
+                return;
+            form.saved(id);
         }
 
         border.color: root.colorAccent
@@ -1155,7 +1163,7 @@ Rectangle {
             Text {
                 color: root.colorDim
                 font.pixelSize: 9
-                text: form.editing ? "Change the title, rank or height, or stage another photo or recording. Each save adds them as one more sample, up to " + Identities.sampleLimit + " of each." : "A name and at least a photo or a recording. A few samples taken in different light and rooms make recognition more reliable."
+                text: form.editing ? "Change the title, rank, height or face size, or stage another photo or recording. Each save adds them as one more sample, up to " + Identities.sampleLimit + " of each." : "A name and at least a photo or a recording. A few samples taken in different light and rooms make recognition more reliable."
                 width: parent.width
                 wrapMode: Text.WordWrap
             }
@@ -1189,6 +1197,7 @@ Rectangle {
             Field {
                 id: titleField
 
+            headField.text = form.person.head > 0 ? (form.person.head * 100).toFixed(1) : "";
                 maximumLength: 64
                 placeholderText: "owner, friend, ..."
             }
@@ -1301,6 +1310,25 @@ Rectangle {
 
                 SmallButton {
                     enabled: Identities.stagedFace !== "" || Identities.stagedVoice !== ""
+            // How tall the face is, which lets Kerfur tell how far away this
+            // person is from the face alone. Measured on its own the first
+            // time the camera sees them from head to feet.
+            FieldLabel {
+                text: "Face size in centimetres (measured when seen whole)"
+            }
+
+            Field {
+                id: headField
+
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                maximumLength: 4
+                placeholderText: "not measured yet"
+
+                validator: RegularExpressionValidator {
+                    regularExpression: /^[0-9]{0,2}([.,][0-9]?)?$/
+                }
+            }
+
                     label: "Clear staged"
 
                     onClicked: Identities.clearStaged()
@@ -1855,7 +1883,7 @@ Rectangle {
                 // the angle the eyes turn through both come from these.
                 Caption {
                     label: "Distance"
-                    value: root.faceTracker && root.faceTracker.attentionDistance > 0 ? root.faceTracker.attentionDistance.toFixed(2) + " m" : "-"
+                    value: root.faceTracker && root.faceTracker.attentionDistance > 0 ? root.faceTracker.attentionDistance.toFixed(2) + " m, " + root.faceTracker.attentionScreenDistance.toFixed(2) + " m from the screen" : "-"
                 }
 
                 SettingSlider {
@@ -2650,6 +2678,17 @@ Rectangle {
 
                 Combo {
                     id: blendModeCombo
+
+                // The eyes cross more the closer the face comes, fully at the
+                // screen itself.
+                SettingSlider {
+                    from: 0
+                    label: "Cross eyes closer than"
+                    settingName: "crossEyeDistance"
+                    stepSize: 0.05
+                    to: 1.5
+                    valueText: KSettings.crossEyeDistance > 0 ? Math.round(KSettings.crossEyeDistance * 100) + " cm" : "off"
+                }
 
                     currentIndex: KSettings.glowBlendMode
                     model: root.blendModeNames

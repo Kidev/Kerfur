@@ -69,6 +69,18 @@ private slots:
     void tooSmallAFaceIsNotPlaced();
     void tiltedCameraPlacesFeetOnTheFloor();
 
+    void statureNeedsNoCameraHeight();
+    void statureNeedsTheFeetBelowTheFace();
+    void headSizePlacesAFaceAlone();
+    void headSizeIsIgnoredForACutOffFace();
+    void headSizeMeasuredFromTheBodyPlacesTheFaceAgain();
+    void aFaceAFewCentimetresAwayIsPlaced();
+    void screenDistanceStartsFromTheScreenCentre();
+
+    void headMeasureWaitsForEnoughSamples();
+    void headMeasureDropsImplausibleSizes();
+    void headMeasureIsTheMedian();
+
     void gazeLooksUpFromBelowTheCamera();
     void distantGazeFollowsTheRay();
 };
@@ -217,6 +229,169 @@ void TestSceneGeometry::tiltedCameraPlacesFeetOnTheFloor()
     QVERIFY(placement.source == RangeSource::Feet);
     QVERIFY(near(placement.floorDistanceMetres, std::hypot(3.0, 0.4)));
     QVERIFY(near(geometry.upOf(placement.position), 1.6 - 1.5));
+}
+
+void TestSceneGeometry::statureNeedsNoCameraHeight()
+{
+    // The camera is really at 1.0 m, but believed to be at 1.3 m: the feet
+    // alone would put the person in the wrong place, the whole body does not.
+    const CameraMount truth{levelMount(1.0)};
+    const SceneGeometry geometry{levelMount(1.3), frame};
+    FaceSighting sighting;
+    sighting.heightMetres = 1.80;
+    sighting.feet = project(truth, 2.5, 0.0, SceneGeometry::anklesAboveFloorMetres);
+    sighting.centre = project(truth, 2.5, 0.0, 1.80 - SceneGeometry::eyesBelowCrownMetres);
+
+    const Placement placement{geometry.place(sighting)};
+    QVERIFY(placement.source == RangeSource::Stature);
+    QVERIFY(near(placement.floorDistanceMetres, 2.5));
+
+    sighting.heightMetres = 0.0;
+    const Placement fromFeet{geometry.place(sighting)};
+    QVERIFY(fromFeet.source == RangeSource::Feet);
+    QVERIFY(!near(fromFeet.floorDistanceMetres, 2.5, 0.1));
+}
+
+void TestSceneGeometry::statureNeedsTheFeetBelowTheFace()
+{
+    const SceneGeometry geometry{levelMount(1.0), frame};
+    FaceSighting sighting;
+    sighting.heightMetres = 1.80;
+    sighting.centre = QPointF{0.5, 0.7};
+    sighting.feet = QPointF{0.5, 0.6};
+    QVERIFY(geometry.place(sighting).source != RangeSource::Stature);
+}
+
+void TestSceneGeometry::headSizePlacesAFaceAlone()
+{
+    const SceneGeometry geometry{levelMount(1.0), frame};
+    FaceSighting sighting;
+    sighting.headMetres = 0.22;
+    // Half a metre ahead, on the axis.
+    const double side{focal * 0.22 / 0.5 / frame.height()};
+    sighting.box = QRectF{0.5 - side / 2.0, 0.5 - side / 2.0, side, side};
+    sighting.centre = sighting.box.center();
+
+    const Placement placement{geometry.place(sighting)};
+    QVERIFY(placement.source == RangeSource::Head);
+    QVERIFY(near(placement.position.z, 0.5));
+
+    sighting.headMetres = 0.0;
+    QVERIFY(geometry.place(sighting).source != RangeSource::Head);
+}
+
+void TestSceneGeometry::headSizeIsIgnoredForACutOffFace()
+{
+    const SceneGeometry geometry{levelMount(1.0), frame};
+    FaceSighting sighting;
+    sighting.headMetres = 0.22;
+    sighting.box = QRectF{0.4, 0.0, 0.2, 0.3};
+    sighting.centre = sighting.box.center();
+    QVERIFY(geometry.place(sighting).source != RangeSource::Head);
+    QCOMPARE(geometry.headSizeAt(sighting, geometry.place(sighting)), 0.0);
+
+    sighting.box.moveTop(0.1);
+    sighting.centre = sighting.box.center();
+    QVERIFY(geometry.place(sighting).source == RangeSource::Head);
+}
+
+void TestSceneGeometry::headSizeMeasuredFromTheBodyPlacesTheFaceAgain()
+{
+    const CameraMount mount{levelMount(1.0)};
+    const SceneGeometry geometry{mount, frame};
+    FaceSighting whole;
+    whole.heightMetres = 1.75;
+    whole.feet = project(mount, 3.0, 0.3, SceneGeometry::anklesAboveFloorMetres);
+    whole.centre = project(mount, 3.0, 0.3, 1.75 - SceneGeometry::eyesBelowCrownMetres);
+    const double side{focal * 0.21 / 3.0 / frame.height()};
+    whole.box = QRectF{whole.centre.x() - side / 2.0, whole.centre.y() - side / 2.0, side, side};
+
+    const Placement measured{geometry.place(whole)};
+    QVERIFY(measured.source == RangeSource::Stature);
+    const double head{geometry.headSizeAt(whole, measured)};
+    QVERIFY(near(head, 0.21, 1e-3));
+
+    // The same face later, with neither height nor feet to go by.
+    FaceSighting alone;
+    alone.box = whole.box;
+    alone.centre = whole.centre;
+    alone.headMetres = head;
+    const Placement placed{geometry.place(alone)};
+    QVERIFY(placed.source == RangeSource::Head);
+    QVERIFY(near(placed.floorDistanceMetres, measured.floorDistanceMetres, 1e-6));
+}
+
+void TestSceneGeometry::aFaceAFewCentimetresAwayIsPlaced()
+{
+    const SceneGeometry geometry{levelMount(1.0), frame};
+    FaceSighting sighting;
+    sighting.headMetres = 0.22;
+    const double side{focal * 0.22 / 0.15 / frame.height()};
+    sighting.box = QRectF{0.5 - side / 2.0, 0.5 - side / 2.0, side, side};
+    sighting.centre = sighting.box.center();
+
+    const Placement placement{geometry.place(sighting)};
+    QVERIFY(placement.isValid());
+    QVERIFY(near(placement.position.z, 0.15));
+
+    // Closer than the nearest a face can be is a misreading.
+    sighting.headMetres = 0.22 * 0.05 / 0.15;
+    QVERIFY(!geometry.place(sighting).isValid());
+}
+
+void TestSceneGeometry::screenDistanceStartsFromTheScreenCentre()
+{
+    const SceneGeometry geometry{levelMount(1.0), frame};
+    FaceSighting sighting;
+    sighting.headMetres = 0.22;
+    const double side{focal * 0.22 / 0.4 / frame.height()};
+    sighting.box = QRectF{0.5 - side / 2.0, 0.5 - side / 2.0, side, side};
+    sighting.centre = sighting.box.center();
+
+    // On the lens axis, 0.4 m out; the screen centre is 0.1 m below the lens.
+    const Placement placement{geometry.place(sighting)};
+    QVERIFY(near(placement.screenDistanceMetres, std::hypot(0.4, 0.1)));
+}
+
+void TestSceneGeometry::headMeasureWaitsForEnoughSamples()
+{
+    HeadMeasure measure{0.1, 0.4};
+    for (qsizetype index{1}; index < HeadMeasure::requiredSamples; ++index) {
+        measure.add(0.2);
+        QVERIFY(!measure.result().has_value());
+    }
+    measure.add(0.2);
+    QVERIFY(measure.result().has_value());
+    QCOMPARE(*measure.result(), 0.2);
+}
+
+void TestSceneGeometry::headMeasureDropsImplausibleSizes()
+{
+    HeadMeasure measure{0.1, 0.4};
+    for (qsizetype index{0}; index < HeadMeasure::requiredSamples; ++index) {
+        measure.add(0.05);
+        measure.add(0.9);
+        measure.add(std::nan(""));
+    }
+    QCOMPARE(measure.count(), 0);
+    QVERIFY(!measure.result().has_value());
+}
+
+void TestSceneGeometry::headMeasureIsTheMedian()
+{
+    HeadMeasure measure{0.1, 0.4};
+    // Most frames agree; a few are far off in either direction.
+    for (qsizetype index{0}; index < HeadMeasure::windowSize; ++index) {
+        measure.add(index % 5 == 0 ? 0.35 : (index % 7 == 0 ? 0.12 : 0.21));
+    }
+    QCOMPARE(measure.count(), HeadMeasure::windowSize);
+    QCOMPARE(*measure.result(), 0.21);
+    // The window keeps only the latest samples.
+    for (qsizetype index{0}; index < HeadMeasure::windowSize; ++index) {
+        measure.add(0.25);
+    }
+    QCOMPARE(measure.count(), HeadMeasure::windowSize);
+    QCOMPARE(*measure.result(), 0.25);
 }
 
 void TestSceneGeometry::gazeLooksUpFromBelowTheCamera()

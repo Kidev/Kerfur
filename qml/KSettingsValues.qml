@@ -26,6 +26,9 @@ QtObject {
     /// Tilt of the camera, and of the screen with it, in degrees: 0 looks
     /// straight ahead, 90 straight up, negative values down.
     property real cameraTilt: 0
+    /// Distance from the screen, in metres, below which a face makes the eyes
+    /// cross, more the closer it comes. 0 turns it off.
+    property real crossEyeDistance: 0.5
     /// Whether faces are read for an expression. Off until asked for.
     property bool expressionEnabled: false
     property real eyeMovementRange: 3.0

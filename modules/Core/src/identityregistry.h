@@ -56,6 +56,11 @@ struct IdentityRecord
     /// place this person in the room: with the camera's own height and tilt,
     /// the height of a face says how far away it is.
     double heightMetres{0.0};
+
+    /// How tall the face detector's box is on this person, in metres, or 0
+    /// when it was never measured. With it, the size of the face alone says
+    /// how far away it is, whatever else of the body is in view.
+    double headMetres{0.0};
 };
 
 /// Every declared identity, read from one manifest.
@@ -140,6 +145,15 @@ public:
     /// as no height at all.
     static constexpr double minimumHeightMetres{0.5};
     static constexpr double maximumHeightMetres{2.5};
+
+    /// The measured face size in metres, or 0 for a stranger and for a record
+    /// that gives none.
+    double headOf(const QString &nameOrId) const;
+
+    /// The face sizes a manifest may record, in metres. Anything outside is
+    /// read as no size at all.
+    static constexpr double minimumHeadMetres{0.10};
+    static constexpr double maximumHeadMetres{0.40};
 
     /// The ids, sorted.
     QStringList names() const;

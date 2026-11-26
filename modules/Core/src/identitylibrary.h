@@ -55,7 +55,8 @@ class IdentityLibrary : public QObject
     /// FileDialog, which on the web build has no file system to show.
     Q_PROPERTY(bool browserFiles READ browserFiles CONSTANT)
     /// One map per person enrolled here: `id`, `name`, `title`, `priority`,
-    /// `standing`, `height` (metres, 0 when not given), `hasFace`, `hasVoice`,
+    /// `standing`, `height` (metres, 0 when not given), `head` (the measured
+    /// face size in metres, 0 when not measured), `hasFace`, `hasVoice`,
     /// `faceCount`, `voiceCount`, and `faces` and `voices`, the samples as
     /// file URLs, oldest first. People
     /// from a gallery configured by hand are not listed: they cannot be
@@ -151,6 +152,12 @@ public:
                            const QString &title,
                            int priority,
                            double heightMetres = 0.0);
+
+    /// Records how tall the face detector's box is on somebody enrolled here,
+    /// in metres. 0 forgets it, so that it is measured again; anything else
+    /// outside `IdentityRegistry::minimumHeadMetres` to `maximumHeadMetres` is
+    /// refused.
+    Q_INVOKABLE bool setHeadSize(const QString &id, double metres);
 
     /// Forgets somebody enrolled here, and deletes their files.
     Q_INVOKABLE bool remove(const QString &id);

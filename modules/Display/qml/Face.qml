@@ -21,6 +21,20 @@ Item {
 
     property bool allowsBlinks: true
     readonly property int blinkDuration: 150
+    // How far each pupil turns in towards the nose, in pixels of the eye
+    // picture.
+    readonly property real crossEyeOffset: root.shownCrossEye * root.maxPupilMovement
+    // How crossed the eyes should be, from 0 to 1: nothing while the face
+    // being followed is `KSettings.crossEyeDistance` or more from the screen,
+    // rising to fully crossed as the face reaches the screen.
+    readonly property real crossEyeTarget: {
+        const limit = KSettings.crossEyeDistance;
+        const distance = tracker.attentionScreenDistance;
+        if (!root.faceTrackingActive || !tracker.faceDetected || limit <= 0 || distance < 0 || distance >= limit) {
+            return 0;
+        }
+        return 1 - distance / limit;
+    }
     property string currentEyesImage: root.pathEyesOpened
     readonly property real doubleBlinkChance: 0.1
     readonly property int doubleBlinkDuration: 100
@@ -43,7 +57,7 @@ Item {
     property bool isWinking: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
     readonly property real leftOffset: ((root.shownLeftRightAngle - 90) / 90) * root.maxPupilMovement
-    readonly property point leftPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
+    readonly property point leftPupilOffset: Qt.point(root.withinReach(root.leftOffset + root.crossEyeOffset), root.rightOffset)
     property bool leftPupilVisible: true
     // How long the eyes stay on the side where somebody was last seen before
     // they look straight ahead again.
@@ -72,10 +86,12 @@ Item {
     property bool pendingDoubleBlink: false
     readonly property point rightEyeCenter: Qt.point(90, 22)
     readonly property real rightOffset: ((root.shownUpDownAngle - 90) / 90) * root.maxPupilMovement
-    readonly property point rightPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
+    readonly property point rightPupilOffset: Qt.point(root.withinReach(root.leftOffset - root.crossEyeOffset), root.rightOffset)
     property bool rightPupilVisible: true
 
     // Where the pupils are drawn, chasing the target angles below.
+    property real shownCrossEye: 0
+    property real shownCrossEyeVelocity: 0
     property real shownLeftRightAngle: 90
     property real shownUpDownAngle: 90
     property real shownLeftRightVelocity: 0
@@ -103,6 +119,12 @@ Item {
         const offset = current - target;
         const pull = (velocity + omega * offset) * dt;
         return [target + (offset + pull) * decay, (velocity - omega * pull) * decay];
+    }
+
+    // A horizontal pupil offset, in pixels of the eye picture, kept inside
+    // the eye.
+    function withinReach(offset) {
+        return Math.max(-root.maxPupilMovement, Math.min(root.maxPupilMovement, offset));
     }
 
     // `value`, in pixels of the eye picture, moved to the nearest whole
@@ -364,13 +386,16 @@ Item {
         // Close enough to stop, in degrees and degrees per second. A tenth of
         // a degree is far below a pixel of pupil travel.
         readonly property real settled: 0.1
+        // The same for how crossed the eyes are, as a share of the full turn.
+        readonly property real settledCrossEye: 0.005
 
-        running: root.shownLeftRightAngle !== root.targetLeftRightAngle || root.shownUpDownAngle !== root.targetUpDownAngle
+        running: root.shownLeftRightAngle !== root.targetLeftRightAngle || root.shownUpDownAngle !== root.targetUpDownAngle || root.shownCrossEye !== root.crossEyeTarget
 
         onRunningChanged: {
             if (!running) {
                 root.shownLeftRightVelocity = 0;
                 root.shownUpDownVelocity = 0;
+                root.shownCrossEyeVelocity = 0;
             }
         }
         onTriggered: {
@@ -378,16 +403,20 @@ Item {
             const dt = Math.min(pupilChase.frameTime, 0.05);
             const leftRight = root.chase(root.shownLeftRightAngle, root.shownLeftRightVelocity, root.targetLeftRightAngle, dt);
             const upDown = root.chase(root.shownUpDownAngle, root.shownUpDownVelocity, root.targetUpDownAngle, dt);
-            const done = Math.abs(leftRight[0] - root.targetLeftRightAngle) < pupilChase.settled && Math.abs(upDown[0] - root.targetUpDownAngle) < pupilChase.settled && Math.abs(leftRight[1]) < pupilChase.settled && Math.abs(upDown[1]) < pupilChase.settled;
+            const crossEye = root.chase(root.shownCrossEye, root.shownCrossEyeVelocity, root.crossEyeTarget, dt);
+            const done = Math.abs(leftRight[0] - root.targetLeftRightAngle) < pupilChase.settled && Math.abs(upDown[0] - root.targetUpDownAngle) < pupilChase.settled && Math.abs(leftRight[1]) < pupilChase.settled && Math.abs(upDown[1]) < pupilChase.settled && Math.abs(crossEye[0] - root.crossEyeTarget) < pupilChase.settledCrossEye && Math.abs(crossEye[1]) < pupilChase.settledCrossEye;
             if (done) {
                 root.shownLeftRightAngle = root.targetLeftRightAngle;
                 root.shownUpDownAngle = root.targetUpDownAngle;
+                root.shownCrossEye = root.crossEyeTarget;
                 return;
             }
             root.shownLeftRightVelocity = leftRight[1];
             root.shownUpDownVelocity = upDown[1];
+            root.shownCrossEyeVelocity = crossEye[1];
             root.shownLeftRightAngle = leftRight[0];
             root.shownUpDownAngle = upDown[0];
+            root.shownCrossEye = crossEye[0];
         }
     }
 

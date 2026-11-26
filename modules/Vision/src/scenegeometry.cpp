@@ -30,6 +30,9 @@ constexpr double maximumYawCorrectionDegrees{60.0};
 /// An eye spacing below this many pixels is a face too small to measure.
 constexpr double minimumEyeSpacingPixels{2.0};
 
+/// A face box shorter than this many pixels is too small to measure.
+constexpr double minimumHeadPixels{8.0};
+
 SceneVector scaled(const SceneVector &vector, double factor)
 {
     return SceneVector{vector.x * factor, vector.y * factor, vector.z * factor};
@@ -60,8 +63,12 @@ double fieldOfViewForSensor(const QString &model)
 QString rangeSourceName(RangeSource source)
 {
     switch (source) {
+    case RangeSource::Stature:
+        return QStringLiteral("stature");
     case RangeSource::Feet:
         return QStringLiteral("feet");
+    case RangeSource::Head:
+        return QStringLiteral("head");
     case RangeSource::Height:
         return QStringLiteral("height");
     case RangeSource::EyeSpacing:
@@ -105,17 +112,37 @@ double SceneGeometry::aheadOf(const SceneVector &vector) const
     return vector.y * m_sinTilt + vector.z * m_cosTilt;
 }
 
+double SceneGeometry::slopeOf(const SceneVector &vector) const
+{
+    return upOf(vector) / std::hypot(aheadOf(vector), vector.x);
+}
+
+bool SceneGeometry::isWhole(const QRectF &box)
+{
+    return box.width() > 0.0 && box.height() > 0.0 && box.left() >= frameEdgeMargin
+           && box.top() >= frameEdgeMargin && box.right() <= 1.0 - frameEdgeMargin
+           && box.bottom() <= 1.0 - frameEdgeMargin;
+}
+
 Placement SceneGeometry::place(const FaceSighting &sighting) const
 {
     if (!isValid()) {
         return {};
     }
-    // The feet first: the floor is the one plane whose height is known
-    // exactly. A declared height comes next, then the eye spacing, which holds
-    // at any angle but carries the spread of adult eye spacings with it. A
-    // stranger's assumed height comes last of all, because it is a guess about
-    // the person rather than a measurement of them.
+    // The whole body first: the angle it spans against a declared height
+    // needs neither the camera's height nor the floor, and the floor under the
+    // feet comes right after. The face against its own measured size comes
+    // next, then the face against a declared height, then the eye spacing,
+    // which holds at any angle but carries the spread of adult eye spacings
+    // with it. A stranger's assumed height comes last of all, because it is a
+    // guess about the person rather than a measurement of them.
+    if (const std::optional<Placement> placed{fromStature(sighting)}) {
+        return *placed;
+    }
     if (const std::optional<Placement> placed{fromFeet(sighting)}) {
+        return *placed;
+    }
+    if (const std::optional<Placement> placed{fromHead(sighting)}) {
         return *placed;
     }
     if (sighting.heightMetres > 0.0) {
@@ -132,6 +159,26 @@ Placement SceneGeometry::place(const FaceSighting &sighting) const
         }
     }
     return {};
+}
+
+std::optional<Placement> SceneGeometry::fromStature(const FaceSighting &sighting) const
+{
+    if (sighting.heightMetres <= 0.0 || !sighting.feet.has_value()
+        || sighting.feet->y() <= sighting.centre.y()) {
+        return std::nullopt;
+    }
+    // The face stands straight above the ankles, so the two slopes differ by
+    // the height between them over the distance along the floor.
+    const SceneVector toFace{ray(sighting.centre)};
+    const SceneVector toFeet{ray(*sighting.feet)};
+    const double spread{slopeOf(toFace) - slopeOf(toFeet)};
+    const double rise{sighting.heightMetres - eyesBelowCrownMetres - anklesAboveFloorMetres};
+    const double faceAlongFloor{std::hypot(aheadOf(toFace), toFace.x)};
+    if (!std::isfinite(spread) || spread <= 0.0 || rise <= 0.0 || faceAlongFloor <= 0.0) {
+        return std::nullopt;
+    }
+    const double floorDistance{rise / spread};
+    return finish(scaled(toFace, floorDistance / faceAlongFloor), RangeSource::Stature);
 }
 
 std::optional<Placement> SceneGeometry::fromFeet(const FaceSighting &sighting) const
@@ -156,6 +203,19 @@ std::optional<Placement> SceneGeometry::fromFeet(const FaceSighting &sighting) c
         return std::nullopt;
     }
     return finish(scaled(toFace, floorDistance / faceAlongFloor), RangeSource::Feet);
+}
+
+std::optional<Placement> SceneGeometry::fromHead(const FaceSighting &sighting) const
+{
+    if (sighting.headMetres <= 0.0 || !isWhole(sighting.box)) {
+        return std::nullopt;
+    }
+    const double pixels{sighting.box.height() * m_frame.height()};
+    if (pixels < minimumHeadPixels) {
+        return std::nullopt;
+    }
+    const double depth{m_focalPixels * sighting.headMetres / pixels};
+    return finish(scaled(ray(sighting.centre), depth), RangeSource::Head);
 }
 
 std::optional<Placement> SceneGeometry::fromHeight(const FaceSighting &sighting,
@@ -196,13 +256,24 @@ std::optional<Placement> SceneGeometry::finish(const SceneVector &position, Rang
     Placement placement;
     placement.position = position;
     placement.floorDistanceMetres = std::hypot(aheadOf(position), position.x);
+    placement.screenDistanceMetres = std::hypot(position.x,
+                                                position.y - m_mount.screenOffsetMetres,
+                                                position.z);
     placement.source = source;
-    if (!std::isfinite(placement.floorDistanceMetres) ||
-        placement.floorDistanceMetres < nearestMetres ||
-        placement.floorDistanceMetres > farthestMetres) {
+    const double fromLens{std::hypot(position.x, position.y, position.z)};
+    if (!std::isfinite(placement.floorDistanceMetres) || !std::isfinite(fromLens)
+        || fromLens < nearestMetres || placement.floorDistanceMetres > farthestMetres) {
         return std::nullopt;
     }
     return placement;
+}
+
+double SceneGeometry::headSizeAt(const FaceSighting &sighting, const Placement &placement) const
+{
+    if (!isValid() || !placement.isValid() || !isWhole(sighting.box)) {
+        return 0.0;
+    }
+    return sighting.box.height() * m_frame.height() * placement.position.z / m_focalPixels;
 }
 
 GazeAngles SceneGeometry::gazeAt(const SceneVector &point) const
@@ -217,6 +288,33 @@ GazeAngles SceneGeometry::gazeAlong(const SceneVector &direction) const
 {
     return GazeAngles{degrees(std::atan2(direction.x, direction.z)),
                       degrees(std::atan2(direction.y, std::hypot(direction.x, direction.z)))};
+}
+
+HeadMeasure::HeadMeasure(double minimumMetres, double maximumMetres)
+    : m_minimum{minimumMetres}
+    , m_maximum{maximumMetres}
+{}
+
+void HeadMeasure::add(double metres)
+{
+    if (!std::isfinite(metres) || metres < m_minimum || metres > m_maximum) {
+        return;
+    }
+    m_samples.append(metres);
+    if (m_samples.size() > windowSize) {
+        m_samples.removeFirst();
+    }
+}
+
+std::optional<double> HeadMeasure::result() const
+{
+    if (m_samples.size() < requiredSamples) {
+        return std::nullopt;
+    }
+    QList<double> sorted{m_samples};
+    const auto middle{sorted.begin() + sorted.size() / 2};
+    std::nth_element(sorted.begin(), middle, sorted.end());
+    return *middle;
 }
 
 } // namespace Kerfur

@@ -7,6 +7,7 @@
 #include "cameraselection.h"
 #include "faceanalysisworker.h"
 #include "identitylibrary.h"
+#include "identityregistry.h"
 #include "perceptiontypes.h"
 #include "session.h"
 #include "videoframeimage.h"
@@ -28,6 +29,11 @@
 namespace {
 
 Q_LOGGING_CATEGORY(trackerLog, "kerfur.vision.tracker")
+
+/// A face turned further than this from the camera, either way, has a box
+/// shorter or taller than its own and is not measured.
+constexpr double headMeasureYawDegrees{30.0};
+constexpr double headMeasurePitchDegrees{20.0};
 
 /// The COCO bones, as index pairs into the seventeen keypoints. Face, arms,
 /// torso and legs in that order, so that a partial skeleton still reads as a
@@ -951,6 +957,7 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
 
     const Kerfur::SceneGeometry geometry{sceneGeometry(result.frameSize)};
     const QList<Kerfur::Placement> placements{placeFaces(geometry, ordered, result.people)};
+    measureHeads(geometry, ordered, placements, result.people);
 
     QVariantList faces;
     faces.reserve(ordered.size());
@@ -959,6 +966,8 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         const Kerfur::Placement &placement{placements.at(index)};
         face.insert(QStringLiteral("distance"),
                     placement.isValid() ? placement.floorDistanceMetres : -1.0);
+        face.insert(QStringLiteral("screenDistance"),
+                    placement.isValid() ? placement.screenDistanceMetres : -1.0);
         face.insert(QStringLiteral("distanceSource"), Kerfur::rangeSourceName(placement.source));
         faces.append(face);
     }
@@ -974,7 +983,7 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         // followed until the face stage catches up.
         const qsizetype body{Kerfur::chooseBody(result.people, previous)};
         if (body < 0) {
-            m_attentionDistance = -1.0;
+            setAttentionPlacement(Kerfur::Placement{});
             emit facesChanged();
             setAttention({}, {});
             setFollowing(false);
@@ -989,15 +998,14 @@ void FaceTracker::applyResult(const Kerfur::AnalysisResult &result)
         sighting.centre = Kerfur::headPoint(person, m_keypointConfidence);
         sighting.feet = feetOf(person);
         const Kerfur::Placement placement{geometry.place(sighting)};
-        m_attentionDistance = placement.isValid() ? placement.floorDistanceMetres : -1.0;
+        setAttentionPlacement(placement);
         emit facesChanged();
         setAttention(handsOf(person), heldOf(person));
         follow(sighting.centre, placement, geometry);
         return;
     }
 
-    m_attentionDistance = placements.first().isValid() ? placements.first().floorDistanceMetres
-                                                       : -1.0;
+    setAttentionPlacement(placements.first());
     const Kerfur::AnalysedFace &primary{ordered.first()};
     m_primaryFace = faces.first().toMap();
     m_faceLandmarks = landmarksToVariant(primary.landmarks);
@@ -1061,6 +1069,37 @@ Kerfur::SceneGeometry FaceTracker::sceneGeometry(const QSize &frame) const
     return Kerfur::SceneGeometry{mount, frame};
 }
 
+Kerfur::FaceSighting FaceTracker::sightingOf(const Kerfur::AnalysedFace &face,
+                                             const QList<Kerfur::AnalysedPerson> &people) const
+{
+    Kerfur::FaceSighting sighting;
+    sighting.centre = face.box.center();
+    sighting.box = face.box;
+    if (face.landmarks.size() >= 2) {
+        sighting.rightEye = face.landmarks.at(0);
+        sighting.leftEye = face.landmarks.at(1);
+    }
+    sighting.yawDegrees = face.pose.valid ? face.pose.yaw : 0.0;
+    sighting.heightMetres = face.heightMetres;
+    sighting.headMetres = face.headMetres > 0.0 ? face.headMetres
+                                                : m_measuredHeads.value(face.identity, 0.0);
+
+    const Kerfur::AnalysedPerson *body{nullptr};
+    for (const Kerfur::AnalysedPerson &person : people) {
+        if (!face.identity.isEmpty() && person.identity == face.identity) {
+            body = &person;
+            break;
+        }
+        if (body == nullptr && person.box.contains(sighting.centre)) {
+            body = &person;
+        }
+    }
+    if (body != nullptr) {
+        sighting.feet = feetOf(*body);
+    }
+    return sighting;
+}
+
 QList<Kerfur::Placement> FaceTracker::placeFaces(const Kerfur::SceneGeometry &geometry,
                                                  const QList<Kerfur::AnalysedFace> &faces,
                                                  const QList<Kerfur::AnalysedPerson> &people) const
@@ -1068,31 +1107,77 @@ QList<Kerfur::Placement> FaceTracker::placeFaces(const Kerfur::SceneGeometry &ge
     QList<Kerfur::Placement> placements;
     placements.reserve(faces.size());
     for (const Kerfur::AnalysedFace &face : faces) {
-        Kerfur::FaceSighting sighting;
-        sighting.centre = face.box.center();
-        if (face.landmarks.size() >= 2) {
-            sighting.rightEye = face.landmarks.at(0);
-            sighting.leftEye = face.landmarks.at(1);
-        }
-        sighting.yawDegrees = face.pose.valid ? face.pose.yaw : 0.0;
-        sighting.heightMetres = face.heightMetres;
-
-        const Kerfur::AnalysedPerson *body{nullptr};
-        for (const Kerfur::AnalysedPerson &person : people) {
-            if (!face.identity.isEmpty() && person.identity == face.identity) {
-                body = &person;
-                break;
-            }
-            if (body == nullptr && person.box.contains(sighting.centre)) {
-                body = &person;
-            }
-        }
-        if (body != nullptr) {
-            sighting.feet = feetOf(*body);
-        }
-        placements.append(geometry.place(sighting));
+        placements.append(geometry.place(sightingOf(face, people)));
     }
     return placements;
+}
+
+void FaceTracker::measureHeads(const Kerfur::SceneGeometry &geometry,
+                               const QList<Kerfur::AnalysedFace> &faces,
+                               const QList<Kerfur::Placement> &placements,
+                               const QList<Kerfur::AnalysedPerson> &people)
+{
+    for (qsizetype index{0}; index < faces.size(); ++index) {
+        const Kerfur::AnalysedFace &face{faces.at(index)};
+        if (face.identity.isEmpty()) {
+            continue;
+        }
+        if (face.headMetres > 0.0) {
+            // The size is saved, measured or typed in. A size forgotten later
+            // is measured again.
+            m_headMeasures.remove(face.identity);
+            m_measuredHeads.remove(face.identity);
+            m_headsSaved.remove(face.identity);
+            continue;
+        }
+        if (m_measuredHeads.contains(face.identity)) {
+            continue;
+        }
+
+        // Only a distance taken from the whole body measures the face, and
+        // only a face turned towards the camera, whose box is as tall as it
+        // gets.
+        const Kerfur::Placement &placement{placements.at(index)};
+        const bool wholeBody{placement.source == Kerfur::RangeSource::Stature
+                             || placement.source == Kerfur::RangeSource::Feet};
+        const bool facing{!face.pose.valid
+                          || (std::abs(face.pose.yaw) <= headMeasureYawDegrees
+                              && std::abs(face.pose.pitch) <= headMeasurePitchDegrees)};
+        if (!wholeBody || !facing) {
+            continue;
+        }
+        const double size{geometry.headSizeAt(sightingOf(face, people), placement)};
+        if (size <= 0.0) {
+            continue;
+        }
+
+        auto measure{m_headMeasures.find(face.identity)};
+        if (measure == m_headMeasures.end()) {
+            measure = m_headMeasures.insert(face.identity,
+                                            Kerfur::HeadMeasure{
+                                                Kerfur::IdentityRegistry::minimumHeadMetres,
+                                                Kerfur::IdentityRegistry::maximumHeadMetres});
+        }
+        measure->add(size);
+        const std::optional<double> settled{measure->result()};
+        if (!settled.has_value()) {
+            continue;
+        }
+        m_measuredHeads.insert(face.identity, *settled);
+        m_headMeasures.erase(measure);
+        if (!m_headsSaved.contains(face.identity)) {
+            m_headsSaved.insert(face.identity);
+            qCInfo(trackerLog) << "measured the face of" << face.identity << "at" << *settled
+                               << "m";
+            Kerfur::IdentityLibrary::instance().setHeadSize(face.identity, *settled);
+        }
+    }
+}
+
+void FaceTracker::setAttentionPlacement(const Kerfur::Placement &placement)
+{
+    m_attentionDistance = placement.isValid() ? placement.floorDistanceMetres : -1.0;
+    m_attentionScreenDistance = placement.isValid() ? placement.screenDistanceMetres : -1.0;
 }
 
 void FaceTracker::setGaze(const Kerfur::GazeAngles &gaze)

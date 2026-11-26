@@ -1056,6 +1056,7 @@ AnalysedFace FaceAnalysisWorker::describeFace(const cv::Mat &bgr,
         // somebody it has never heard of.
         face.title = face.identity.isEmpty() ? QString{} : m_registry.standingOf(face.identity);
         face.heightMetres = m_registry.heightOf(face.identity);
+        face.headMetres = m_registry.headOf(face.identity);
     }
 
     // The preview is a mirror, so what the detector called the subject's right
