@@ -12,6 +12,8 @@ qt_add_qml_module(
     SOURCES src/texturewatch.cpp
             src/texturewatch.h
     DEPENDENCIES TARGET KerfurCore Tools Vision Skills
+    # The application's own module, `qml`, which holds KSettings.
+    IMPORT_PATH ${CMAKE_BINARY_DIR}
 )
 
 # Qt6::Quick is PUBLIC because texturewatch.h names QQuickItem in its interface.

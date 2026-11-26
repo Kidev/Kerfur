@@ -4,18 +4,25 @@
 // whole cell high: blue, green and red, left to right. Each stripe is lit by
 // its own channel of the face colour, so the colour is something the eye
 // mixes rather than something any one stripe has. A thin dark line separates
-// two stripes, and another separates two rows of cells.
+// two stripes, and another separates two rows of cells. Cells cover the whole
+// item, unlit outside the picture; the strip narrower than a cell left at
+// each edge stays dark.
 
-layout(location = 0) in vec2 fragCoord;
+layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
 
 layout(std140, binding = 0) uniform buf {
     mat4 qt_Matrix;
     float qt_Opacity;
+    // This item's width and height.
+    vec2 itemSize;
     // The face picture, as x, y, width, height in this item's coordinates.
     vec4 faceRect;
     // Cells across and down the picture: the size of cellLevels.
     vec2 faceCells;
+    // The cells drawn on the item, as the first column and row and the number
+    // of each, counted in cells from the picture's top left cell.
+    vec4 ledCells;
     // What a fully lit cell adds up to.
     vec4 ledScreenLedColor;
     // Cell pitch, in item pixels.
@@ -24,9 +31,6 @@ layout(std140, binding = 0) uniform buf {
     float ledScreenOffLevel;
     // One device pixel, in item pixels: the width the panel is filtered over.
     float ledScreenPixel;
-    // 1 draws only the picture's own cells and leaves the margin around them
-    // dark; 0 covers the item with cells, unlit outside the picture.
-    float ledScreenFaceOnly;
     // Width of the dark line between two stripes, as a fraction of the cell.
     float ledScreenStripeGap;
     // Height of the dark line between two rows, as a fraction of the cell.
@@ -38,11 +42,17 @@ layout(std140, binding = 0) uniform buf {
 // One texel per cell: how lit the cell is, in the red channel.
 layout(binding = 1) uniform sampler2D cellLevels;
 
+// 1 for a cell from `first` up to, but not including, `end`, 0 otherwise.
+float inCells(vec2 cell, vec2 first, vec2 end)
+{
+    vec2 inside = step(first, cell) * (vec2(1.0) - step(end, cell));
+    return inside.x * inside.y;
+}
+
 // 1 for a cell of the picture, 0 for one outside it.
 float inPicture(vec2 cell)
 {
-    vec2 inside = step(vec2(0.0), cell) * (vec2(1.0) - step(faceCells, cell));
-    return inside.x * inside.y;
+    return inCells(cell, vec2(0.0), faceCells);
 }
 
 // The light a cell of the picture puts out. The texture is read for every
@@ -74,7 +84,7 @@ void main()
 
     // The grid starts at the picture's corner, so each cell centre lands on a
     // texel centre of the per cell image.
-    vec2 position = (fragCoord - faceRect.xy) / pitch;
+    vec2 position = (qt_TexCoord0 * itemSize - faceRect.xy) / pitch;
     vec2 low = position - 0.5 * footprint;
     vec2 high = position + 0.5 * footprint;
     vec2 first = floor(low);
@@ -88,7 +98,7 @@ void main()
         float down = (clamp(high.y - row, rowStart, rowEnd) - clamp(low.y - row, rowStart, rowEnd)) / footprint;
         for (int i = 0; i < 2; ++i) {
             vec2 cell = vec2(first.x + float(i), row);
-            float drawn = max(inPicture(cell), 1.0 - ledScreenFaceOnly);
+            float drawn = inCells(cell, ledCells.xy, ledCells.xy + ledCells.zw);
             vec3 stripes = (clamp(vec3(high.x - cell.x), stripeStart, stripeEnd)
                             - clamp(vec3(low.x - cell.x), stripeStart, stripeEnd)) / footprint;
             // Reordered from blue, green, red to the channels' order.

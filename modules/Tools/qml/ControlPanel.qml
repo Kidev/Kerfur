@@ -37,6 +37,9 @@ Rectangle {
     /// How long a press on the face lasts before it shows or hides this panel,
     /// quoted by the hide button's tooltip.
     property int holdToToggleMs: 3000
+    /// The narrowest the panel lays its controls out at without clipping or
+    /// eliding them.
+    readonly property int minimumWidth: 320
 
     // One palette, named once. The alpha lives in the background colour rather
     // than in `opacity`, because opacity on the panel fades the text with it
@@ -477,10 +480,13 @@ Rectangle {
 
     // A caption with the current value on the right, over the control itself.
     // Reading the number off the handle position is the thing this replaces.
+    // With a `settingName`, a right click on the value puts that setting back
+    // to its default.
     component Caption: Item {
         id: caption
 
         property string label: ""
+        property string settingName: ""
         property string value: ""
 
         height: 13
@@ -495,11 +501,21 @@ Rectangle {
         }
 
         Text {
+            id: valueText
+
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             color: root.colorAccent
             font.pixelSize: 10
             text: caption.value
+
+            MouseArea {
+                acceptedButtons: Qt.RightButton
+                anchors.fill: parent
+                enabled: caption.settingName !== ""
+
+                onClicked: KSettings.resetToDefault(caption.settingName)
+            }
         }
     }
 
@@ -524,6 +540,7 @@ Rectangle {
 
         Caption {
             label: settingSlider.label
+            settingName: settingSlider.settingName
             value: settingSlider.valueText !== "" ? settingSlider.valueText : slider.value.toFixed(settingSlider.decimals)
         }
 
@@ -559,6 +576,7 @@ Rectangle {
 
         Caption {
             label: fineSlider.label
+            settingName: fineSlider.settingName
             value: Number(KSettings[fineSlider.settingName]).toFixed(2)
         }
 
@@ -1680,6 +1698,7 @@ Rectangle {
 
                 Caption {
                     label: "Camera"
+                    settingName: "captureResolution"
                     value: root.faceTracker ? root.faceTracker.currentResolution : ""
                 }
 
@@ -1716,6 +1735,7 @@ Rectangle {
 
                 Caption {
                     label: "Update rate"
+                    settingName: "visionUpdateHz"
                     value: root.faceTracker ? (root.faceTracker.updateHz + " Hz, " + root.faceTracker.analysisMs + " ms per pass") : ""
                 }
 
@@ -1730,6 +1750,7 @@ Rectangle {
 
                 Caption {
                     label: "Preview detail"
+                    settingName: "previewMaxSide"
                     value: root.faceTracker ? root.faceTracker.previewResolution : ""
                 }
 
@@ -1750,6 +1771,7 @@ Rectangle {
 
                 Caption {
                     label: "Analysis detail"
+                    settingName: "analysisMaxSide"
                     value: root.faceTracker ? root.faceTracker.analysisResolution : ""
                 }
 

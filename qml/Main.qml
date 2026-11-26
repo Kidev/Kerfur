@@ -58,6 +58,8 @@ Window {
         holdToToggleMs: face.holdDuration
         speechRecognizer: face.speechRecognizer
         height: Window.height
-        width: 0.15 * Window.width
+        // A share of a wide screen, and as much as the controls need on a
+        // narrow one.
+        width: Math.min(Window.width, Math.max(0.15 * Window.width, controlPanel.minimumWidth))
     }
 }

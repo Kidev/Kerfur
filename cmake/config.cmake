@@ -14,6 +14,7 @@ file(
 )
 
 set(SOURCES_QML_SINGLETON "qml/KSettings.qml")
+set(SOURCES_QML_SETTINGS "qml/KSettingsValues.qml")
 # The glob also matches the singleton, which QML_FILES must list only once.
 list(REMOVE_ITEM SOURCES_QML ${SOURCES_QML_SINGLETON})
 set(
@@ -28,6 +29,8 @@ set(RESOURCES_FILE "resources.qrc")
 set_source_files_properties(${MISC_EXTRA_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 set_source_files_properties(${SOURCES_QML_SINGLETON} PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(${SOURCES_QML_SINGLETON} PROPERTIES QT_RESOURCE_ALIAS KSettings.qml)
+# Beside the singleton, which derives from it.
+set_source_files_properties(${SOURCES_QML_SETTINGS} PROPERTIES QT_RESOURCE_ALIAS KSettingsValues.qml)
 
 resolve_env_or_var(QT_ROOT_DIR "" QT_INSTALL_DIR)
 

@@ -1,6 +1,5 @@
 import QtQuick
 import Display
-import Tools
 import qml 1.0
 
 /// The face drawn as an LED panel: the screen fills this item, and `source` is
@@ -8,10 +7,10 @@ import qml 1.0
 ///
 /// With `ledScreenLedSize` at 0 (automatic) every pixel of the picture is one
 /// cell: the cell is the largest whole number of device pixels that fits
-/// `sourceSize` cells on the screen, the picture is centred, and the margin
-/// left around it stays dark. With a size in pixels, cells of that size cover
-/// the whole item, unlit outside the picture, which fills the item with its
-/// aspect ratio kept.
+/// `sourceSize` cells on the screen, and the picture is centred. With a size in
+/// pixels, the picture fills the item with its aspect ratio kept. Either way,
+/// unlit cells repeat from the picture out to the edges of the item, and the
+/// strip narrower than a cell left at each edge stays dark.
 ///
 /// A cell that the picture lights comes on over `ledScreenFadeIn` and one it
 /// leaves goes dark over `ledScreenFadeOut`. The panel redraws on its own only
@@ -30,6 +29,18 @@ Item {
     property real glowBlurAmount: KSettings.glowBlurAmount
     property color glowColor: KSettings.glowColor
     property real glowMaxBrightness: KSettings.glowMaxBrightness
+    /// The cells drawn on the item: the first column and row, and the number
+    /// of each, counted in cells from the picture's top left cell. Only whole
+    /// cells are drawn.
+    readonly property rect ledCells: {
+        // Absorbs rounding, so a cell that ends exactly on an edge is kept.
+        const slack = 0.001;
+        const left = Math.floor(root.pictureRect.x / root.pitch + slack);
+        const top = Math.floor(root.pictureRect.y / root.pitch + slack);
+        const right = Math.floor((root.width - root.pictureRect.x) / root.pitch + slack);
+        const bottom = Math.floor((root.height - root.pictureRect.y) / root.pitch + slack);
+        return Qt.rect(-left, -top, Math.max(0, left + right), Math.max(0, top + bottom));
+    }
     /// Milliseconds a cell takes to come on fully from dark; 0 is at once.
     property int ledScreenFadeIn: KSettings.ledScreenFadeIn
     /// Milliseconds a cell takes to go dark from fully lit; 0 is at once.
@@ -45,6 +56,9 @@ Item {
     property real ledScreenStripeGap: KSettings.ledScreenStripeGap
     /// How far a bright stripe washes towards white at its core, from 0 to 1.
     property real ledScreenWhiteCore: KSettings.ledScreenWhiteCore
+    /// One cell, in pixels of the picture `source` shows. A drawing that
+    /// moves by whole multiples of it lights the same shape at every step.
+    readonly property size pictureCell: Qt.size(root.pictureCells.width / root.cells.width, root.pictureCells.height / root.cells.height)
     readonly property size pictureCells: Qt.size(Math.max(1, Math.round(root.sourceSize.width)), Math.max(1, Math.round(root.sourceSize.height)))
     /// Where the picture sits, in this item's coordinates.
     readonly property rect pictureRect: {
@@ -144,7 +158,8 @@ Item {
         readonly property var cellLevels: shownLevelsSource
         readonly property size faceCells: root.cells
         readonly property rect faceRect: root.pictureRect
-        readonly property real ledScreenFaceOnly: root.automaticLedSize ? 1 : 0
+        readonly property size itemSize: Qt.size(ledScreenEffect.width, ledScreenEffect.height)
+        readonly property rect ledCells: root.ledCells
         readonly property color ledScreenLedColor: root.ledScreenLedColor
         readonly property real ledScreenLedSize: root.pitch
         readonly property real ledScreenOffLevel: root.ledScreenOffLevel
@@ -158,7 +173,6 @@ Item {
         fragmentShader: '/shaders/kerfur.frag.qsb'
         layer.enabled: true
         layer.smooth: true
-        vertexShader: '/shaders/kerfur.vert.qsb'
     }
 
     Glow {

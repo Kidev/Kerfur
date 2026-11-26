@@ -1,2 +1,3 @@
 module qml
 singleton KSettings 1.0 KSettings.qml
+KSettingsValues 1.0 KSettingsValues.qml

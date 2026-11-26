@@ -1,9 +1,10 @@
+pragma ComponentBehavior: Bound
+
 import Core
 import QtMultimedia
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Window
-import Tools
 import Vision
 import Hearing
 import Skills
@@ -24,11 +25,11 @@ Item {
     readonly property real doubleBlinkChance: 0.1
     readonly property int doubleBlinkDuration: 100
     readonly property real eyeMovementRange: KSettings.eyeMovementRange
-    readonly property alias faceTracker: faceTracker
-    readonly property alias speechRecognizer: speechRecognizer
+    readonly property alias faceTracker: tracker
+    readonly property alias speechRecognizer: recognizer
 
     // Face tracking properties
-    readonly property bool faceTrackingActive: faceTracker.enabled && faceTracker.following
+    readonly property bool faceTrackingActive: tracker.enabled && tracker.following
     // How long a press on the face lasts before it counts as `held`.
     readonly property int holdDuration: 3000
     property bool isBlinking: false
@@ -37,7 +38,7 @@ Item {
     // lasts `meowDuration` and ends by itself.
     property bool isMeowing: false
     // Asleep while the models are stopped and only motion is looked for.
-    readonly property bool isSleeping: faceTracker.enabled && faceTracker.watching
+    readonly property bool isSleeping: tracker.enabled && tracker.watching
     property bool isTouched: false
     property bool isWinking: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
@@ -47,7 +48,7 @@ Item {
     // How long the eyes stay on the side where somebody was last seen before
     // they look straight ahead again.
     readonly property int lookAheadDelay: Math.round(KSettings.lookAheadAfterSeconds * 1000)
-    property bool maintainEyePosition: faceTracker.enabled && !faceTracker.following
+    property bool maintainEyePosition: tracker.enabled && !tracker.following
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
     // How quickly the drawn pupils catch up with the target angles, in
@@ -55,7 +56,7 @@ Item {
     // of the gap between two analysis passes, so a pupil has nearly arrived
     // when the next position comes in, and it keeps its speed through that
     // update instead of stopping on each one.
-    readonly property real pupilSmoothTime: Math.max(0.03, Math.min(0.08, 0.4 / Math.max(1, faceTracker.updateHz)))
+    readonly property real pupilSmoothTime: Math.max(0.03, Math.min(0.08, 0.4 / Math.max(1, tracker.updateHz)))
     // A little longer than the sound, so the face is still meowing when it
     // stops.
     readonly property int meowDuration: 900
@@ -104,6 +105,14 @@ Item {
         return [target + (offset + pull) * decay, (velocity - omega * pull) * decay];
     }
 
+    // `value`, in pixels of the eye picture, moved to the nearest whole
+    // number of LED cells, each `cell` picture pixels long. A pupil placed
+    // between two cells half lights both, and its outline changes with every
+    // step it takes.
+    function onCell(value, cell) {
+        return Math.round(value / cell) * cell;
+    }
+
     function cancelDoubleBlink() {
         root.pendingDoubleBlink = false;
         root.isDoubleBlink = false;
@@ -113,12 +122,12 @@ Item {
     // Everybody the gallery names in this pass, by face or by body.
     function identitiesInView() {
         const seen = [];
-        for (const face of faceTracker.faces) {
+        for (const face of tracker.faces) {
             if (face.known) {
                 seen.push(face.identity);
             }
         }
-        for (const person of faceTracker.people) {
+        for (const person of tracker.people) {
             if (person.known && person.identity) {
                 seen.push(person.identity);
             }
@@ -416,7 +425,7 @@ Item {
     }
 
     SpeechRecognizer {
-        id: speechRecognizer
+        id: recognizer
 
         enabled: KSettings.speechRecognitionEnabled // Add this setting to KSettings.qml
 
@@ -436,7 +445,7 @@ Item {
     }
 
     FaceTracker {
-        id: faceTracker
+        id: tracker
 
         analysisMaxSide: KSettings.analysisMaxSide
         cameraHeight: KSettings.cameraHeight
@@ -484,9 +493,9 @@ Item {
         // the rim at somebody 90 degrees to the side. `pupilChase` moves the
         // drawn pupils there.
         onGazeChanged: {
-            if (faceTracker.following && !root.isBlinking && !root.isTouched && !root.isMeowing && !root.isWinking && faceTracker.enabled) {
-                root.targetLeftRightAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazeYaw * root.eyeMovementRange));
-                root.targetUpDownAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazePitch * root.eyeMovementRange));
+            if (tracker.following && !root.isBlinking && !root.isTouched && !root.isMeowing && !root.isWinking && tracker.enabled) {
+                root.targetLeftRightAngle = Math.max(0, Math.min(180, 90 + tracker.gazeYaw * root.eyeMovementRange));
+                root.targetUpDownAngle = Math.max(0, Math.min(180, 90 + tracker.gazePitch * root.eyeMovementRange));
             }
         }
         // Somebody lost is looked for where they were last seen, for
@@ -495,7 +504,7 @@ Item {
             if (following) {
                 lookAheadTimer.stop();
                 centerReturnTimer.stop();
-            } else if (faceTracker.enabled) {
+            } else if (tracker.enabled) {
                 centerReturnTimer.stop();
                 lookAheadTimer.restart();
             } else {
@@ -512,7 +521,7 @@ Item {
         repeat: false
 
         onTriggered: {
-            if (faceTracker.enabled && !faceTracker.following) {
+            if (tracker.enabled && !tracker.following) {
                 root.lookAhead();
             }
         }
@@ -558,7 +567,7 @@ Item {
         }
         onTriggered: {
             // Only return to center if face tracking is disabled
-            if (!faceTracker.enabled && steps < maxSteps) {
+            if (!tracker.enabled && steps < maxSteps) {
                 const centerAngle = 90;
                 const currentLeftRight = root.targetLeftRightAngle;
                 const currentUpDown = root.targetUpDownAngle;
@@ -616,8 +625,8 @@ Item {
             source: root.pathEyesPupil
             visible: root.leftPupilVisible
             width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
-            x: displayContainer.relativeScaleWidth * (root.leftEyeCenter.x + root.leftPupilOffset.x)
-            y: displayContainer.relativeScaleHeight * (root.leftEyeCenter.y + root.leftPupilOffset.y)
+            x: displayContainer.relativeScaleWidth * root.onCell(root.leftEyeCenter.x + root.leftPupilOffset.x, ledScreen.pictureCell.width)
+            y: displayContainer.relativeScaleHeight * root.onCell(root.leftEyeCenter.y + root.leftPupilOffset.y, ledScreen.pictureCell.height)
         }
 
         Image {
@@ -627,8 +636,8 @@ Item {
             source: root.pathEyesPupil
             visible: root.rightPupilVisible
             width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
-            x: displayContainer.relativeScaleWidth * (root.rightEyeCenter.x + root.rightPupilOffset.x)
-            y: displayContainer.relativeScaleHeight * (root.rightEyeCenter.y + root.rightPupilOffset.y)
+            x: displayContainer.relativeScaleWidth * root.onCell(root.rightEyeCenter.x + root.rightPupilOffset.x, ledScreen.pictureCell.width)
+            y: displayContainer.relativeScaleHeight * root.onCell(root.rightEyeCenter.y + root.rightPupilOffset.y, ledScreen.pictureCell.height)
         }
     }
 
@@ -833,9 +842,9 @@ Item {
     MouseArea {
         id: pupilTrackingArea
 
-        property bool maintainPosition: faceTracker.enabled && !faceTracker.following
+        property bool maintainPosition: tracker.enabled && !tracker.following
         property bool shouldTrack: !root.isBlinking && !root.isTouched && !root.isMeowing && !root.isSleeping && (!pupilTrackingArea.pressed || root.isWinking)
-        property bool useFaceTracking: faceTracker.enabled && faceTracker.following
+        property bool useFaceTracking: tracker.enabled && tracker.following
 
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         anchors.fill: parent
@@ -860,7 +869,7 @@ Item {
                 holdTimer.restart();
                 mouse.accepted = true;
             } else if (mouse.button === Qt.RightButton) {
-                var winkSide = Math.random() < 0.5 ? Face.WinkType.Left : Face.WinkType.Right;
+                const winkSide = Math.random() < 0.5 ? Face.WinkType.Left : Face.WinkType.Right;
                 root.startWinking(winkSide);
                 mouse.accepted = true;
             }
