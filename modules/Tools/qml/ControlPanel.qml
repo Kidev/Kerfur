@@ -237,6 +237,12 @@ Rectangle {
         return parts.join(", ");
     }
 
+    function behaviourSummary() {
+        if (!KSettings.greetingEnabled)
+            return "greetings off";
+        return "greets after " + KSettings.greetAfterHours.toFixed(1) + " h away";
+    }
+
     function visionSummary() {
         if (!root.faceTracker || !root.faceTracker.enabled)
             return "off";
@@ -2431,6 +2437,52 @@ Rectangle {
                     visible: Identities.problem !== "" && !root.addingPerson && root.editingPersonId === ""
                     width: parent.width
                     wrapMode: Text.WordWrap
+                }
+            }
+
+            // What Kerfur does on its own: greeting people who come back, and
+            // where it looks once nobody is left to follow.
+            Section {
+                summary: root.behaviourSummary()
+                title: "Behaviour"
+                visible: !Session.light
+
+                Toggle {
+                    checked: KSettings.greetingEnabled
+                    label: "Meow at people back after a while"
+
+                    onToggled: KSettings.greetingEnabled = !KSettings.greetingEnabled
+                }
+
+                SettingSlider {
+                    decimals: 1
+                    from: 0.5
+                    label: "Greet after (hours away)"
+                    settingName: "greetAfterHours"
+                    stepSize: 0.5
+                    to: 48
+                    visible: KSettings.greetingEnabled
+                }
+
+                // A factor of 4 with 8 hours makes 2 hours asleep enough.
+                SettingSlider {
+                    decimals: 1
+                    from: 1
+                    label: "Time asleep counts"
+                    settingName: "sleepTimeFactor"
+                    stepSize: 0.5
+                    to: 12
+                    valueText: KSettings.sleepTimeFactor.toFixed(1) + "x, " + (KSettings.greetAfterHours / KSettings.sleepTimeFactor).toFixed(1) + " h asleep"
+                    visible: KSettings.greetingEnabled
+                }
+
+                SettingSlider {
+                    decimals: 1
+                    from: 0.5
+                    label: "Look ahead after nobody for (s)"
+                    settingName: "lookAheadAfterSeconds"
+                    stepSize: 0.5
+                    to: 10
                 }
             }
 

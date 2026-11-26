@@ -110,6 +110,8 @@ A stranger with neither feet nor eyes in view is assumed to be 1.70 m tall. The 
 #### Watching for motion
 With nobody in view for 30 seconds, Kerfur stops running the models and only compares frames with each other, twice a second. Each frame is reduced to a 128 pixel wide grey thumbnail (on a Pi camera module, from the luma plane alone, without converting the frame to colour) and compared with the first thumbnail taken after the models stopped. A change of exposure or of the room light, which moves every pixel at once, is subtracted first. In a lit room, a pixel counts as changed when it moves by 16 grey levels. A dark room spans far fewer levels, so the threshold shrinks in proportion to the contrast of the first thumbnail, down to 3. The second thumbnail measures the camera's noise, and the threshold stays three and a half standard deviations above it, so the gain a camera adds in the dark does not wake the models by itself. Once more than 1% of the picture has changed, the models run again; if they find nobody within 3 seconds, watching resumes and the current picture becomes the new reference. All four figures are in the *Vision* section, beside a readout of how much of the picture changed last. Turning off *Watch for motion when nobody is around* keeps the models running.
 
+Kerfur sleeps while it watches: its eyes close and z's rise from the top right corner of the face.
+
 ### Knowing people
 Kerfur ships with an empty gallery. Every profile carries the two models that learn a person (face recognition and speaker recognition), and people are taught from the control panel.
 
@@ -154,6 +156,15 @@ Paths are relative to the manifest, so the directory copies to another machine a
 A gallery written by hand or copied from another machine is read from the `Paths/identitiesPath` setting, unset by default. When set, that gallery is read first and the panel's records override it id by id; the panel lists and changes only its own records. A hand-written gallery may skip the manifest, in which case files are matched by stem and everybody is unranked. The panel refuses to rewrite an `ids.json` edited by hand into the list or `identities` form.
 
 When a voice is recognised while that person's face is in shot, the camera preview draws the sentence over their head, bordered in the colour of their face box. The two are matched by name, which holds because one manifest enrols both galleries. A recognised speaker who is out of shot gets no caption; the transcript is in the hearing panel either way.
+
+### Behaviour
+Kerfur meows when it hears its name. The match accepts the spellings an English model writes for the French, American and British pronunciations ("Kerfur", "care fear", "Curfer", "Kerfa" and others), and whole words only, so "careful" and "kerfuffle" leave it quiet.
+
+Kerfur also meows at somebody from the gallery who comes back after 8 hours out of sight, and at anybody it recognises for the first time. Time asleep counts four times over, so two hours of watching for motion are worth the full eight. Time with Kerfur closed counts once. The absences are kept in the `Greetings` group of the settings file, and a restart keeps track of everybody seen within those 8 hours.
+
+When the person followed leaves the picture, the eyes stay on the side where they were last seen for 1.5 seconds, then turn straight ahead.
+
+The *Behaviour* section of the panel holds the greeting switch, the absence, the factor for time asleep and the delay before looking ahead.
 
 ### Hands and what is in them
 For a person the gallery recognises, and for anybody at all who is alone in view, Kerfur first locates their hands from the pose keypoints. A hand sits about a third of a forearm past the wrist, along the forearm, and measures about eight tenths of one across. An arm reaching towards the camera projects to almost no length, and a box sized from it alone would miss the hand nearest the lens, the largest one in the frame and the one most likely to hold something. So the shoulders, the trunk, the eyes and the ears are measured too, each scaled by what a hand is worth against it, and the forearm's answer is kept only where the rest of the body agrees. The result is a region to look in, where the hand pipeline starts.

@@ -29,6 +29,8 @@ kerfur_add_test(identitylibrary KerfurCore)
 kerfur_add_test(wavfile KerfurCore)
 kerfur_add_test(capturepermission KerfurCore)
 kerfur_add_test(propertysynchronizer KerfurCore)
+kerfur_add_test(absenceclock KerfurCore)
+kerfur_add_test(greeter KerfurCore)
 
 # Vision and Hearing both keep OpenCV private, so neither its headers nor its
 # libraries reach a consumer. These suites build cv::Mat inputs of their own, so

@@ -27,7 +27,7 @@ private slots:
         QTest::newRow("blank audio") << QStringLiteral("[BLANK_AUDIO]");
         QTest::newRow("silence") << QStringLiteral(" [ Silence ] ");
         QTest::newRow("parenthesised") << QStringLiteral("(door closes)");
-        QTest::newRow("music") << QStringLiteral("♪ lyrics ♪");
+        QTest::newRow("music") << QStringLiteral("\u266a lyrics \u266a");
         QTest::newRow("asterisks") << QStringLiteral("*coughs*");
         QTest::newRow("punctuation only") << QStringLiteral(" ... ");
         QTest::newRow("empty") << QString{};
@@ -67,9 +67,40 @@ private slots:
         QTest::newRow("plain") << QStringLiteral("hey kerfur") << true;
         QTest::newRow("capitalised") << QStringLiteral("Kerfur, look at me") << true;
         QTest::newRow("mishearing") << QStringLiteral("care fur please") << true;
-        QTest::newRow("umlaut") << QStringLiteral("kerfür") << true;
+        QTest::newRow("umlaut") << QStringLiteral("kerf\u00fcr") << true;
         QTest::newRow("inside a longer word") << QStringLiteral("what a kerfuffle") << false;
         QTest::newRow("unrelated") << QStringLiteral("turn the lights on") << false;
+
+        // The French way: an English model has no French u or r to write.
+        QTest::newRow("french, care fear") << QStringLiteral("Care fear, come here") << true;
+        QTest::newRow("french, care few") << QStringLiteral("care few") << true;
+        QTest::newRow("french, kerr fur") << QStringLiteral("Kerr fur") << true;
+        QTest::newRow("french, kerfure") << QStringLiteral("Kerfure!") << true;
+        QTest::newRow("french, kerfoor") << QStringLiteral("hello Kerfoor") << true;
+
+        // The American way.
+        QTest::newRow("american, kerfer") << QStringLiteral("Kerfer, look") << true;
+        QTest::newRow("american, curfer") << QStringLiteral("hey Curfer") << true;
+        QTest::newRow("american, cur fur") << QStringLiteral("cur fur") << true;
+        QTest::newRow("american, kirfer") << QStringLiteral("Kirfer") << true;
+        QTest::newRow("american, kerpher") << QStringLiteral("Kerpher") << true;
+        QTest::newRow("american, hyphenated") << QStringLiteral("Ker-fur") << true;
+
+        // The British way, with no r at the end.
+        QTest::newRow("british, kerfa") << QStringLiteral("Kerfa, sit") << true;
+        QTest::newRow("british, curfa") << QStringLiteral("curfa") << true;
+        QTest::newRow("british, kerfuh") << QStringLiteral("Kerfuh") << true;
+        QTest::newRow("british, curfew") << QStringLiteral("curfew") << true;
+
+        // Words that share the sounds and are something else.
+        QTest::newRow("careful") << QStringLiteral("careful now") << false;
+        QTest::newRow("carefree") << QStringLiteral("a carefree day") << false;
+        QTest::newRow("coffee") << QStringLiteral("more coffee") << false;
+        QTest::newRow("carver") << QStringLiteral("the carver") << false;
+        QTest::newRow("cover") << QStringLiteral("cover it") << false;
+        QTest::newRow("kafka") << QStringLiteral("reading Kafka") << false;
+        QTest::newRow("surfer") << QStringLiteral("a surfer") << false;
+        QTest::newRow("her fur") << QStringLiteral("her fur is soft") << false;
     }
 
     void wakeWordIsHeard()

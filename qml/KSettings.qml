@@ -15,6 +15,16 @@ QtObject {
     property bool autoPaddingEnabled: true
     /// Height of the camera lens above the floor, in metres.
     property real cameraHeight: 1.0
+    property Settings behaviour: Settings {
+        id: settingsBehaviour
+
+        property alias greetAfterHours: root.greetAfterHours
+        property alias greetingEnabled: root.greetingEnabled
+        property alias lookAheadAfterSeconds: root.lookAheadAfterSeconds
+        property alias sleepTimeFactor: root.sleepTimeFactor
+
+        category: "Behaviour"
+    }
     property real blurMultiplier: 1
     /// The camera chosen in the panel, by device id. Empty means automatic: a
     /// front facing camera, otherwise the system default.
@@ -51,6 +61,12 @@ QtObject {
     /// `glowColor` so the custom swatch still offers it after a preset is picked.
     property color glowCustomColor: "#ff8000"
     property real glowMaxBrightness: 1.0
+    /// Hours of waking time somebody known has to be out of sight before
+    /// Kerfur meows at them on their return.
+    property real greetAfterHours: 8
+    /// Whether Kerfur meows at somebody known who comes back after
+    /// `greetAfterHours`.
+    property bool greetingEnabled: true
     /// Score the hand landmark model needs before a hand counts.
     property real handConfidence: 0.5
     /// Seconds without anybody in view before the models stop and only
@@ -65,6 +81,9 @@ QtObject {
     property real keypointConfidence: 0.4
     property int ledScreenLedSize: 6
     property real leftRightAngle: 90
+    /// Seconds the eyes stay where the last person was seen before they look
+    /// straight ahead.
+    property real lookAheadAfterSeconds: 1.5
     /// Whether a stranger's hands are tracked while they are the only person
     /// in view. People the gallery knows always have theirs tracked.
     property bool loneStrangerHands: true
@@ -153,6 +172,8 @@ QtObject {
     /// screen, in metres. Negative when the camera is below it.
     property real screenOffset: 0.1
     property bool showControls: false
+    /// How many times faster an absence runs while Kerfur is asleep.
+    property real sleepTimeFactor: 4
     property Settings speech: Settings {
         id: settingsSpeech
 

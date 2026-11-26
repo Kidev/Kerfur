@@ -48,6 +48,10 @@ qt_add_qml_module(
             src/resourcemonitor.h
             src/propertysynchronizer.cpp
             src/propertysynchronizer.h
+            src/absenceclock.cpp
+            src/absenceclock.h
+            src/greeter.cpp
+            src/greeter.h
 )
 
 target_link_libraries(${CORE_MODULE} PUBLIC Qt6::Core Qt6::Gui Qt6::Qml)

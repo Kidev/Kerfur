@@ -33,12 +33,20 @@ Item {
     readonly property int holdDuration: 3000
     property bool isBlinking: false
     property bool isDoubleBlink: false
+    // A meow that was not a touch: the name heard, or somebody greeted. It
+    // lasts `meowDuration` and ends by itself.
+    property bool isMeowing: false
+    // Asleep while the models are stopped and only motion is looked for.
+    readonly property bool isSleeping: faceTracker.enabled && faceTracker.watching
     property bool isTouched: false
     property bool isWinking: false
     readonly property point leftEyeCenter: Qt.point(32, 22)
     readonly property real leftOffset: ((root.shownLeftRightAngle - 90) / 90) * root.maxPupilMovement
     readonly property point leftPupilOffset: Qt.point(root.leftOffset, root.rightOffset)
     property bool leftPupilVisible: true
+    // How long the eyes stay on the side where somebody was last seen before
+    // they look straight ahead again.
+    readonly property int lookAheadDelay: Math.round(KSettings.lookAheadAfterSeconds * 1000)
     property bool maintainEyePosition: faceTracker.enabled && !faceTracker.following
     readonly property int maxBlinkInterval: 8000
     readonly property int maxPupilMovement: 5
@@ -48,6 +56,9 @@ Item {
     // when the next position comes in, and it keeps its speed through that
     // update instead of stopping on each one.
     readonly property real pupilSmoothTime: Math.max(0.03, Math.min(0.08, 0.4 / Math.max(1, faceTracker.updateHz)))
+    // A little longer than the sound, so the face is still meowing when it
+    // stops.
+    readonly property int meowDuration: 900
     readonly property real meowVolume: 1
     readonly property int minBlinkInterval: 4000
     readonly property string pathEyesClosed: "/assets/img/eyes_closed.png"
@@ -99,9 +110,39 @@ Item {
         doubleBlinkTimer.stop();
     }
 
-    function playMeowSound() {
-        dynamicSound.source = root.pathSoundMeow;
-        dynamicSound.play();
+    // Everybody the gallery names in this pass, by face or by body.
+    function identitiesInView() {
+        const seen = [];
+        for (const face of faceTracker.faces) {
+            if (face.known) {
+                seen.push(face.identity);
+            }
+        }
+        for (const person of faceTracker.people) {
+            if (person.known && person.identity) {
+                seen.push(person.identity);
+            }
+        }
+        return seen;
+    }
+
+    // Straight ahead, as if somebody had just stepped in front: the pupils
+    // chase the centre the way they chase a person.
+    function lookAhead() {
+        root.targetLeftRightAngle = 90;
+        root.targetUpDownAngle = 90;
+    }
+
+    // The same face and sound as a touch, for `meowDuration`. A touch already
+    // meowing keeps the face until it is released.
+    function meow() {
+        if (root.isMeowing || root.isTouched) {
+            return;
+        }
+        root.stopWinking();
+        root.cancelDoubleBlink();
+        root.isMeowing = true;
+        meowTimer.restart();
     }
 
     function resetBlinkTimer() {
@@ -145,7 +186,7 @@ Item {
     states: [
         State {
             name: "normal"
-            when: !root.isTouched && !root.isBlinking && !root.isWinking
+            when: !root.isTouched && !root.isMeowing && !root.isBlinking && !root.isWinking && !root.isSleeping
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesOpened
@@ -155,7 +196,7 @@ Item {
         },
         State {
             name: "meow"
-            when: root.isTouched
+            when: root.isTouched || root.isMeowing
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesMeow
@@ -165,7 +206,17 @@ Item {
         },
         State {
             name: "blink"
-            when: root.isBlinking && !root.isTouched && !root.isWinking
+            when: root.isBlinking && !root.isTouched && !root.isMeowing && !root.isWinking && !root.isSleeping
+
+            PropertyChanges {
+                root.currentEyesImage: root.pathEyesClosed
+                root.leftPupilVisible: false
+                root.rightPupilVisible: false
+            }
+        },
+        State {
+            name: "sleep"
+            when: root.isSleeping && !root.isTouched && !root.isMeowing && !root.isWinking
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesClosed
@@ -175,7 +226,7 @@ Item {
         },
         State {
             name: "wink_left"
-            when: root.isWinking && root.winkType === Face.WinkType.Left
+            when: root.isWinking && !root.isTouched && !root.isMeowing && root.winkType === Face.WinkType.Left
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesLeftWink
@@ -185,7 +236,7 @@ Item {
         },
         State {
             name: "wink_right"
-            when: root.isWinking && root.winkType === Face.WinkType.Right
+            when: root.isWinking && !root.isTouched && !root.isMeowing && root.winkType === Face.WinkType.Right
 
             PropertyChanges {
                 root.currentEyesImage: root.pathEyesRightWink
@@ -205,6 +256,18 @@ Item {
                     root.allowsBlinks = false;
                     dynamicSound.source = root.pathSoundMeow;
                     dynamicSound.play();
+                }
+            }
+        },
+        Transition {
+            to: "sleep"
+
+            ScriptAction {
+                script: {
+                    blinkTimer.stop();
+                    root.cancelDoubleBlink();
+                    root.isBlinking = false;
+                    root.allowsBlinks = false;
                 }
             }
         },
@@ -357,13 +420,7 @@ Item {
 
         enabled: KSettings.speechRecognitionEnabled // Add this setting to KSettings.qml
 
-        onKerfurHeard: {
-            // Trigger meow when "kerfur" is heard
-            if (!root.isTouched && !root.isWinking && !root.isBlinking) {
-                root.isTouched = true;
-                root.playMeowSound();
-            }
-        }
+        onKerfurHeard: root.meow()
 
         onSentenceRecognized: (text, confidence) => {
             console.log("Heard:", text, "with confidence:", confidence);
@@ -410,9 +467,11 @@ Item {
         onEnabledChanged: {
             if (!enabled) {
                 // Return to center when face tracking is disabled
+                lookAheadTimer.stop();
                 centerReturnTimer.start();
             }
         }
+        onFacesChanged: greeter.see(root.identitiesInView())
         onErrorStringChanged: {
             if (errorString !== "") {
                 console.warn("FaceTracker error:", errorString);
@@ -425,23 +484,60 @@ Item {
         // the rim at somebody 90 degrees to the side. `pupilChase` moves the
         // drawn pupils there.
         onGazeChanged: {
-            if (faceTracker.following && !root.isBlinking && !root.isTouched && !root.isWinking && faceTracker.enabled) {
+            if (faceTracker.following && !root.isBlinking && !root.isTouched && !root.isMeowing && !root.isWinking && faceTracker.enabled) {
                 root.targetLeftRightAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazeYaw * root.eyeMovementRange));
                 root.targetUpDownAngle = Math.max(0, Math.min(180, 90 + faceTracker.gazePitch * root.eyeMovementRange));
             }
         }
+        // Somebody lost is looked for where they were last seen, for
+        // `lookAheadDelay`, and then the eyes look straight ahead.
         onFollowingChanged: {
-            if (!following && root.faceTrackingActive) {
-                // Face lost but tracking still active - do NOT return to center
+            if (following) {
+                lookAheadTimer.stop();
                 centerReturnTimer.stop();
-            } else if (!following && !faceTracker.enabled) {
-                // Face tracking disabled - gradually return to center
-                centerReturnTimer.start();
+            } else if (faceTracker.enabled) {
+                centerReturnTimer.stop();
+                lookAheadTimer.restart();
             } else {
-                // Face detected - stop any center return
-                centerReturnTimer.stop();
+                lookAheadTimer.stop();
+                centerReturnTimer.start();
             }
         }
+    }
+
+    Timer {
+        id: lookAheadTimer
+
+        interval: root.lookAheadDelay
+        repeat: false
+
+        onTriggered: {
+            if (faceTracker.enabled && !faceTracker.following) {
+                root.lookAhead();
+            }
+        }
+    }
+
+    // Greets people the gallery knows when they come back after a long time
+    // away. Time asleep counts several times over.
+    Greeter {
+        id: greeter
+
+        asleep: root.isSleeping
+        enabled: KSettings.greetingEnabled
+        greetAfterHours: KSettings.greetAfterHours
+        sleepFactor: KSettings.sleepTimeFactor
+
+        onGreeted: root.meow()
+    }
+
+    Timer {
+        id: meowTimer
+
+        interval: root.meowDuration
+        repeat: false
+
+        onTriggered: root.isMeowing = false
     }
 
     // Timer to handle face tracking loss - keeps eyes at last position instead of centering
@@ -533,27 +629,126 @@ Item {
         }
     }
 
-    MultiEffect {
-        id: maskedDisplayImage
+    // What the LED screen lights: the eyes, and the marks of a sleeping face
+    // beside them. Laid over the eye picture, in its coordinates.
+    Item {
+        id: faceLayer
 
         anchors.fill: displayContainer
-        autoPaddingEnabled: KSettings.autoPaddingEnabled
-        // No layer: the LED screen captures this item with hideSource, and a
-        // layered item stays drawn underneath the capture.
-        maskEnabled: !root.isBlinking && !root.isTouched
-        maskInverted: true
-        maskSpreadAtMax: KSettings.maskSpreadAtMax
-        maskSpreadAtMin: KSettings.maskSpreadAtMin
-        maskThresholdMax: KSettings.maskThresholdMax
-        maskThresholdMin: KSettings.maskThresholdMin
 
-        maskSource: ShaderEffectSource {
-            hideSource: true
-            sourceItem: displayContainer
+        MultiEffect {
+            id: maskedDisplayImage
+
+            anchors.fill: parent
+            autoPaddingEnabled: KSettings.autoPaddingEnabled
+            // No layer: the LED screen captures this item with hideSource, and a
+            // layered item stays drawn underneath the capture.
+            maskEnabled: !root.isBlinking && !root.isTouched && !root.isMeowing && !root.isSleeping
+            maskInverted: true
+            maskSpreadAtMax: KSettings.maskSpreadAtMax
+            maskSpreadAtMin: KSettings.maskSpreadAtMin
+            maskThresholdMax: KSettings.maskThresholdMax
+            maskThresholdMin: KSettings.maskThresholdMin
+
+            maskSource: ShaderEffectSource {
+                hideSource: true
+                sourceItem: displayContainer
+            }
+            source: ShaderEffectSource {
+                hideSource: true
+                sourceItem: displayImage
+            }
         }
-        source: ShaderEffectSource {
-            hideSource: true
-            sourceItem: displayImage
+
+        // Three z's rising from above the right eye into the empty corner of
+        // the picture, each growing and fading as it goes, a third of a cycle
+        // apart.
+        Item {
+            id: sleepMarks
+
+            // Where each mark starts and ends, and its size there, in pixels of
+            // the eye picture (147 by 70).
+            readonly property point rise: Qt.point(110, 27)
+            readonly property point peak: Qt.point(140, 2)
+            readonly property real smallest: 4
+            readonly property real largest: 9
+            readonly property real stroke: 1.6
+            readonly property int count: 3
+            // Milliseconds for one mark to rise all the way.
+            readonly property int period: 4200
+            property real cycle: 0
+
+            anchors.fill: parent
+            opacity: root.state === "sleep" ? 1 : 0
+            visible: sleepMarks.opacity > 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 400
+                }
+            }
+
+            // Fifteen steps a second. A step moves a mark by less than one LED
+            // cell, and a face that is asleep has no reason to redraw the
+            // screen at the display rate.
+            Timer {
+                id: sleepMarkStep
+
+                interval: 66
+                repeat: true
+                running: sleepMarks.visible
+
+                onTriggered: sleepMarks.cycle = (sleepMarks.cycle + sleepMarkStep.interval / sleepMarks.period) % 1
+            }
+
+            Repeater {
+                model: sleepMarks.count
+
+                // A z the size of the largest mark, scaled down, so its
+                // geometry is built once and only moved.
+                Item {
+                    id: mark
+
+                    required property int index
+
+                    // How far this mark is along its rise, from 0 to 1.
+                    readonly property real progress: (sleepMarks.cycle + mark.index / sleepMarks.count) % 1
+                    readonly property real side: sleepMarks.largest * displayContainer.relativeScaleWidth
+                    readonly property real thickness: sleepMarks.stroke * displayContainer.relativeScaleWidth
+
+                    height: mark.side
+                    opacity: Math.sin(Math.PI * mark.progress)
+                    scale: (sleepMarks.smallest + (sleepMarks.largest - sleepMarks.smallest) * mark.progress) / sleepMarks.largest
+                    width: mark.side
+                    // A slight sway, so the marks drift rather than slide.
+                    x: displayContainer.relativeScaleWidth * (sleepMarks.rise.x + (sleepMarks.peak.x - sleepMarks.rise.x) * mark.progress + 1.5 * Math.sin(2 * Math.PI * mark.progress)) - mark.side / 2
+                    y: displayContainer.relativeScaleHeight * (sleepMarks.rise.y + (sleepMarks.peak.y - sleepMarks.rise.y) * mark.progress) - mark.side / 2
+
+                    Rectangle {
+                        color: "white"
+                        height: mark.thickness
+                        radius: mark.thickness / 2
+                        width: mark.side
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        color: "white"
+                        height: mark.thickness
+                        radius: mark.thickness / 2
+                        rotation: -45
+                        width: Math.SQRT2 * (mark.side - mark.thickness) + mark.thickness
+                    }
+
+                    Rectangle {
+                        color: "white"
+                        height: mark.thickness
+                        radius: mark.thickness / 2
+                        width: mark.side
+                        y: mark.side - mark.thickness
+                    }
+                }
+            }
         }
     }
 
@@ -561,8 +756,8 @@ Item {
         id: ledScreen
 
         anchors.fill: parent
-        source: maskedDisplayImage
-        sourceRect: Qt.rect(maskedDisplayImage.x, maskedDisplayImage.y, maskedDisplayImage.width, maskedDisplayImage.height)
+        source: faceLayer
+        sourceRect: Qt.rect(faceLayer.x, faceLayer.y, faceLayer.width, faceLayer.height)
     }
 
     Timer {
@@ -636,7 +831,7 @@ Item {
         id: pupilTrackingArea
 
         property bool maintainPosition: faceTracker.enabled && !faceTracker.following
-        property bool shouldTrack: !root.isBlinking && !root.isTouched && (!pupilTrackingArea.pressed || root.isWinking)
+        property bool shouldTrack: !root.isBlinking && !root.isTouched && !root.isMeowing && !root.isSleeping && (!pupilTrackingArea.pressed || root.isWinking)
         property bool useFaceTracking: faceTracker.enabled && faceTracker.following
 
         acceptedButtons: Qt.LeftButton | Qt.RightButton
