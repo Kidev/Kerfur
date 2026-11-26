@@ -40,13 +40,14 @@ QtObject {
     /// Horizontal field of view of the camera in degrees, or 0 for the known
     /// figure of a Raspberry Pi camera module (70 for any other camera).
     property real fieldOfView: 0
-    property int glowBlendMode: 1
+    property int glowBlendMode: 0
     property real glowBloom: 0
     property real glowBlurAmount: 0
-    property color glowColor: "magenta"
+    property color glowColor: "#ff98ff"
     /// The last colour chosen from the colour dialog, kept apart from
     /// `glowColor` so the custom swatch still offers it after a preset is picked.
-    property color glowCustomColor: "#ff8000"
+    /// Fully transparent until a colour has been chosen there.
+    property color glowCustomColor: "transparent"
     property real glowMaxBrightness: 1.0
     /// Hours of waking time somebody known has to be out of sight before
     /// Kerfur meows at them on their return.
@@ -70,19 +71,19 @@ QtObject {
     property int ledScreenFadeIn: 0
     /// Milliseconds an LED cell takes to go dark from fully lit.
     property int ledScreenFadeOut: 50
-    /// LED cell pitch in pixels. 0 makes every pixel of the eye picture one
-    /// cell, as large as the screen allows.
-    property int ledScreenLedSize: 0
     /// How bright an LED stripe that is off still looks, from 0 to 1.
-    property real ledScreenOffLevel: 0.025
+    property real ledScreenOffLevel: 0.02
+    /// LED cells across and down every pixel of the eye picture: 2 makes four
+    /// cells of each pixel, 3 makes nine. At least 1.
+    property int ledScreenPixelDensity: 1
     /// Height of the dark line between two rows of LED cells, as a fraction
     /// of a cell.
-    property real ledScreenRowGap: 0.05
+    property real ledScreenRowGap: 0.07
     /// Width of the dark line between two LED stripes, as a fraction of a
     /// cell.
-    property real ledScreenStripeGap: 0.05
+    property real ledScreenStripeGap: 0.07
     /// How far a bright LED stripe washes towards white at its core.
-    property real ledScreenWhiteCore: 0.22
+    property real ledScreenWhiteCore: 0
     property real leftRightAngle: 90
     /// Seconds the eyes stay where the last person was seen before they look
     /// straight ahead.
@@ -93,7 +94,7 @@ QtObject {
     property real maskSpreadAtMax: 0
     property real maskSpreadAtMin: 0
     property real maskThresholdMax: 1.0
-    property real maskThresholdMin: 0.25
+    property real maskThresholdMin: 0
     property string modelsPath: root.appDataPath + "/models/"
     /// Score the object detector needs before something near a hand counts.
     property real objectConfidence: 0.35

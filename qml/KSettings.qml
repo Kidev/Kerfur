@@ -80,8 +80,8 @@ KSettingsValues {
         property alias glowMaxBrightness: root.glowMaxBrightness
         property alias ledScreenFadeIn: root.ledScreenFadeIn
         property alias ledScreenFadeOut: root.ledScreenFadeOut
-        property alias ledScreenLedSize: root.ledScreenLedSize
         property alias ledScreenOffLevel: root.ledScreenOffLevel
+        property alias ledScreenPixelDensity: root.ledScreenPixelDensity
         property alias ledScreenRowGap: root.ledScreenRowGap
         property alias ledScreenStripeGap: root.ledScreenStripeGap
         property alias ledScreenWhiteCore: root.ledScreenWhiteCore

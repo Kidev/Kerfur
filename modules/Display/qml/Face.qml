@@ -638,6 +638,11 @@ Item {
 
             anchors.fill: parent
             fillMode: Image.PreserveAspectFit
+            // Each pixel of the picture lights all of its cells alike when the
+            // LED screen gives it more than one; a smoothed picture would
+            // blend the cells on an edge into its neighbours. The pupils are
+            // drawn the same way.
+            smooth: false
             source: root.currentEyesImage
 
             onStatusChanged: {
@@ -652,6 +657,7 @@ Item {
 
             height: leftPupil.sourceSize.height * displayContainer.relativeScaleHeight
             source: root.pathEyesPupil
+            smooth: false
             visible: root.leftPupilVisible
             width: leftPupil.sourceSize.width * displayContainer.relativeScaleWidth
             x: displayContainer.relativeScaleWidth * root.onCell(root.leftEyeCenter.x + root.leftPupilOffset.x, ledScreen.pictureCell.width)
@@ -663,6 +669,7 @@ Item {
 
             height: rightPupil.sourceSize.height * displayContainer.relativeScaleHeight
             source: root.pathEyesPupil
+            smooth: false
             visible: root.rightPupilVisible
             width: rightPupil.sourceSize.width * displayContainer.relativeScaleWidth
             x: displayContainer.relativeScaleWidth * root.onCell(root.rightEyeCenter.x + root.rightPupilOffset.x, ledScreen.pictureCell.width)

@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+import QtQuick.Shapes
 import Core
 import Vision
 import Hearing
@@ -81,7 +82,32 @@ Rectangle {
     readonly property var updateRateLabels: ["3 Hz - idling", "6 Hz - default", "10 Hz - responsive", "15 Hz - maximum"]
     readonly property var updateRateValues: [3, 6, 10, 15]
     readonly property var blendModeNames: ["Additive", "Screen", "Replace", "Outer"]
-    readonly property list<color> glowPresetColors: [Qt.rgba(1, 0, 0, 1), Qt.rgba(0, 1, 0, 1), Qt.rgba(0, 0, 1, 1), Qt.rgba(0, 1, 1, 1), Qt.rgba(1, 0, 1, 1), Qt.rgba(1, 1, 1, 1)]
+    readonly property list<color> glowPresetColors: ["#44cbff", "#ff3a21", "#00ff00", "#ff98ff", "#ffffff"]
+    // The gaming glow passes through these in turn, then back to the first.
+    readonly property list<color> gamingColors: ["#ff1980", "#ff00ff", "#763cf7", "#0076ff", "#00a8ff", "#00cbff", "#00ffff", "#00eeee", "#2cffbe", "#56ff7f", "#aaff00", "#c0ff00", "#dcff00", "#eaff00", "#ffff00", "#ffd400", "#ffbe00", "#ffaa00", "#ff3300"]
+    /// Seconds the gaming glow takes to come back to its first colour.
+    readonly property real gamingCycleSeconds: 3.2
+    // Each gaming colour in Oklab, with `at`, where the cycle reaches it, and
+    // `length`, the share of the cycle spent on the way to the next one, both
+    // from 0 to 1. The share is the distance between the two colours in
+    // Oklab, so the glow changes at an even pace to the eye even where the
+    // list puts two colours close together.
+    readonly property var gamingStops: {
+        const lab = root.gamingColors.map(colour => root.oklabOf(colour));
+        const lengths = lab.map((point, index) => root.oklabDistance(point, lab[(index + 1) % lab.length]));
+        const total = lengths.reduce((sum, length) => sum + length, 0);
+        let at = 0;
+        return lab.map((point, index) => {
+            const stop = {
+                "at": at / total,
+                "lab": point,
+                "length": lengths[index] / total
+            };
+            at += lengths[index];
+            return stop;
+        });
+    }
+    readonly property url repositoryUrl: "https://github.com/Kidev/Kerfur"
 
     // Rank for somebody added from the panel. Zero is the only rank that may
     // give commands, so it says so; the default is two, which may not.
@@ -150,8 +176,61 @@ Rectangle {
         return root.faceTracker.perceptionProblem !== "" ? root.colorWarn : root.colorDim;
     }
 
+    // Two colours that look the same in the panel, compared at eight bits a
+    // channel. The colour dialog keeps sixteen, so a colour picked there is
+    // otherwise never equal to the preset it shows as.
+    function sameColour(first, second) {
+        return first.toString() === second.toString();
+    }
+
+    /// Whether a colour has been chosen from the colour dialog yet.
+    function hasCustomColour() {
+        return KSettings.glowCustomColor.a > 0;
+    }
+
     function isGlowPreset(colour) {
-        return root.glowPresetColors.some(preset => Qt.colorEqual(preset, colour));
+        return root.glowPresetColors.some(preset => root.sameColour(preset, colour));
+    }
+
+    /// `colour` in Oklab, as [lightness, a, b].
+    function oklabOf(colour) {
+        const linear = [colour.r, colour.g, colour.b].map(channel => channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4));
+        const l = Math.cbrt(0.4122214708 * linear[0] + 0.5363325363 * linear[1] + 0.0514459929 * linear[2]);
+        const m = Math.cbrt(0.2119034982 * linear[0] + 0.6806995451 * linear[1] + 0.1073969566 * linear[2]);
+        const s = Math.cbrt(0.0883024619 * linear[0] + 0.2817188376 * linear[1] + 0.6299787005 * linear[2]);
+        return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+    }
+
+    /// The opaque colour at `lab` in Oklab, clamped to what the screen shows.
+    function colourOfOklab(lab) {
+        const l = Math.pow(lab[0] + 0.3963377774 * lab[1] + 0.2158037573 * lab[2], 3);
+        const m = Math.pow(lab[0] - 0.1055613458 * lab[1] - 0.0638541728 * lab[2], 3);
+        const s = Math.pow(lab[0] - 0.0894841775 * lab[1] - 1.2914855480 * lab[2], 3);
+        const linear = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+        const encoded = linear.map(channel => {
+            const clamped = Math.max(0, Math.min(1, channel));
+            return clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+        });
+        return Qt.rgba(encoded[0], encoded[1], encoded[2], 1);
+    }
+
+    function oklabDistance(first, second) {
+        return Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
+    }
+
+    /// The gaming glow at `phase` of its cycle, 0 and 1 both being its first
+    /// colour.
+    function gamingColorAt(phase) {
+        const stops = root.gamingStops;
+        const wrapped = phase - Math.floor(phase);
+        let index = stops.length - 1;
+        while (index > 0 && stops[index].at > wrapped) {
+            --index;
+        }
+        const from = stops[index];
+        const to = stops[(index + 1) % stops.length];
+        const along = from.length > 0 ? Math.min(1, (wrapped - from.at) / from.length) : 0;
+        return root.colourOfOklab(from.lab.map((value, axis) => value + (to.lab[axis] - value) * along));
     }
 
     function peopleSummary() {
@@ -1118,6 +1197,7 @@ Rectangle {
                 return;
             titleField.text = form.person.title;
             heightField.text = form.person.height > 0 ? form.person.height.toFixed(2) : "";
+            headField.text = form.person.head > 0 ? (form.person.head * 100).toFixed(1) : "";
             const rank = root.rankValues.indexOf(form.person.priority);
             rankCombo.currentIndex = rank >= 0 ? rank : root.defaultRankIndex;
         }
@@ -1197,7 +1277,6 @@ Rectangle {
             Field {
                 id: titleField
 
-            headField.text = form.person.head > 0 ? (form.person.head * 100).toFixed(1) : "";
                 maximumLength: 64
                 placeholderText: "owner, friend, ..."
             }
@@ -1228,6 +1307,25 @@ Rectangle {
 
                 validator: RegularExpressionValidator {
                     regularExpression: /^[0-2]?([.,][0-9]{0,2})?$/
+                }
+            }
+
+            // How tall the face is, which lets Kerfur tell how far away this
+            // person is from the face alone. Measured on its own the first
+            // time the camera sees them from head to feet.
+            FieldLabel {
+                text: "Face size in centimetres (measured when seen whole)"
+            }
+
+            Field {
+                id: headField
+
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                maximumLength: 4
+                placeholderText: "not measured yet"
+
+                validator: RegularExpressionValidator {
+                    regularExpression: /^[0-9]{0,2}([.,][0-9]?)?$/
                 }
             }
 
@@ -1310,25 +1408,6 @@ Rectangle {
 
                 SmallButton {
                     enabled: Identities.stagedFace !== "" || Identities.stagedVoice !== ""
-            // How tall the face is, which lets Kerfur tell how far away this
-            // person is from the face alone. Measured on its own the first
-            // time the camera sees them from head to feet.
-            FieldLabel {
-                text: "Face size in centimetres (measured when seen whole)"
-            }
-
-            Field {
-                id: headField
-
-                inputMethodHints: Qt.ImhFormattedNumbersOnly
-                maximumLength: 4
-                placeholderText: "not measured yet"
-
-                validator: RegularExpressionValidator {
-                    regularExpression: /^[0-9]{0,2}([.,][0-9]?)?$/
-                }
-            }
-
                     label: "Clear staged"
 
                     onClicked: Identities.clearStaged()
@@ -1494,15 +1573,15 @@ Rectangle {
     Timer {
         id: colorAnimationTimer
 
-        property real hue: 0
+        property real phase: 0
 
         interval: 16 // approximately 60 FPS
         repeat: true
         running: false
 
         onTriggered: {
-            hue = (hue + 0.005) % 1.0;
-            KSettings.glowColor = Qt.hsva(hue, 1.0, 1.0, 1.0);
+            colorAnimationTimer.phase = (colorAnimationTimer.phase + colorAnimationTimer.interval / 1000 / root.gamingCycleSeconds) % 1;
+            KSettings.glowColor = root.gamingColorAt(colorAnimationTimer.phase);
         }
     }
 
@@ -1581,6 +1660,71 @@ Rectangle {
             StatusLight {
                 label: "skills"
                 tint: Skills.problem !== "" ? root.colorBad : (Skills.skillNames.length > 0 ? root.colorOk : "#4a4f57")
+            }
+        }
+
+        // Opens the project's repository in the browser.
+        Rectangle {
+            id: repositoryButton
+
+            anchors.right: hideButton.left
+            anchors.rightMargin: 6
+            anchors.verticalCenter: wordmark.verticalCenter
+            border.color: repositoryMouse.containsMouse ? root.colorAccent : root.colorLine
+            border.width: 1
+            color: repositoryMouse.pressed ? "#3a3f47" : root.colorRaised
+            height: 22
+            radius: 4
+            width: 22
+
+            // The GitHub mark, drawn on a square 16 units wide.
+            Shape {
+                anchors.centerIn: parent
+                height: 14
+                preferredRendererType: Shape.CurveRenderer
+                width: 14
+
+                ShapePath {
+                    fillColor: "white"
+                    scale: Qt.size(14 / 16, 14 / 16)
+                    strokeWidth: -1
+
+                    PathSvg {
+                        path: "M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"
+                    }
+                }
+            }
+
+            MouseArea {
+                id: repositoryMouse
+
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+
+                onClicked: Qt.openUrlExternally(root.repositoryUrl)
+            }
+
+            ToolTip {
+                id: repositoryTip
+
+                delay: 300
+                text: "Kerfur on GitHub"
+                visible: repositoryMouse.containsMouse
+                x: repositoryButton.width - width
+                y: repositoryButton.height + 6
+
+                background: Rectangle {
+                    border.color: root.colorLine
+                    border.width: 1
+                    color: root.colorRaised
+                    radius: 4
+                }
+                contentItem: Text {
+                    color: root.colorText
+                    font.pixelSize: 10
+                    text: repositoryTip.text
+                }
             }
         }
 
@@ -2534,6 +2678,17 @@ Rectangle {
                     stepSize: 0.5
                     to: 10
                 }
+
+                // The eyes cross more the closer the face comes, fully at the
+                // screen itself.
+                SettingSlider {
+                    from: 0
+                    label: "Cross eyes closer than"
+                    settingName: "crossEyeDistance"
+                    stepSize: 0.05
+                    to: 1.5
+                    valueText: KSettings.crossEyeDistance > 0 ? Math.round(KSettings.crossEyeDistance * 100) + " cm" : "off"
+                }
             }
 
             Section {
@@ -2552,17 +2707,20 @@ Rectangle {
             }
 
             Section {
-                summary: KSettings.ledScreenLedSize > 0 ? KSettings.ledScreenLedSize.toFixed(0) + " px cells" : "Auto cells"
+                summary: KSettings.ledScreenPixelDensity + "x pixel density"
                 title: "Screen"
 
+                // 2 splits every pixel of the face into four LEDs, 3 into
+                // nine. The screen lowers it while an LED would be smaller
+                // than a pixel of the display.
                 SettingSlider {
                     decimals: 0
-                    from: 0
-                    label: "LED size (px)"
-                    settingName: "ledScreenLedSize"
+                    from: 1
+                    label: "Pixel density"
+                    settingName: "ledScreenPixelDensity"
                     stepSize: 1
-                    to: 50
-                    valueText: KSettings.ledScreenLedSize > 0 ? KSettings.ledScreenLedSize.toFixed(0) : "auto, one per picture pixel"
+                    to: 8
+                    valueText: KSettings.ledScreenPixelDensity + "x"
                 }
 
                 SettingSlider {
@@ -2679,17 +2837,6 @@ Rectangle {
                 Combo {
                     id: blendModeCombo
 
-                // The eyes cross more the closer the face comes, fully at the
-                // screen itself.
-                SettingSlider {
-                    from: 0
-                    label: "Cross eyes closer than"
-                    settingName: "crossEyeDistance"
-                    stepSize: 0.05
-                    to: 1.5
-                    valueText: KSettings.crossEyeDistance > 0 ? Math.round(KSettings.crossEyeDistance * 100) + " cm" : "off"
-                }
-
                     currentIndex: KSettings.glowBlendMode
                     model: root.blendModeNames
 
@@ -2735,7 +2882,7 @@ Rectangle {
 
                             required property color modelData
 
-                            selected: !colorAnimationTimer.running && Qt.colorEqual(KSettings.glowColor, presetSwatch.modelData)
+                            selected: !colorAnimationTimer.running && root.sameColour(KSettings.glowColor, presetSwatch.modelData)
                             swatchColor: presetSwatch.modelData
 
                             onPicked: {
@@ -2745,20 +2892,21 @@ Rectangle {
                         }
                     }
 
-                    // The custom colour: shows the last one chosen, and opens
-                    // the dialog on that colour to change it.
+                    // The custom colour: shows the last one chosen, or only its
+                    // outline before any has been, and opens the dialog on that
+                    // colour, or on the glow in use, to choose one.
                     Swatch {
-                        selected: !colorAnimationTimer.running && !root.isGlowPreset(KSettings.glowColor) && Qt.colorEqual(KSettings.glowColor, KSettings.glowCustomColor)
+                        selected: !colorAnimationTimer.running && root.hasCustomColour() && !root.isGlowPreset(KSettings.glowColor) && root.sameColour(KSettings.glowColor, KSettings.glowCustomColor)
                         swatchColor: KSettings.glowCustomColor
 
                         onPicked: {
-                            glowColorDialog.selectedColor = KSettings.glowCustomColor;
+                            glowColorDialog.selectedColor = root.hasCustomColour() ? KSettings.glowCustomColor : KSettings.glowColor;
                             glowColorDialog.open();
                         }
 
                         Text {
                             anchors.centerIn: parent
-                            color: KSettings.glowCustomColor.hslLightness > 0.6 ? root.colorInk : root.colorText
+                            color: root.hasCustomColour() && KSettings.glowCustomColor.hslLightness > 0.6 ? root.colorInk : root.colorText
                             font.bold: true
                             font.pixelSize: 14
                             text: "+"
@@ -2770,35 +2918,41 @@ Rectangle {
 
                         selected: colorAnimationTimer.running
 
+                        // The cycle from top to bottom.
                         gradient: Gradient {
                             GradientStop {
-                                color: "red"
-                                position: 0.0
+                                color: root.gamingColorAt(0)
+                                position: 0
                             }
 
                             GradientStop {
-                                color: "yellow"
-                                position: 0.2
+                                color: root.gamingColorAt(1 / 6)
+                                position: 1 / 6
                             }
 
                             GradientStop {
-                                color: "green"
-                                position: 0.4
+                                color: root.gamingColorAt(2 / 6)
+                                position: 2 / 6
                             }
 
                             GradientStop {
-                                color: "cyan"
-                                position: 0.6
+                                color: root.gamingColorAt(3 / 6)
+                                position: 3 / 6
                             }
 
                             GradientStop {
-                                color: "blue"
-                                position: 0.8
+                                color: root.gamingColorAt(4 / 6)
+                                position: 4 / 6
                             }
 
                             GradientStop {
-                                color: "magenta"
-                                position: 1.0
+                                color: root.gamingColorAt(5 / 6)
+                                position: 5 / 6
+                            }
+
+                            GradientStop {
+                                color: root.gamingColorAt(1)
+                                position: 1
                             }
                         }
 
