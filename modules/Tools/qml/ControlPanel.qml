@@ -2502,15 +2502,68 @@ Rectangle {
             }
 
             Section {
-                summary: KSettings.ledScreenLedSize.toFixed(0) + " px cells"
+                summary: KSettings.ledScreenLedSize > 0 ? KSettings.ledScreenLedSize.toFixed(0) + " px cells" : "Auto cells"
                 title: "Screen"
 
                 SettingSlider {
-                    decimals: 1
-                    from: 1
-                    label: "LED size"
+                    decimals: 0
+                    from: 0
+                    label: "LED size (px)"
                     settingName: "ledScreenLedSize"
+                    stepSize: 1
                     to: 50
+                    valueText: KSettings.ledScreenLedSize > 0 ? KSettings.ledScreenLedSize.toFixed(0) : "auto, one per picture pixel"
+                }
+
+                SettingSlider {
+                    from: 0
+                    label: "Line between stripes (fraction of a cell)"
+                    settingName: "ledScreenStripeGap"
+                    stepSize: 0.01
+                    to: 0.3
+                }
+
+                SettingSlider {
+                    from: 0
+                    label: "Line between rows (fraction of a cell)"
+                    settingName: "ledScreenRowGap"
+                    stepSize: 0.01
+                    to: 0.5
+                }
+
+                SettingSlider {
+                    from: 0
+                    label: "Stripe white core"
+                    settingName: "ledScreenWhiteCore"
+                    stepSize: 0.01
+                    to: 1
+                }
+
+                SettingSlider {
+                    decimals: 3
+                    from: 0
+                    label: "Unlit stripe level"
+                    settingName: "ledScreenOffLevel"
+                    stepSize: 0.005
+                    to: 0.2
+                }
+
+                SettingSlider {
+                    decimals: 0
+                    from: 0
+                    label: "Cell fade in (ms)"
+                    settingName: "ledScreenFadeIn"
+                    stepSize: 5
+                    to: 1000
+                }
+
+                SettingSlider {
+                    decimals: 0
+                    from: 0
+                    label: "Cell fade out (ms)"
+                    settingName: "ledScreenFadeOut"
+                    stepSize: 5
+                    to: 1000
                 }
 
                 SettingSlider {

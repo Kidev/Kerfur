@@ -79,7 +79,23 @@ QtObject {
     /// Score one body keypoint needs before the head or a wrist is placed on
     /// it.
     property real keypointConfidence: 0.4
-    property int ledScreenLedSize: 6
+    /// Milliseconds an LED cell takes to come on fully from dark.
+    property int ledScreenFadeIn: 0
+    /// Milliseconds an LED cell takes to go dark from fully lit.
+    property int ledScreenFadeOut: 50
+    /// LED cell pitch in pixels. 0 makes every pixel of the eye picture one
+    /// cell, as large as the screen allows.
+    property int ledScreenLedSize: 0
+    /// How bright an LED stripe that is off still looks, from 0 to 1.
+    property real ledScreenOffLevel: 0
+    /// Height of the dark line between two rows of LED cells, as a fraction
+    /// of a cell.
+    property real ledScreenRowGap: 0.12
+    /// Width of the dark line between two LED stripes, as a fraction of a
+    /// cell.
+    property real ledScreenStripeGap: 0.09
+    /// How far a bright LED stripe washes towards white at its core.
+    property real ledScreenWhiteCore: 0.22
     property real leftRightAngle: 90
     /// Seconds the eyes stay where the last person was seen before they look
     /// straight ahead.
@@ -154,7 +170,13 @@ QtObject {
         property alias glowColor: root.glowColor
         property alias glowCustomColor: root.glowCustomColor
         property alias glowMaxBrightness: root.glowMaxBrightness
+        property alias ledScreenFadeIn: root.ledScreenFadeIn
+        property alias ledScreenFadeOut: root.ledScreenFadeOut
         property alias ledScreenLedSize: root.ledScreenLedSize
+        property alias ledScreenOffLevel: root.ledScreenOffLevel
+        property alias ledScreenRowGap: root.ledScreenRowGap
+        property alias ledScreenStripeGap: root.ledScreenStripeGap
+        property alias ledScreenWhiteCore: root.ledScreenWhiteCore
         property alias leftRightAngle: root.leftRightAngle
         property alias maskSpreadAtMax: root.maskSpreadAtMax
         property alias maskSpreadAtMin: root.maskSpreadAtMin

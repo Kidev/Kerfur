@@ -9,7 +9,11 @@ qt_add_qml_module(
               qml/Glow.qml
               qml/LedScreen.qml
               qml/Face.qml
+    SOURCES src/texturewatch.cpp
+            src/texturewatch.h
     DEPENDENCIES TARGET KerfurCore Tools Vision Skills
 )
 
-target_link_libraries(${DISPLAY_MODULE} PRIVATE KerfurCore Skills)
+# Qt6::Quick is PUBLIC because texturewatch.h names QQuickItem in its interface.
+target_link_libraries(${DISPLAY_MODULE} PUBLIC Qt6::Quick PRIVATE KerfurCore Skills)
+target_include_directories(${DISPLAY_MODULE} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

@@ -588,9 +588,12 @@ Item {
         property real relativeScaleHeight: displayImage.height / (displayImage.sourceSize.height)
         property real relativeScaleWidth: displayImage.width / (displayImage.sourceSize.width)
 
-        anchors.centerIn: parent
-        height: Math.min(root.height, root.width * (displayImage.sourceSize.height / displayImage.sourceSize.width))
-        width: Math.min(root.width, root.height * (displayImage.sourceSize.width / displayImage.sourceSize.height))
+        // The LED screen decides where the picture goes, so its pixels land
+        // on the screen's cells.
+        height: ledScreen.pictureRect.height
+        width: ledScreen.pictureRect.width
+        x: ledScreen.pictureRect.x
+        y: ledScreen.pictureRect.y
 
         Image {
             id: displayImage
@@ -757,7 +760,7 @@ Item {
 
         anchors.fill: parent
         source: faceLayer
-        sourceRect: Qt.rect(faceLayer.x, faceLayer.y, faceLayer.width, faceLayer.height)
+        sourceSize: displayImage.sourceSize
     }
 
     Timer {
