@@ -1190,6 +1190,19 @@ bool FaceTracker::motionWakes(const QImage &thumbnail)
         m_motionGate.setReference(thumbnail);
         return false;
     }
+    // The second picture of the empty room measures the camera's noise.
+    if (!m_motionGate.isCalibrated()) {
+        m_motionGate.calibrate(thumbnail);
+        if (m_motionGate.isCalibrated()) {
+            qCInfo(trackerLog) << "a change of" << m_motionGate.threshold()
+                               << "grey levels counts as motion";
+        } else {
+            // A picture of another size: the capture changed under the
+            // reference, which starts again from this one.
+            m_motionGate.setReference(thumbnail);
+        }
+        return false;
+    }
     const qreal percent{m_motionGate.changedFraction(thumbnail) * 100.0};
     if (!qFuzzyCompare(percent + 1.0, m_motionPercent + 1.0)) {
         m_motionPercent = percent;

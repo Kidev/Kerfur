@@ -7,7 +7,9 @@
 #include <QTest>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <random>
 #include <vector>
 
 using namespace Kerfur;
@@ -20,6 +22,55 @@ QImage greyFrame(int level, int width = 640, int height = 360)
     image.fill(QColor{level, level, level});
     return image;
 }
+
+/// A thumbnail whose columns run from `left` to `right`: a room with a dark
+/// side and a lit side, and a contrast of about their difference.
+QImage gradientThumbnail(int left, int right)
+{
+    QImage image{MotionGate::thumbnailWidth, 72, QImage::Format_Grayscale8};
+    for (int row{0}; row < image.height(); ++row) {
+        uchar *line{image.scanLine(row)};
+        for (int col{0}; col < image.width(); ++col) {
+            line[col] = static_cast<uchar>(std::lround(
+                left + (static_cast<double>(right - left) * col / (image.width() - 1))));
+        }
+    }
+    return image;
+}
+
+/// `image` with independent normal noise of `deviation` grey levels on every
+/// pixel, seeded so that a run is repeatable.
+QImage withNoise(const QImage &image, double deviation, unsigned seed)
+{
+    QImage noisy{image};
+    std::mt19937 generator{seed};
+    std::normal_distribution<double> noise{0.0, deviation};
+    for (int row{0}; row < noisy.height(); ++row) {
+        uchar *line{noisy.scanLine(row)};
+        for (int col{0}; col < noisy.width(); ++col) {
+            line[col] = static_cast<uchar>(
+                std::clamp(static_cast<int>(std::lround(line[col] + noise(generator))), 0, 255));
+        }
+    }
+    return noisy;
+}
+
+/// `image` with `area` raised by `delta` grey levels: somebody, lit a little
+/// more than what they stand in front of.
+QImage withFigure(const QImage &image, const QRect &area, int delta)
+{
+    QImage changed{image};
+    for (int row{area.top()}; row <= area.bottom(); ++row) {
+        uchar *line{changed.scanLine(row)};
+        for (int col{area.left()}; col <= area.right(); ++col) {
+            line[col] = static_cast<uchar>(std::clamp(line[col] + delta, 0, 255));
+        }
+    }
+    return changed;
+}
+
+// The share of the picture that wakes the models by default.
+constexpr double wakeFraction{0.01};
 
 } // namespace
 
@@ -39,6 +90,12 @@ private slots:
     void wholeFrameBrightnessShiftIsIgnored();
     void noReferenceCountsAsChange();
     void otherSizeCountsAsChange();
+    void aLitRoomKeepsTheFullThreshold();
+    void movementInTheDarkIsSeen();
+    void aCloseUpInTheDarkIsSeen();
+    void sensorNoiseDoesNotWake();
+    void movementStandsOutOfTheNoise();
+    void calibrationNeverBlindsTheGate();
 
     void presenceKeepsTheModelsRunning();
     void absenceStartsWatching();
@@ -125,6 +182,91 @@ void TestMotionGate::otherSizeCountsAsChange()
     MotionGate gate;
     gate.setReference(MotionGate::thumbnail(greyFrame(80, 640, 360)));
     QCOMPARE(gate.changedFraction(MotionGate::thumbnail(greyFrame(80, 640, 480))), 1.0);
+}
+
+void TestMotionGate::aLitRoomKeepsTheFullThreshold()
+{
+    MotionGate gate;
+    const QImage room{gradientThumbnail(0, 255)};
+    gate.setReference(room);
+    QCOMPARE(gate.threshold(), MotionGate::pixelThreshold);
+    gate.calibrate(room);
+    QVERIFY(gate.isCalibrated());
+    QCOMPARE(gate.threshold(), MotionGate::pixelThreshold);
+}
+
+/// A dark room spans thirty grey levels, and somebody walking through it
+/// brightens what they cover by eight: half of a lit room's threshold.
+void TestMotionGate::movementInTheDarkIsSeen()
+{
+    MotionGate gate;
+    const QImage room{gradientThumbnail(10, 40)};
+    gate.setReference(room);
+    gate.calibrate(room);
+    QVERIFY(gate.threshold() < 8);
+
+    const double changed{gate.changedFraction(withFigure(room, QRect{32, 10, 40, 50}, 8))};
+    QVERIFY2(changed > 0.15, qPrintable(QString::number(changed)));
+}
+
+/// Close enough to fill most of the picture, the figure is the median and the
+/// exposure correction takes it out; what is left is the room behind, which
+/// now looks changed by as much.
+void TestMotionGate::aCloseUpInTheDarkIsSeen()
+{
+    MotionGate gate;
+    const QImage room{gradientThumbnail(10, 40)};
+    gate.setReference(room);
+    gate.calibrate(room);
+
+    const double changed{gate.changedFraction(withFigure(room, QRect{0, 0, 90, 72}, 8))};
+    QVERIFY2(changed > wakeFraction, qPrintable(QString::number(changed)));
+}
+
+/// A camera turns its gain up in the dark, and the noise it adds would reach
+/// a threshold scaled to the contrast alone on a third of the picture.
+void TestMotionGate::sensorNoiseDoesNotWake()
+{
+    const QImage room{gradientThumbnail(10, 40)};
+    constexpr double noise{2.5};
+
+    MotionGate gate;
+    gate.setReference(withNoise(room, noise, 1));
+    gate.calibrate(withNoise(room, noise, 2));
+    QVERIFY(gate.isCalibrated());
+
+    const double changed{gate.changedFraction(withNoise(room, noise, 3))};
+    QVERIFY2(changed < wakeFraction, qPrintable(QString::number(changed)));
+}
+
+void TestMotionGate::movementStandsOutOfTheNoise()
+{
+    const QImage room{gradientThumbnail(10, 40)};
+    constexpr double noise{2.5};
+
+    MotionGate gate;
+    gate.setReference(withNoise(room, noise, 4));
+    gate.calibrate(withNoise(room, noise, 5));
+
+    const QImage frame{withFigure(withNoise(room, noise, 6), QRect{0, 0, 64, 36}, 20)};
+    const double changed{gate.changedFraction(frame)};
+    QVERIFY2(changed > 0.15, qPrintable(QString::number(changed)));
+}
+
+/// Somebody crossing the room while the noise is measured looks like a very
+/// noisy camera. The gate is then as sensitive as a lit room's, and no less.
+void TestMotionGate::calibrationNeverBlindsTheGate()
+{
+    const QImage room{gradientThumbnail(0, 255)};
+
+    MotionGate gate;
+    gate.setReference(room);
+    gate.calibrate(withNoise(room, 30.0, 7));
+    QVERIFY(gate.isCalibrated());
+    QCOMPARE(gate.threshold(), MotionGate::pixelThreshold);
+
+    const double changed{gate.changedFraction(withFigure(room, QRect{0, 0, 64, 36}, 40))};
+    QVERIFY2(changed > 0.2, qPrintable(QString::number(changed)));
 }
 
 void TestMotionGate::presenceKeepsTheModelsRunning()
